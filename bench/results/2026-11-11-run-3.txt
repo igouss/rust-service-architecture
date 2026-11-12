@@ -1,0 +1,48 @@
+log-as-truth on SQLite against a state row: baseline at the port shape of e960d9f
+started at unix time 1794437902
+processor: Intel(R) Core(TM) i7-8650U CPU @ 1.90GHz
+kernel: 7.1.3-100.fc43.x86_64
+sqlite: 3.53.2 (bundled with rusqlite)
+data directory: ./target/bench-data/1794437902-3811033
+filesystem (type, source, mount): btrfs /dev/mapper/luks-<redacted> <mount redacted>
+before: rustc processes=0 cargo processes=0 loadavg=0.88 1.26 1.07 1/1529 3811034
+
+== synchronous=FULL ==
+pragmas read back; log: journal_mode=wal synchronous=2; state-row: journal_mode=wal synchronous=2
+
+app::handle(CompleteTask) on a Task stream of N Added facts, each call on its own stream of exactly N;
+log and state-row calls alternate; 5 warm-ups then 30 timed calls per cell; microseconds; percentiles by nearest rank
+      N |    log min    log p50    log p90 |  state min  state p50  state p90 | p50 ratio
+      1 |     3857.4     4192.1     4436.2 |     3822.0     4217.3     4489.9 |      0.99
+     10 |     3851.4     4119.5     4455.4 |     3834.6     4260.5     4582.0 |      0.97
+    100 |     3608.2     4124.0     4667.7 |     3803.9     4080.9     4571.8 |      1.01
+   1000 |     3959.5     4180.5     4465.9 |     3841.6     3994.2     4274.2 |      1.05
+  10000 |     5972.9     6219.7     6800.8 |     3926.8     4209.9     4738.2 |      1.48
+
+Store::commit(AddTask outcome) on a new stream, the outcome built before the clock starts;
+the two variants alternate; 5 warm-ups then 30 timed commits per row; microseconds
+variant                                      |        min        p50        p90
+no read model                                |     3603.9     4040.7     4501.2
+read-model row and position in the commit    |     3817.9     4105.5     4636.4
+p50 ratio, with read model over without: 1.02
+
+== synchronous=NORMAL ==
+pragmas read back; log: journal_mode=wal synchronous=1; state-row: journal_mode=wal synchronous=1
+
+app::handle(CompleteTask) on a Task stream of N Added facts, each call on its own stream of exactly N;
+log and state-row calls alternate; 5 warm-ups then 30 timed calls per cell; microseconds; percentiles by nearest rank
+      N |    log min    log p50    log p90 |  state min  state p50  state p90 | p50 ratio
+      1 |       36.9       37.4       39.8 |       44.0       44.6       47.3 |      0.84
+     10 |       38.7       39.6       63.7 |       44.3       44.6       69.4 |      0.89
+    100 |       56.9       58.9       61.6 |       44.2       47.1       47.7 |      1.25
+   1000 |      229.9      234.8      239.2 |       47.2       48.1       50.6 |      4.88
+  10000 |     1947.7     1999.8     2034.3 |       48.5       50.3       54.9 |     39.77
+
+Store::commit(AddTask outcome) on a new stream, the outcome built before the clock starts;
+the two variants alternate; 5 warm-ups then 30 timed commits per row; microseconds
+variant                                      |        min        p50        p90
+no read model                                |       31.9       32.3       34.9
+read-model row and position in the commit    |       54.7       55.3       61.9
+p50 ratio, with read model over without: 1.71
+
+after: rustc processes=0 cargo processes=0 loadavg=0.89 1.26 1.07 1/1533 3811057

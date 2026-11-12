@@ -1,0 +1,3 @@
+id: arch-raw
+document: docs/architecture/ports.req.md
+minted: before-registry

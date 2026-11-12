@@ -1,0 +1,122 @@
+state rows with facts as history on SQLite: commands, queries and the thread hop
+binary built from: f0c172b
+compiler: rustc 1.95.0 (59807616e 2026-04-14)
+started at unix time 1794449025
+processor: Intel(R) Core(TM) i7-8650U CPU @ 1.90GHz
+kernel: 7.1.3-100.fc43.x86_64
+sqlite: 3.53.2 (bundled with rusqlite)
+tokio: multi-thread runtime, 8 worker threads
+data directory: ./target/bench-data/1794449025-370711
+filesystem (type, source, mount): btrfs /dev/mapper/luks-<redacted> <mount redacted>
+disk: luks-<redacted> crypt <- nvme0n1p3 part nvme <- nvme0n1 disk SAMSUNG MZVLB1T0HALR-000L7 nvme
+before: rustc processes=0 cargo processes=0 loadavg=3.36 1.61 0.73 1/1567 370722
+
+== Durability::Full: synchronous=FULL asked of the adapter, which exposes no read-back ==
+journal_mode read back from a second connection: wal
+
+a. app::handle(CompleteTask) on a task whose history already holds N facts. The command loads the state row and
+   writes one fact, the state row and the tally row. No command accumulates N facts on one task, so the histories
+   are seeded by raw SQL in one transaction: N Added facts per task (versions 1 to N), its state row Open at
+   version N (the fold of those facts), and the tally row and its position as app::rebuild folds those facts
+   (one open per Added fact, so the tally counts facts here, not tasks). 105 tasks, 353535 facts.
+   Each call on its own task; the three N alternate; 5 warm-ups then 30 timed calls per cell; microseconds;
+   percentiles by nearest rank
+      N |        min        p50        p90 |   p50 over N=1
+      1 |     3808.9     4062.3     4288.6 |           1.00
+    100 |     3757.7     4020.0     4485.1 |           0.99
+  10000 |     3712.9     3990.0     4309.8 |           0.98
+   checked after the cell: the live tally equals app::rebuild over all 353640 facts
+
+b, c. One command per call, each on its own stream, each command in its own store; the two alternate;
+   the payments were authorized through handle(Authorize) before the clock, then the store reopened;
+   5 warm-ups then 30 timed calls per row; microseconds
+command and what its unit of work writes                   |        min        p50        p90
+b. handle(AddTask): 1 fact, 1 state row, tally row         |     3735.4     4198.4     7139.9
+c. handle(Capture): 2 facts, 2 state rows, 1 outbox row    |     3677.8     4156.3     4578.0
+
+d. Queries over a store of T tasks, every second one completed (T/2 open, T/2 done), each T in its own file.
+   Seeded through app::handle(AddTask) and app::handle(CompleteTask) under Durability::Normal, one unit of work
+   per command, then the store closed and reopened under the durability measured.
+   open_tasks reads and decodes every Task state row (JSON) and keeps the open ones; task_tally reads one
+   read-model row; task_board does both in one snapshot. The three alternate;
+   5 warm-ups then 30 timed calls per row; microseconds
+query                                                      |        min        p50        p90
+open_tasks, 10 tasks                                       |        6.1        6.1        6.2
+task_tally, 10 tasks                                       |        3.0        3.1        3.1
+task_board, 10 tasks                                       |        9.1        9.3        9.4
+open_tasks, 100 tasks                                      |       36.3       37.4       37.9
+task_tally, 100 tasks                                      |        3.2        3.2        3.3
+task_board, 100 tasks                                      |       39.8       40.7       55.2
+open_tasks, 1000 tasks                                     |      320.4      359.2      392.4
+task_tally, 1000 tasks                                     |        3.7        4.2        4.8
+task_board, 1000 tasks                                     |      324.8      355.1      406.7
+open_tasks, 10000 tasks                                    |     3777.5     3958.0     5599.2
+task_tally, 10000 tasks                                    |        7.4        8.3       13.8
+task_board, 10000 tasks                                    |     3803.3     3951.8     4592.9
+open_tasks, 100000 tasks                                   |    38604.6    39830.5    44891.0
+task_tally, 100000 tasks                                   |       23.1       25.7       29.1
+task_board, 100000 tasks                                   |    38863.4    39670.9    42337.4
+
+e. The thread hop: handle(AddTask) on one store, called from a task on a worker thread of a multi-thread Tokio
+   runtime, first directly on that worker and then through tokio::task::spawn_blocking(..).await; the third row
+   sends an empty closure the same way. The three alternate; 5 warm-ups then 30 timed calls per row; microseconds
+variant                                                    |        min        p50        p90
+handle(AddTask) called on the worker thread                |     3045.3     4221.4     4861.0
+handle(AddTask) through spawn_blocking                     |     3482.4     4147.0     4825.4
+an empty closure through spawn_blocking                    |        8.5       41.9      107.3
+
+== Durability::Normal: synchronous=NORMAL asked of the adapter, which exposes no read-back ==
+journal_mode read back from a second connection: wal
+
+a. app::handle(CompleteTask) on a task whose history already holds N facts. The command loads the state row and
+   writes one fact, the state row and the tally row. No command accumulates N facts on one task, so the histories
+   are seeded by raw SQL in one transaction: N Added facts per task (versions 1 to N), its state row Open at
+   version N (the fold of those facts), and the tally row and its position as app::rebuild folds those facts
+   (one open per Added fact, so the tally counts facts here, not tasks). 105 tasks, 353535 facts.
+   Each call on its own task; the three N alternate; 5 warm-ups then 30 timed calls per cell; microseconds;
+   percentiles by nearest rank
+      N |        min        p50        p90 |   p50 over N=1
+      1 |       60.7       62.4       77.1 |           1.00
+    100 |       60.6       63.3       66.8 |           1.01
+  10000 |       63.0       65.2       67.9 |           1.04
+   checked after the cell: the live tally equals app::rebuild over all 353640 facts
+
+b, c. One command per call, each on its own stream, each command in its own store; the two alternate;
+   the payments were authorized through handle(Authorize) before the clock, then the store reopened;
+   5 warm-ups then 30 timed calls per row; microseconds
+command and what its unit of work writes                   |        min        p50        p90
+b. handle(AddTask): 1 fact, 1 state row, tally row         |       96.4      107.3      148.0
+c. handle(Capture): 2 facts, 2 state rows, 1 outbox row    |       93.7       98.9      112.7
+
+d. Queries over a store of T tasks, every second one completed (T/2 open, T/2 done), each T in its own file.
+   Seeded through app::handle(AddTask) and app::handle(CompleteTask) under Durability::Normal, one unit of work
+   per command, then the store closed and reopened under the durability measured.
+   open_tasks reads and decodes every Task state row (JSON) and keeps the open ones; task_tally reads one
+   read-model row; task_board does both in one snapshot. The three alternate;
+   5 warm-ups then 30 timed calls per row; microseconds
+query                                                      |        min        p50        p90
+open_tasks, 10 tasks                                       |        6.1        6.3        6.6
+task_tally, 10 tasks                                       |        3.0        3.1        3.3
+task_board, 10 tasks                                       |        9.2        9.4        9.8
+open_tasks, 100 tasks                                      |       37.7       40.3       46.2
+task_tally, 100 tasks                                      |        3.2        3.5        4.4
+task_board, 100 tasks                                      |       41.0       44.4       60.2
+open_tasks, 1000 tasks                                     |      321.0      367.7      398.2
+task_tally, 1000 tasks                                     |        3.6        4.3        5.0
+task_board, 1000 tasks                                     |      325.2      370.8      408.8
+open_tasks, 10000 tasks                                    |     3563.0     3680.1     4220.7
+task_tally, 10000 tasks                                    |        4.7        6.1       10.2
+task_board, 10000 tasks                                    |     3557.3     3653.8     4094.8
+open_tasks, 100000 tasks                                   |    37907.7    38671.9    41066.0
+task_tally, 100000 tasks                                   |       22.4       26.7       29.0
+task_board, 100000 tasks                                   |    37898.8    38866.2    43257.6
+
+e. The thread hop: handle(AddTask) on one store, called from a task on a worker thread of a multi-thread Tokio
+   runtime, first directly on that worker and then through tokio::task::spawn_blocking(..).await; the third row
+   sends an empty closure the same way. The three alternate; 5 warm-ups then 30 timed calls per row; microseconds
+variant                                                    |        min        p50        p90
+handle(AddTask) called on the worker thread                |       67.2       88.2      104.7
+handle(AddTask) through spawn_blocking                     |       75.9      112.3      169.2
+an empty closure through spawn_blocking                    |        8.4       27.1       90.5
+
+after: rustc processes=0 cargo processes=0 loadavg=1.96 1.57 0.79 1/1570 371820

@@ -1,0 +1,16 @@
+[package]
+name = "ports"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+
+[package.metadata.hex-arch]
+role = "port-and-adapter"
+context = "example"
+
+[dependencies]
+domain = { path = "../domain" }
+serde = { workspace = true }
+
+[lints]
+workspace = true

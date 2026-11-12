@@ -1,0 +1,22 @@
+[package]
+name = "adapter-sqlite"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+
+[package.metadata.hex-arch]
+role = "driven-adapter"
+context = "example"
+
+[dependencies]
+domain = { path = "../domain" }
+ports = { path = "../ports" }
+rusqlite = { version = "0.40", features = ["bundled"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+rusqlite = { version = "0.40", features = ["bundled"] }
+
+[lints]
+workspace = true

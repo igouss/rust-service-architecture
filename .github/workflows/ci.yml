@@ -1,0 +1,57 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 5 * * 1"
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      - run: cargo install --locked --git https://github.com/igouss/hex-lint
+      - run: cargo install --locked --git https://github.com/igouss/effect-audit
+      - run: cargo install --locked --git https://github.com/igouss/req
+      - run: curl -sSL https://raw.githubusercontent.com/babashka/babashka/master/install | sudo bash
+      - run: just check
+
+  mutation:
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.95
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: just,cargo-mutants
+      - run: cargo install --locked --git https://github.com/igouss/hex-lint
+      - run: cargo install --locked --git https://github.com/igouss/effect-audit
+      - run: curl -sSL https://raw.githubusercontent.com/babashka/babashka/master/install | sudo bash
+      - run: python3 mutants.py | tee mutants-architecture.txt
+      - run: cargo mutants -p domain --no-shuffle | tee mutants-core.txt
+        if: always()
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: mutation-report
+          path: |
+            mutants-architecture.txt
+            mutants-core.txt

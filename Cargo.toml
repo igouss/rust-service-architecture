@@ -1,0 +1,25 @@
+[workspace]
+members = ["domain", "ports", "app", "adapter-sqlite", "adapter-http", "server", "bench"]
+resolver = "2"
+
+[workspace.package]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/igouss/rust-service-architecture"
+
+[workspace.dependencies]
+axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1" }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["fmt"] }
+
+[workspace.lints.rust]
+unused_must_use = "deny"
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+wildcard_enum_match_arm = "deny"
+unwrap_used = "deny"
+expect_used = "deny"

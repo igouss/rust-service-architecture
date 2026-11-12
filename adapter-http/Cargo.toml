@@ -1,0 +1,31 @@
+[package]
+name = "adapter-http"
+version = "0.0.0"
+edition.workspace = true
+license.workspace = true
+
+[package.metadata.hex-arch]
+role = "driving-adapter"
+context = "example"
+
+[dependencies]
+app = { path = "../app" }
+axum = { workspace = true }
+domain = { path = "../domain" }
+futures-util = { version = "0.3", default-features = false }
+ports = { path = "../ports" }
+serde = { workspace = true }
+serde_urlencoded = "0.7"
+tokio = { workspace = true, features = ["macros", "rt", "sync"] }
+tracing = { workspace = true }
+uuid = { version = "1", features = ["v7"] }
+
+[dev-dependencies]
+adapter-sqlite = { path = "../adapter-sqlite" }
+http-body-util = "0.1"
+tokio = { workspace = true, features = ["time"] }
+tower = { version = "0.5", features = ["util"] }
+tracing-subscriber = { workspace = true }
+
+[lints]
+workspace = true
