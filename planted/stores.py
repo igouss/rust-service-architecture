@@ -54,6 +54,8 @@ STORES = [
      "BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY", "BEGIN ISOLATION LEVEL READ COMMITTED READ ONLY", POSTGRES),
     ("T44 the Postgres pool keeps a connection the server closed", "adapter-postgres/src/lib.rs",
      "worker.broken.load(Ordering::SeqCst)", "worker.broken.load(Ordering::SeqCst) && false", POSTGRES),
+    ("T46 a Postgres store opened as normal still waits for the disk", "adapter-postgres/src/lib.rs",
+     'Durability::Normal => "off",', 'Durability::Normal => "on",', POSTGRES),
     ("T45 a failed Postgres unit leaves its transaction open on the pooled connection", "adapter-postgres/src/lib.rs",
      "if self.open {", "if self.open && false {", POSTGRES),
 ]

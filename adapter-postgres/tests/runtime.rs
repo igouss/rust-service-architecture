@@ -2,7 +2,7 @@
 
 use std::sync::{Arc, Mutex};
 
-use adapter_postgres::Postgres;
+use adapter_postgres::{Durability, Postgres};
 use app::{handle, relay};
 use domain::fulfilment::{FulfilmentRequest, Progress};
 use domain::payment::{Amount, Authorize, Capture};
@@ -21,7 +21,7 @@ fn fresh(schema: &str) {
 
 fn store(schema: &str) -> Postgres {
     fresh(schema);
-    Postgres::connect(&url(), schema, 4).expect("opens")
+    Postgres::connect(&url(), schema, 4, Durability::Full).expect("opens")
 }
 
 fn id(text: &str) -> StreamId {
@@ -87,14 +87,15 @@ fn the_store_may_be_opened_and_used_inside_a_runtime() {
     setup.batch_execute("DROP SCHEMA IF EXISTS runtime_open CASCADE").expect("dropped");
     drop(setup);
     let runtime: Runtime = Builder::new_current_thread().build().expect("runtime");
-    let answer: Result<Answer<TaskRefusal>, StoreError> = runtime.block_on(async { add(&Postgres::connect(&url(), "runtime_open", 2)?, "t-1") });
+    let answer: Result<Answer<TaskRefusal>, StoreError> =
+        runtime.block_on(async { add(&Postgres::connect(&url(), "runtime_open", 2, Durability::Full)?, "t-1") });
     assert_eq!(answer, Ok(Answer::Accepted(Version(1))));
 }
 
 #[test]
 fn a_store_whose_connections_the_server_closed_recovers() {
     fresh("runtime_recover");
-    let store: Postgres = Postgres::connect(&url(), "runtime_recover", 2).expect("opens");
+    let store: Postgres = Postgres::connect(&url(), "runtime_recover", 2, Durability::Full).expect("opens");
     add(&store, "t-0").expect("handled");
     let mut admin: postgres::Client = postgres::Client::connect(&url(), postgres::NoTls).expect("connects");
     let closed: postgres::Row = admin
@@ -122,4 +123,19 @@ fn a_store_reads_on_one_connection_while_a_unit_is_open_on_another() {
         store.read(|view| Ok(view.states::<domain::task::Task>()?.len()))
     });
     assert_eq!(seen, Ok(0));
+}
+
+#[test]
+fn a_store_opened_as_full_commits_synchronously() {
+    fresh("runtime_full");
+    let store: Postgres = Postgres::connect(&url(), "runtime_full", 1, Durability::Full).expect("opens");
+    assert_eq!(store.durability(), Ok(Durability::Full));
+}
+
+#[test]
+fn a_store_opened_as_normal_does_not_wait_for_the_disk() {
+    fresh("runtime_normal");
+    let store: Postgres = Postgres::connect(&url(), "runtime_normal", 1, Durability::Normal).expect("opens");
+    assert_eq!(store.durability(), Ok(Durability::Normal));
+    assert_eq!(add(&store, "t-1"), Ok(Answer::Accepted(Version(1))));
 }

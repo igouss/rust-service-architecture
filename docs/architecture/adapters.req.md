@@ -97,6 +97,13 @@ service holds open on the server. Each connection names itself `store_<schema>` 
 A connection the server closed is dropped from the pool, and a unit or read that finds one
 before it has run anything starts again on another.
 
+The composition root chooses the durability, as it does for SQLite (`arch-0ev`):
+`Durability::Full` waits for the disk on every commit; `Durability::Normal` does not, and a
+server crash can lose the last commits but never leaves the database inconsistent. A disk
+sync is most of what a durable command costs: on the machine these were measured on, one sync
+took 4.2 ms and a durable command 5.6 ms, against 1.2 ms under `Normal`
+(`docs/adr/0006-postgres-as-one-writer.md`).
+
 The store port stays synchronous (`arch-v1q`), and the store can be opened, called and dropped
 from any thread, as the SQLite store can. The blocking client runs a runtime of its own and
 panics when called from a thread that is driving async tasks, so each pooled connection lives
@@ -114,6 +121,7 @@ last two raise no error.
 - `arch-m7du.5` The store is opened, used through `spawn_blocking`, used as the relay's outbox and dropped inside a runtime: `the_store_may_be_opened_and_used_inside_a_runtime`, `a_unit_of_work_runs_through_spawn_blocking_on_a_multi_thread_runtime`, `the_relay_runs_on_a_runtime_of_its_own_with_the_store_as_its_outbox`, `the_store_may_be_dropped_inside_a_runtime`.
 - `arch-m7du.6` A read runs while a unit is open in the same process, and a store whose connections the server closed answers the next command: `a_store_reads_on_one_connection_while_a_unit_is_open_on_another`, `a_store_whose_connections_the_server_closed_recovers` (mutant T44).
 - `arch-m7du.7` A failed unit leaves no open transaction on the connection it returns to the pool (mutant T45).
+- `arch-m7du.8` A store opened as `Normal` commits without waiting for the disk, and one opened as `Full` waits: `a_store_opened_as_normal_does_not_wait_for_the_disk`, `a_store_opened_as_full_commits_synchronously` (mutant T46).
 - `arch-m7du.3` The `postgres` recipe passes against a server and fails when `STORE_POSTGRES_URL` is unset; the `postgres` job in continuous integration runs it.
 - `arch-m7du.4` A mutant that needs the server is reported as not killed when no test passed, so an unreachable server never reads as a kill (mutants T40 to T42).
 

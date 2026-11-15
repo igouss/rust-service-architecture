@@ -67,7 +67,11 @@ and still serialises the common case.
 - With the server's connections closed under it, the store answered the next command in each of
   40 runs. Before a fatal server error counted as a dead connection, it failed one run in
   three.
-- Not measured: the adapter under concurrent load.
+- One disk sync on that machine: 4.2 ms (`pg_test_fsync`, 236 a second). A durable command
+  is one sync plus about a millisecond, on Postgres and on SQLite alike, so the adapter takes
+  the same `Durability` choice SQLite has. Sharing one sync between waiting commands is the
+  move after that, when a service needs more durable commands a second than one sync each.
+- Not measured: the adapter under concurrent load, or any disk but this one.
 
 ## What it preserved
 

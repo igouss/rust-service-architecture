@@ -25,9 +25,25 @@ struct Worker {
     broken: Arc<AtomicBool>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Durability {
+    Full,
+    Normal,
+}
+
+impl Durability {
+    fn setting(self) -> &'static str {
+        match self {
+            Durability::Full => "on",
+            Durability::Normal => "off",
+        }
+    }
+}
+
 struct Connections {
     url: String,
     schema: String,
+    durability: Durability,
 }
 
 #[derive(Debug)]
@@ -56,7 +72,7 @@ impl ManageConnection for Connections {
     type Error = Refused;
 
     fn connect(&self) -> Result<Worker, Refused> {
-        Worker::start(&self.url, &self.schema).map_err(refused)
+        Worker::start(&self.url, &self.schema, self.durability).map_err(refused)
     }
 
     fn is_valid(&self, worker: &mut Worker) -> Result<(), Refused> {
@@ -126,15 +142,18 @@ fn prepared(url: &str, schema: &str) -> Result<i64, postgres::Error> {
     client.query_one("SELECT to_regnamespace($1)::oid::bigint", &[&schema])?.try_get(0)
 }
 
-fn connection(url: &str, schema: &str) -> Result<(Client, Statements), postgres::Error> {
+fn connection(url: &str, schema: &str, durability: Durability) -> Result<(Client, Statements), postgres::Error> {
     let mut client: Client = Client::connect(url, NoTls)?;
-    client.batch_execute(&format!("SET search_path TO {schema}; SET application_name TO 'store_{schema}'"))?;
+    let commit: &str = durability.setting();
+    client.batch_execute(&format!(
+        "SET search_path TO {schema}; SET application_name TO 'store_{schema}'; SET synchronous_commit TO {commit}"
+    ))?;
     let statements: Statements = Statements::prepare(&mut client)?;
     Ok((client, statements))
 }
 
-fn serve(url: &str, schema: &str, ready: &SyncSender<Result<(), StoreError>>, inbox: Receiver<Job>) {
-    match connection(url, schema) {
+fn serve(url: &str, schema: &str, durability: Durability, ready: &SyncSender<Result<(), StoreError>>, inbox: Receiver<Job>) {
+    match connection(url, schema, durability) {
         Err(error) => {
             let _unheard: Result<(), SendError<Result<(), StoreError>>> = ready.send(Err(unavailable(error)));
         }
@@ -149,7 +168,7 @@ fn serve(url: &str, schema: &str, ready: &SyncSender<Result<(), StoreError>>, in
 }
 
 impl Worker {
-    fn start(url: &str, schema: &str) -> Result<Worker, StoreError> {
+    fn start(url: &str, schema: &str, durability: Durability) -> Result<Worker, StoreError> {
         let (jobs, inbox): (Sender<Job>, Receiver<Job>) = mpsc::channel();
         let (ready, started): Pipe<Result<(), StoreError>> = mpsc::sync_channel(1);
         let (url, schema): (String, String) = (url.to_string(), schema.to_string());
@@ -158,7 +177,7 @@ impl Worker {
         thread::Builder::new()
             .name("postgres-store".to_string())
             .spawn(move || {
-                serve(&url, &schema, &ready, inbox);
+                serve(&url, &schema, durability, &ready, inbox);
                 ended.store(true, Ordering::SeqCst);
             })
             .map_err(|error: std::io::Error| StoreError::Unavailable { cause: error.to_string() })?;
@@ -185,7 +204,7 @@ impl Worker {
 }
 
 impl Postgres {
-    pub fn connect(url: &str, schema: &str, connections: u32) -> Result<Postgres, StoreError> {
+    pub fn connect(url: &str, schema: &str, connections: u32, durability: Durability) -> Result<Postgres, StoreError> {
         let schema: &str = named(schema)?;
         let (address, name): (String, String) = (url.to_string(), schema.to_string());
         let lock: i64 = thread::spawn(move || prepared(&address, &name))
@@ -198,6 +217,7 @@ impl Postgres {
             .build(Connections {
                 url: url.to_string(),
                 schema: schema.to_string(),
+                durability,
             })
             .map_err(|error: r2d2::Error| StoreError::Unavailable { cause: error.to_string() })?;
         Ok(Postgres { pool, lock, listener: None })
@@ -207,6 +227,16 @@ impl Postgres {
         Postgres {
             listener: Some(Box::new(listener)),
             ..self
+        }
+    }
+
+    pub fn durability(&self) -> Result<Durability, StoreError> {
+        let row: Row = self
+            .checked()?
+            .call(|client: &mut Client, _statements: &Statements| client.query_one("SELECT current_setting('synchronous_commit')", &[]))?;
+        match text(&row, 0)? {
+            "off" => Ok(Durability::Normal),
+            _synchronous => Ok(Durability::Full),
         }
     }
 

@@ -2,7 +2,7 @@
 
 use std::thread::{self, JoinHandle};
 
-use adapter_postgres::Postgres;
+use adapter_postgres::{Durability, Postgres};
 use domain::task::{AddTask, Tally, Task, TaskEvent, TaskRefusal, TaskTally, Title};
 use ports::{Answer, Applied, Journal, Position, Recorded, StoreError, StreamId, Unit};
 
@@ -28,7 +28,7 @@ fn add_and_tally(unit: &mut Unit<'_>, task: &str) -> Result<(), StoreError> {
 
 fn writer(schema: &'static str, number: u64) -> JoinHandle<Result<(), StoreError>> {
     thread::spawn(move || {
-        let store: Postgres = Postgres::connect(&url(), schema, 2)?;
+        let store: Postgres = Postgres::connect(&url(), schema, 2, Durability::Full)?;
         (0..COMMANDS).try_for_each(|command: u64| store.write(|unit| add_and_tally(unit, &format!("t-{number}-{command}"))))
     })
 }
@@ -37,7 +37,7 @@ fn writer(schema: &'static str, number: u64) -> JoinHandle<Result<(), StoreError
 fn many_writers_on_one_schema_keep_the_tally_equal_to_the_facts() {
     let schema: &'static str = "writers_tally";
     fresh(schema);
-    let store: Postgres = Postgres::connect(&url(), schema, 4).expect("opens");
+    let store: Postgres = Postgres::connect(&url(), schema, 4, Durability::Full).expect("opens");
     let writers: Vec<JoinHandle<Result<(), StoreError>>> = (0..WRITERS).map(|number: u64| writer(schema, number)).collect();
     let outcomes: Vec<Result<(), StoreError>> = writers
         .into_iter()
@@ -68,8 +68,8 @@ fn many_writers_on_one_schema_keep_the_tally_equal_to_the_facts() {
 fn a_read_keeps_one_snapshot_while_another_writer_commits() {
     let schema: &'static str = "writers_snapshot";
     fresh(schema);
-    let reader: Postgres = Postgres::connect(&url(), schema, 4).expect("opens");
-    let other: Postgres = Postgres::connect(&url(), schema, 4).expect("opens");
+    let reader: Postgres = Postgres::connect(&url(), schema, 4, Durability::Full).expect("opens");
+    let other: Postgres = Postgres::connect(&url(), schema, 4, Durability::Full).expect("opens");
     let seen: (Option<Tally>, usize) = reader
         .read(|view| {
             let before: Option<Tally> = view.row::<TaskTally>(TaskTally::KEY)?;
@@ -83,7 +83,7 @@ fn a_read_keeps_one_snapshot_while_another_writer_commits() {
 
 fn claim(schema: &'static str) -> JoinHandle<Result<Answer<TaskRefusal>, StoreError>> {
     thread::spawn(move || {
-        let store: Postgres = Postgres::connect(&url(), schema, 2)?;
+        let store: Postgres = Postgres::connect(&url(), schema, 2, Durability::Full)?;
         let title: Title = Title::new("the one").expect("a title");
         let applied: Applied<Task> = store.write(|unit| unit.apply(&StreamId("same".to_string()), |state: Task| ports::decide(AddTask { title }, state)))?;
         Ok(applied.answer)
@@ -94,7 +94,7 @@ fn claim(schema: &'static str) -> JoinHandle<Result<Answer<TaskRefusal>, StoreEr
 fn writers_claiming_one_stream_leave_exactly_one_accepted() {
     let schema: &'static str = "writers_claim";
     fresh(schema);
-    drop(Postgres::connect(&url(), schema, 4).expect("opens"));
+    drop(Postgres::connect(&url(), schema, 4, Durability::Full).expect("opens"));
     let claims: Vec<JoinHandle<Result<Answer<TaskRefusal>, StoreError>>> = (0..WRITERS).map(|_writer: u64| claim(schema)).collect();
     let mut answers: Vec<Result<Answer<TaskRefusal>, StoreError>> = claims
         .into_iter()
