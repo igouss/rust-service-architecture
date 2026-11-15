@@ -62,10 +62,6 @@ is not done until all of them pass. An adapter's own test file holds only what t
 cannot ask of every store: for SQLite, a reopened file and a corrupt row; for Postgres,
 writers on separate connections.
 
-The memory adapter keeps every fact, refusal and request for as long as the process lives,
-as the other stores do on disk, so a service that runs for long on it grows without bound;
-nothing trims it yet.
-
 A service with no state has no lifecycle (`arch-f5d`), so it has no store adapter, no
 `Policy` and no call to `app::handle`. It keeps `domain` for its refined types and pure
 functions, `ports` for its gateways, and its driving adapters, under the same role matrix and
@@ -76,6 +72,42 @@ the same gates.
 - `arch-e5eb.1` Every case of the suite passes against the SQLite and memory adapters (`just test`) and against the Postgres adapter (`just postgres`, which needs a server).
 - `arch-e5eb.2` The `raw-store` recipe fails when a crate that implements `Store` has no `tests/conformance.rs` that includes the suite (T2, `just check`; mutant G11).
 - `arch-e5eb.3` A fault planted in a store adapter fails a case of the suite: mutants T4 to T9, T16 and T26 in the SQLite adapter, mutants T27 to T38 in the memory adapter, mutants T40 to T42 in the Postgres adapter.
+
+## `arch-7h52` The memory store shall hold a bounded history, and what a service may forget shall not be a lifecycle
+
+| What a store holds | SQLite and Postgres | Memory |
+|---|---|---|
+| state rows, read-model rows | all | all |
+| facts | all | the last `Kept::facts` |
+| recorded refusals | all | the last `Kept::refusals` |
+| requests | all, marked done | until done, then none |
+
+On disk, history is what a read model is rebuilt from and what explains a state, so it is
+kept whole and archiving it is an operation, not a code path. In memory a rebuild serves
+nothing: a new read-model shape is new code, new code is a restart, and a restart empties the
+store. So the memory store keeps a tail for diagnosis, and the composition root says how long
+a tail in `Memory::new(Kept { .. })`. Positions keep counting past what was trimmed, and a read
+of facts that reaches into the trimmed part is refused rather than answered short, so a
+rebuild over a trimmed history fails where it would have produced a wrong read model.
+`Memory::held` reports how much the store holds, for a service to publish.
+
+State rows and read-model rows are not trimmed by any store. The domain bounds them: a
+lifecycle is something the business counts (a task, a payment, a booking). What may be
+forgotten, and whose keys the outside world can mint without limit (a session, a rate
+limiter's window, a cache entry), is not a lifecycle (`arch-f5d`): it lives inside the
+adapter that owns it, with that adapter's own expiry, and no decision reads it without it
+first entering as a command (`arch-jbno`).
+
+Recorded refusals on disk grow with refused requests. Limiting how many a client may send is
+the driving adapter's bound (`arch-kpb`), not the store's.
+
+### Acceptance
+
+- `arch-7h52.1` The memory store drops facts beyond the kept number and keeps counting positions: `facts_beyond_the_kept_number_are_dropped_and_positions_keep_counting` (mutants T47 and T50).
+- `arch-7h52.2` A read that reaches into trimmed facts is refused: `a_read_of_facts_that_were_trimmed_is_refused` (mutant T48).
+- `arch-7h52.3` The memory store drops the oldest refusals beyond the kept number: `refusals_beyond_the_kept_number_drop_the_oldest` (mutant T49).
+- `arch-7h52.4` A request marked done is no longer held and is not claimed again: `a_done_request_is_no_longer_held` (mutant T32).
+- `arch-7h52.5` Review checks that state with unbounded keys that may be forgotten is not modelled as a lifecycle (T4, gap ledger).
 
 ## `arch-m7du` The Postgres adapter shall run one unit of work at a time for its schema, and a read shall see one snapshot
 

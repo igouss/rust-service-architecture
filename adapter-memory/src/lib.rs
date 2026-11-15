@@ -1,4 +1,4 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::{PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use ports::store::{Key, Reader, Store, StoredFact, StoredRequest, Writer};
@@ -20,7 +20,6 @@ struct Request {
     lifecycle: &'static str,
     stream: StreamId,
     request: String,
-    done: bool,
     attempts: u64,
 }
 
@@ -34,11 +33,28 @@ struct Rejection {
 #[derive(Default)]
 struct Tables {
     states: BTreeMap<Stream, (Version, String)>,
-    facts: Vec<Fact>,
-    rejections: Vec<Rejection>,
-    outbox: Vec<Request>,
+    facts: VecDeque<Fact>,
+    trimmed: u64,
+    rejections: VecDeque<Rejection>,
+    outbox: BTreeMap<u64, Request>,
+    issued: u64,
     rows: BTreeMap<Row, String>,
     positions: BTreeMap<&'static str, Position>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Kept {
+    pub facts: usize,
+    pub refusals: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Held {
+    pub states: usize,
+    pub facts: usize,
+    pub refusals: usize,
+    pub requests: usize,
+    pub rows: usize,
 }
 
 #[derive(Default)]
@@ -54,9 +70,9 @@ struct Pending {
 
 type Listener = Box<dyn Fn(Position) + Send + Sync>;
 
-#[derive(Default)]
 pub struct Memory {
     tables: RwLock<Tables>,
+    kept: Kept,
     listener: Option<Listener>,
 }
 
@@ -87,14 +103,29 @@ fn rows_in<'a>(tables: &'a Tables, read_model: &'static str) -> impl Iterator<It
 }
 
 impl Memory {
-    pub fn new() -> Memory {
-        Memory::default()
+    pub fn new(kept: Kept) -> Memory {
+        Memory {
+            tables: RwLock::default(),
+            kept,
+            listener: None,
+        }
+    }
+
+    pub fn held(&self) -> Held {
+        let tables: RwLockReadGuard<'_, Tables> = self.reading();
+        Held {
+            states: tables.states.len(),
+            facts: tables.facts.len(),
+            refusals: tables.rejections.len(),
+            requests: tables.outbox.len(),
+            rows: tables.rows.len(),
+        }
     }
 
     pub fn on_commit(self, listener: impl Fn(Position) + Send + Sync + 'static) -> Memory {
         Memory {
-            tables: self.tables,
             listener: Some(Box::new(listener)),
+            ..self
         }
     }
 
@@ -214,7 +245,7 @@ impl Writer for MemoryWriter<'_> {
             version,
             event: event.to_string(),
         });
-        Ok(Position(count(self.tables.facts.len() + self.pending.facts.len())))
+        Ok(Position(self.tables.trimmed + count(self.tables.facts.len() + self.pending.facts.len())))
     }
 
     fn save(&mut self, lifecycle: &'static str, stream: &StreamId, version: Version, state: &str) -> Result<(), StoreError> {
@@ -236,7 +267,6 @@ impl Writer for MemoryWriter<'_> {
             lifecycle,
             stream: stream.clone(),
             request: request.to_string(),
-            done: false,
             attempts: 0,
         });
         Ok(())
@@ -249,17 +279,23 @@ impl Writer for MemoryWriter<'_> {
         limit: usize,
         each: &mut dyn FnMut(StoredFact<'_>) -> Result<(), StoreError>,
     ) -> Result<(), StoreError> {
+        let trimmed: u64 = self.tables.trimmed;
+        if after.0 < trimmed {
+            return Err(StoreError::Unavailable {
+                cause: format!("facts up to position {trimmed} were trimmed, so they cannot be read after position {}", after.0),
+            });
+        }
         self.tables
             .facts
             .iter()
             .chain(self.pending.facts.iter())
             .enumerate()
-            .skip(index(after.0))
+            .skip(index(after.0 - trimmed))
             .filter(|(_at, fact): &(usize, &Fact)| fact.lifecycle == lifecycle)
             .take(limit)
             .try_for_each(|(at, fact): (usize, &Fact)| {
                 each(StoredFact {
-                    position: Position(count(at + 1)),
+                    position: Position(trimmed + count(at + 1)),
                     stream: fact.stream.clone(),
                     version: fact.version,
                     event: &fact.event,
@@ -298,7 +334,13 @@ impl Writer for MemoryWriter<'_> {
     }
 }
 
-fn commit(tables: &mut Tables, pending: Pending) -> Option<Position> {
+fn trim<T>(queue: &mut VecDeque<T>, kept: usize) -> u64 {
+    let excess: usize = queue.len().saturating_sub(kept);
+    queue.drain(..excess);
+    count(excess)
+}
+
+fn commit(tables: &mut Tables, pending: Pending, kept: Kept) -> Option<Position> {
     let appended: bool = !pending.facts.is_empty();
     for read_model in &pending.cleared {
         tables.rows.retain(|row: &Row, _text: &mut String| row.0 != *read_model);
@@ -307,7 +349,10 @@ fn commit(tables: &mut Tables, pending: Pending) -> Option<Position> {
     tables.states.extend(pending.states);
     tables.facts.extend(pending.facts);
     tables.rejections.extend(pending.rejections);
-    tables.outbox.extend(pending.outbox);
+    for request in pending.outbox {
+        tables.issued += 1;
+        tables.outbox.insert(tables.issued, request);
+    }
     tables.positions.extend(pending.positions);
     for (row, text) in pending.rows {
         match text {
@@ -315,7 +360,10 @@ fn commit(tables: &mut Tables, pending: Pending) -> Option<Position> {
             None => tables.rows.remove(&row),
         };
     }
-    appended.then(|| Position(count(tables.facts.len())))
+    let last: Option<Position> = appended.then(|| Position(tables.trimmed + count(tables.facts.len())));
+    tables.trimmed += trim(&mut tables.facts, kept.facts);
+    trim(&mut tables.rejections, kept.refusals);
+    last
 }
 
 impl Store for Memory {
@@ -327,7 +375,7 @@ impl Store for Memory {
         };
         let value: T = work(&mut writer)?;
         let pending: Pending = writer.pending;
-        let last: Option<Position> = commit(&mut tables, pending);
+        let last: Option<Position> = commit(&mut tables, pending, self.kept);
         drop(tables);
         if let (Some(position), Some(listener)) = (last, &self.listener) {
             listener(position);
@@ -342,19 +390,18 @@ impl Store for Memory {
 
     fn requests(&self, _key: Key, lifecycle: &'static str, limit: usize) -> Result<Vec<StoredRequest>, StoreError> {
         let tables: RwLockReadGuard<'_, Tables> = self.reading();
-        let mut open: Vec<(u64, usize, &Request)> = tables
+        let mut open: Vec<(u64, u64, &Request)> = tables
             .outbox
             .iter()
-            .enumerate()
-            .filter(|(_at, request): &(usize, &Request)| request.lifecycle == lifecycle && !request.done)
-            .map(|(at, request): (usize, &Request)| (request.attempts, at, request))
+            .filter(|(_id, request): &(&u64, &Request)| request.lifecycle == lifecycle)
+            .map(|(id, request): (&u64, &Request)| (request.attempts, *id, request))
             .collect();
-        open.sort_by_key(|(attempts, at, _request): &(u64, usize, &Request)| (*attempts, *at));
+        open.sort_by_key(|(attempts, id, _request): &(u64, u64, &Request)| (*attempts, *id));
         Ok(open
             .into_iter()
             .take(limit)
-            .map(|(_attempts, at, request): (u64, usize, &Request)| StoredRequest {
-                id: RequestId(count(at + 1)),
+            .map(|(_attempts, id, request): (u64, u64, &Request)| StoredRequest {
+                id: RequestId(id),
                 stream: request.stream.clone(),
                 request: request.request.clone(),
             })
@@ -362,16 +409,12 @@ impl Store for Memory {
     }
 
     fn mark_done(&self, _key: Key, id: RequestId) -> Result<(), StoreError> {
-        let mut tables: RwLockWriteGuard<'_, Tables> = self.writing();
-        if let Some(request) = index(id.0).checked_sub(1).and_then(|at: usize| tables.outbox.get_mut(at)) {
-            request.done = true;
-        }
+        self.writing().outbox.remove(&id.0);
         Ok(())
     }
 
     fn mark_failed(&self, _key: Key, id: RequestId) -> Result<(), StoreError> {
-        let mut tables: RwLockWriteGuard<'_, Tables> = self.writing();
-        if let Some(request) = index(id.0).checked_sub(1).and_then(|at: usize| tables.outbox.get_mut(at)) {
+        if let Some(request) = self.writing().outbox.get_mut(&id.0) {
             request.attempts += 1;
         }
         Ok(())

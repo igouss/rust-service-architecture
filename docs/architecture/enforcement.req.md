@@ -94,6 +94,7 @@ reported; they do not fail `just check`.
 | a guard on edits that weaken a gate | [`arch-tsu`](enforcement.req.md) | review |
 | a check that an event carries what was decided, not the state after it | [core](core.req.md) | names only (`events`) |
 | a check that no query result enters a command as proof of uniqueness | [core](core.req.md) | review |
+| a check that forgettable state with unbounded keys is not a lifecycle | [adapters](adapters.req.md) | review |
 
 ### Acceptance
 
