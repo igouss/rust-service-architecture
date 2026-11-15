@@ -14,10 +14,13 @@ server = []
 [dependencies]
 ports = { path = "../ports" }
 postgres = "0.19"
+r2d2 = "0.8"
 
 [dev-dependencies]
+app = { path = "../app" }
 domain = { path = "../domain" }
 postgres = "0.19"
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 serde = { workspace = true }
 
 [[test]]
@@ -26,6 +29,10 @@ required-features = ["server"]
 
 [[test]]
 name = "writers"
+required-features = ["server"]
+
+[[test]]
+name = "runtime"
 required-features = ["server"]
 
 [lints]

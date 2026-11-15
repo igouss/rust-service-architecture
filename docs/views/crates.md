@@ -20,6 +20,7 @@ graph TD
     adapter_http --> ports
     adapter_memory -.-> domain
     adapter_memory --> ports
+    adapter_postgres -.-> app
     adapter_postgres -.-> domain
     adapter_postgres --> ports
     adapter_sqlite -.-> domain

@@ -62,6 +62,10 @@ is not done until all of them pass. An adapter's own test file holds only what t
 cannot ask of every store: for SQLite, a reopened file and a corrupt row; for Postgres,
 writers on separate connections.
 
+The memory adapter keeps every fact, refusal and request for as long as the process lives,
+as the other stores do on disk, so a service that runs for long on it grows without bound;
+nothing trims it yet.
+
 A service with no state has no lifecycle (`arch-f5d`), so it has no store adapter, no
 `Policy` and no call to `app::handle`. It keeps `domain` for its refined types and pure
 functions, `ports` for its gateways, and its driving adapters, under the same role matrix and
@@ -69,7 +73,7 @@ the same gates.
 
 ### Acceptance
 
-- `arch-e5eb.1` Every case of the suite passes against each store adapter (`just test`).
+- `arch-e5eb.1` Every case of the suite passes against the SQLite and memory adapters (`just test`) and against the Postgres adapter (`just postgres`, which needs a server).
 - `arch-e5eb.2` The `raw-store` recipe fails when a crate that implements `Store` has no `tests/conformance.rs` that includes the suite (T2, `just check`; mutant G11).
 - `arch-e5eb.3` A fault planted in a store adapter fails a case of the suite: mutants T4 to T9, T16 and T26 in the SQLite adapter, mutants T27 to T38 in the memory adapter, mutants T40 to T42 in the Postgres adapter.
 
@@ -87,8 +91,16 @@ lock, so positions have no gaps.
 readers never wait for the writer, and a query that reads twice reads one snapshot
 (`arch-3q8`).
 
-The store port stays synchronous (`arch-v1q`): the adapter uses the blocking client, and a
-driving adapter runs a unit of work off the executor as it does for SQLite.
+Connections come from a pool. A unit of work or a read checks one out for its duration, so a
+read never waits behind a unit in the same process, and the pool's size bounds what the
+service holds open on the server. Each connection names itself `store_<schema>` to the server.
+A connection the server closed is dropped from the pool, and a unit or read that finds one
+before it has run anything starts again on another.
+
+The store port stays synchronous (`arch-v1q`), and the store can be opened, called and dropped
+from any thread, as the SQLite store can. The blocking client runs a runtime of its own and
+panics when called from a thread that is driving async tasks, so each pooled connection lives
+on a thread of its own inside the adapter and a call hands it one statement and waits.
 
 Without the lock, two units that interleave do one of three things, each observed
 (`bench/results/2026-11-15-postgres-writer-lock-spike.txt`): refuse a valid fact as out of
@@ -99,6 +111,9 @@ last two raise no error.
 
 - `arch-m7du.1` Writers on separate connections leave the read model equal to the fold of the facts, with positions 1 to N: `many_writers_on_one_schema_keep_the_tally_equal_to_the_facts` (mutant T39).
 - `arch-m7du.2` A read does not see a commit made after it began: `a_read_keeps_one_snapshot_while_another_writer_commits` (mutant T43).
+- `arch-m7du.5` The store is opened, used through `spawn_blocking`, used as the relay's outbox and dropped inside a runtime: `the_store_may_be_opened_and_used_inside_a_runtime`, `a_unit_of_work_runs_through_spawn_blocking_on_a_multi_thread_runtime`, `the_relay_runs_on_a_runtime_of_its_own_with_the_store_as_its_outbox`, `the_store_may_be_dropped_inside_a_runtime`.
+- `arch-m7du.6` A read runs while a unit is open in the same process, and a store whose connections the server closed answers the next command: `a_store_reads_on_one_connection_while_a_unit_is_open_on_another`, `a_store_whose_connections_the_server_closed_recovers` (mutant T44).
+- `arch-m7du.7` A failed unit leaves no open transaction on the connection it returns to the pool (mutant T45).
 - `arch-m7du.3` The `postgres` recipe passes against a server and fails when `STORE_POSTGRES_URL` is unset; the `postgres` job in continuous integration runs it.
 - `arch-m7du.4` A mutant that needs the server is reported as not killed when no test passed, so an unreachable server never reads as a kill (mutants T40 to T42).
 

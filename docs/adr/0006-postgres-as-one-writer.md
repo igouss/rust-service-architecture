@@ -1,4 +1,4 @@
-# 0006. Postgres runs one unit of work at a time, behind an advisory lock
+# 0006. Postgres runs one unit of work at a time, behind an advisory lock, on pooled connections that each have a thread
 
 Date: 2026-11-15
 
@@ -32,6 +32,19 @@ no conflict, no retry. Reads run on their own connections in read-only `REPEATAB
 transactions and never wait for the writer. Positions are assigned under the lock as one more
 than the highest stored. The client is the blocking one; ADR 0002 stands.
 
+Connections come from an `r2d2` pool: a unit or a read checks one out, so reads do not queue
+behind a unit, a connection the server closed is replaced, and the pool's size is the
+service's footprint on the server. A first version kept one writer connection and a fixed
+ring of readers behind mutexes; it could not replace a dead connection and made a reader wait
+for a busy one while others were idle.
+
+Each pooled connection lives on a thread of its own, and a call hands it one statement and
+waits for the answer. The blocking client is the async client with a private runtime, and it
+panics when called from a thread that is driving tasks: with the client called directly,
+`app::relay` panicked under `Runtime::block_on`, and dropping the store inside a runtime
+aborted the process. Passing the conformance suite had shown neither, because the suite runs
+on plain threads.
+
 Considered and set aside: an expected version with retry (above); a lock per lifecycle, which
 lets commands on different lifecycles interleave but deadlocks when policies cross lifecycles
 and still serialises the common case.
@@ -46,8 +59,15 @@ and still serialises the common case.
 - The adapter passes the 38 cases of the conformance suite. Four writers on separate
   connections leave the tally equal to the facts with positions 1 to 100 (mutant T39 removes
   the lock and the test fails). A read does not see a commit made after it began (mutant T43).
-- Not measured: the adapter itself under load. The spike's numbers are plain SQL over a unix
-  socket, one statement per round trip, which is what the adapter does.
+- `app::handle(AddTask)` through the adapter, 500 commands on one connection over TCP
+  loopback, test profile: 5.6 ms p50 with `synchronous_commit=on`, 1.2 ms with `off`. The
+  SQLite adapter on the same machine: 3.9 ms under `Durability::Full`, 59 µs under `Normal`.
+  A durable commit costs about the same on both; without one, Postgres pays for a round trip
+  and a thread hand-off per statement, about ten of each per command.
+- With the server's connections closed under it, the store answered the next command in each of
+  40 runs. Before a fatal server error counted as a dead connection, it failed one run in
+  three.
+- Not measured: the adapter under concurrent load.
 
 ## What it preserved
 

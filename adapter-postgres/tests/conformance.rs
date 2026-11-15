@@ -13,7 +13,7 @@ fn subject() -> Subject {
     let schema: String = format!("suite_{}", SCHEMAS.fetch_add(1, Ordering::SeqCst));
     let mut setup: postgres::Client = postgres::Client::connect(&url, postgres::NoTls).expect("connects");
     setup.batch_execute(&format!("DROP SCHEMA IF EXISTS {schema} CASCADE")).expect("dropped");
-    Postgres::connect(&url, &schema, 1).expect("opens")
+    Postgres::connect(&url, &schema, 4).expect("opens")
 }
 
 include!("../../ports/tests/conformance/suite.rs");

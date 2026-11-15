@@ -107,7 +107,8 @@ Participants: `Projection`, `ports::project`, `Unit::put`, `app::project`, `app:
 ## `arch-a90r` A recorded fact shall be built only by ports, from a write or a read of the store
 
 The system shall build a `Recorded` fact only when `Unit::apply` appends it or `Unit::facts`
-reads it back, so every fact a policy or a projection receives is one the store holds.
+reads it back, so nothing outside `ports` can make one up. A fact carried out of a unit that
+then fails was appended and rolled back; it is still one `ports` built.
 
 Participants: `ports::Recorded`, `Unit::apply`, `Unit::facts`.
 
