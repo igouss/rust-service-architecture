@@ -34,7 +34,7 @@ Each is a crate; dependencies only point inward.
 | Core | `domain` | state types, commands, events, decisions, derived views, process managers | nothing: no I/O, no clock, no async |
 | Ports | `ports` | the traits the outside must implement and the types that cross them | the core |
 | Shell | `app` | the handler, each record type's policy, queries, the relay | core and ports |
-| Adapters | `adapter-sqlite`, `adapter-memory`, `adapter-http` | a store, on SQLite or in memory; HTTP and Datastar server-sent events | the outside world |
+| Adapters | `adapter-sqlite`, `adapter-memory`, `adapter-postgres`, `adapter-http` | a store, on SQLite, in memory or on Postgres; HTTP and Datastar server-sent events | the outside world |
 | Root | `server` | `main()`, which plugs adapters into the shell | everything |
 
 The generated picture is [`docs/views/crates.md`](docs/views/crates.md).
@@ -88,10 +88,11 @@ MIT or Apache-2.0, at your option.
 
 ## What it is for, and what it is not
 
-It is for a single-node service on SQLite: one writer, one process. That is what lets one
-transaction hold everything a command causes. A database reached over the network, or a second
-writer process, changes the design; [`docs/adr/0001`](docs/adr/0001-state-rows-with-facts-as-history.md)
-says how.
+It is for a service whose commands run one at a time: SQLite on one node, state held in
+memory, or Postgres behind a writer lock. That is what lets one transaction hold everything a
+command causes. A service that needs commands to commit concurrently changes the design;
+[`docs/adr/0001`](docs/adr/0001-state-rows-with-facts-as-history.md) and
+[`0006`](docs/adr/0006-postgres-as-one-writer.md) say how.
 
 ## Measured
 

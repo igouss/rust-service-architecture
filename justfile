@@ -27,6 +27,23 @@ roles:
 raw-store:
     python3 raw-store.py
 
+[doc("The Postgres adapter against a server: lints, the conformance suite, concurrent writers. Not in `check`: it needs STORE_POSTGRES_URL.")]
+postgres:
+    @test -n "${STORE_POSTGRES_URL:-}" || (echo 'postgres: set STORE_POSTGRES_URL to a database these tests may write to, or run `just postgres-local`' && false)
+    cargo clippy -q -p adapter-postgres --all-targets --features server -- -D warnings
+    cargo test -q -p adapter-postgres --features server
+
+[doc("Start a throwaway Postgres under target/, run `just postgres` against it, stop it.")]
+postgres-local:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    data=target/postgres
+    test -d "$data" || initdb -D "$data" -A trust -U store >/dev/null
+    pg_ctl -D "$data" -o "-c listen_addresses=127.0.0.1 -c port=54330 -c unix_socket_directories=''" -l "$data/server.log" -w start >/dev/null
+    trap 'pg_ctl -D "$data" -m fast stop >/dev/null' EXIT
+    createdb -h 127.0.0.1 -p 54330 -U store store 2>/dev/null || true
+    STORE_POSTGRES_URL="host=127.0.0.1 port=54330 user=store dbname=store" just postgres
+
 [doc("arch-zhm: the core does no I/O, reads no clock, runs no async.")]
 purity:
     effect-audit --require-domain --strict .

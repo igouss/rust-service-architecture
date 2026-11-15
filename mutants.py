@@ -7,7 +7,7 @@ from planted.shell import SHELL
 from planted.stores import STORES
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-CRATES = ["domain", "ports", "app", "adapter-sqlite", "adapter-memory", "adapter-http", "server", "bench"]
+CRATES = ["domain", "ports", "app", "adapter-sqlite", "adapter-memory", "adapter-postgres", "adapter-http", "server", "bench"]
 FILES = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "clippy.toml", "rustfmt.toml", "justfile", "guide-sync.bb", "mutants.py", "raw-store.py"]
 
 MUTANTS = SHELL + STORES + HTTP + GATES
@@ -29,6 +29,18 @@ def run(name, path, old, new, expect):
             return False, "ANCHOR FOUND %d TIMES" % source.count(old)
         open(target, "w").write(source.replace(old, new))
         env = dict(os.environ, CARGO_TARGET_DIR=os.path.join(ROOT, "target", "mutants"))
+        if isinstance(expect, tuple) and expect[0] == "server":
+            if not os.environ.get(expect[2]):
+                return False, "NEEDS %s: this mutant is killed by tests that run against a server" % expect[2]
+            done = subprocess.run(expect[1], cwd=scratch, env=env, capture_output=True, text=True)
+            output = done.stdout + done.stderr
+            failed = sorted(set(re.findall(r"^---- (\S+) stdout ----", output, re.M)))
+            passed = sum(int(count) for count in re.findall(r"test result: \w+\. (\d+) passed", output))
+            if "could not compile" in output:
+                return False, "DID NOT COMPILE: " + " ".join(sorted(set(re.findall(r"error\[E\d+\]", output))))
+            if passed == 0:
+                return False, "NO TEST PASSED: the server is not reachable, so a failure proves nothing"
+            return done.returncode != 0 and bool(failed), "killed by " + ", ".join(failed) if failed else "SURVIVED"
         if isinstance(expect, tuple):
             shutil.copytree(os.path.join(ROOT, "docs"), os.path.join(scratch, "docs"))
             done = subprocess.run(expect[1], cwd=scratch, env=env, capture_output=True, text=True)

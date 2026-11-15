@@ -28,6 +28,11 @@ names the rule it enforces.
 | `docs` | `guide-sync.bb` | every Rust block in these documents is code in the workspace |
 | `ids` | `req check` | the requirement ids and their projection are current |
 
+`just postgres` runs the Postgres adapter's lints and tests against the server that
+`STORE_POSTGRES_URL` names, and `just postgres-local` starts a throwaway one for it. Neither is
+in `just check`, which needs no server; the `postgres` job in continuous integration runs the
+first on every change.
+
 Mutation testing is not in `just check` and not in the working loop. The `mutation` job in
 `.github/workflows/ci.yml` runs `just mutants` and `cargo mutants` after a push to `main` and
 weekly; it never blocks a change ([`arch-h6j`](enforcement.req.md)).

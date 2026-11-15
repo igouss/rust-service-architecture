@@ -9,7 +9,7 @@ form you are copying.
 | Path | What to do |
 |---|---|
 | `ports/src/`, `ports/tests/conformance/` | keep, byte for byte |
-| `adapter-sqlite/`, `adapter-memory/` | keep the one store adapter your service uses, byte for byte, with its `tests/conformance.rs`; delete the other together with its workspace member line and its entry in `mutants.py`'s `CRATES` ([adapters](../architecture/adapters.req.md)) |
+| `adapter-sqlite/`, `adapter-memory/`, `adapter-postgres/` | keep the one store adapter your service uses, byte for byte, with its tests; delete the others together with their workspace member lines, their entries in `mutants.py`'s `CRATES` and their mutants ([adapters](../architecture/adapters.req.md)). Without `adapter-postgres`, delete the `postgres` recipes and the `postgres` job too |
 | `app/src/lib.rs`, `domain/src/lib.rs` | keep; only their `pub mod` lines change |
 | `clippy.toml`, `rustfmt.toml`, the root `Cargo.toml`, `views.py`, `guide-sync.bb`, `CLAUDE.md`, `.req/`, `requirements.toon`, `LICENSE-*`, `.gitignore` | keep |
 | `domain/src/task.rs`, `payment.rs`, `fulfilment.rs`; `app/src/tasks.rs`, `payments.rs` | replace with your lifecycles, policies and queries |

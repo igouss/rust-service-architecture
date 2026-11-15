@@ -1,0 +1,75 @@
+Postgres writer-lock spike, 2026-11-15. Throwaway cluster, PostgreSQL 18.6, unix socket, one machine
+(Intel i7-8650U). Not the adapter: plain SQL through psql and pgbench, written before adapter-postgres
+existed, to decide the shape of the store port. The schema is the SQLite adapter's, with facts.position
+as an identity column. READ COMMITTED, the default.
+
+A unit of work (unit.sql, below): read the stream's version, insert a fact, upsert the state row, read
+the tally read model's position and row, compare the fact's position with the read model's position
+(the arch-oif guard), upsert the row and the position, commit. Two sessions A and B, interleaved with
+pg_sleep.
+
+Without a lock
+  S1  A takes position 1, B takes 2 and commits, A guards after:
+      A REFUSED OutOfOrder at 2 offered 1. A valid command fails; facts: 2 only.
+  S1b A reads the guard before B commits and writes after:
+      both commit. facts 1,2; tally row 1; tally position 1. The position went backwards and one
+      fact is missing from the tally, with no error.
+  S2  both read the tally before either writes:
+      both commit. facts 1,2; tally row 1; tally position 2. One fact missing, no error.
+  S3  same stream, both load version 0:
+      B: duplicate key value violates unique constraint facts_lifecycle_stream_version_key.
+
+With SELECT pg_advisory_xact_lock(1) as the first statement of each unit
+  S1, S1b, S2: facts 1,2; tally row 2; tally position 2.
+  S3: facts s1v1, s1v2; tally row 2; tally position 2.
+
+pgbench, the same unit as a script (bench.sql), random stream out of 100000, 8 s per row.
+"check" is read after the run: facts counted, the tally row, the tally position, max(position).
+
+  synchronous_commit=on   clients=1  lock      172.9 tps   5.78 ms   check: facts=1383 tally=1383 pos=1383 maxpos=1383
+  synchronous_commit=on   clients=8  lock      183.7 tps  43.56 ms   check: facts=1474 tally=1474 pos=1474 maxpos=1474
+  synchronous_commit=on   clients=8  no lock   207.7 tps  38.51 ms   check: facts=1675 tally=201  pos=1671 maxpos=1675
+  synchronous_commit=off  clients=1  lock     1255.0 tps   0.80 ms   check: facts=10035 tally=10035 pos=10035 maxpos=10035
+  synchronous_commit=off  clients=8  lock     1007.0 tps   7.94 ms   check: facts=8048 tally=8048 pos=8048 maxpos=8048
+  synchronous_commit=off  clients=8  no lock  (2 clients aborted on the unique constraint)
+                                               2.71 ms               check: facts=23589 tally=5508 pos=23591 maxpos=23591
+
+The no-lock rows are a ceiling, not an option: their tally is wrong.
+
+--- unit.sql
+\set QUIET on
+BEGIN;
+:lock
+SELECT pg_sleep(:pre);
+SELECT coalesce((SELECT version FROM states WHERE lifecycle='task' AND stream=:'stream'),0) AS v \gset
+INSERT INTO facts (lifecycle, stream, version, event) VALUES ('task', :'stream', :v + 1, 'Added') RETURNING position AS pos \gset
+\echo :who fact position :pos
+INSERT INTO states VALUES ('task', :'stream', :v + 1, 'Open') ON CONFLICT (lifecycle, stream) DO UPDATE SET version = excluded.version, state = excluded.state;
+SELECT pg_sleep(:mid);
+SELECT coalesce((SELECT position FROM read_model_positions WHERE name='tally'),0) AS at \gset
+SELECT coalesce((SELECT row::int FROM read_models WHERE name='tally' AND key='all'),0) AS n \gset
+\echo :who guard reads position :at tally :n
+SELECT pg_sleep(:late);
+SELECT :pos <= :at AS out_of_order \gset
+\if :out_of_order
+  \echo :who REFUSED OutOfOrder at :at offered :pos
+  ROLLBACK;
+\else
+  INSERT INTO read_models VALUES ('tally','all', (:n + 1)::text) ON CONFLICT (name, key) DO UPDATE SET row = excluded.row;
+  INSERT INTO read_model_positions VALUES ('tally', :pos) ON CONFLICT (name) DO UPDATE SET position = excluded.position;
+  COMMIT;
+  \echo :who committed
+\endif
+
+--- bench.sql (":lock" is the advisory lock statement or absent)
+\set s random(1, 100000)
+BEGIN;
+:lock
+SELECT coalesce((SELECT version FROM states WHERE lifecycle='task' AND stream=:s::text),0) AS v \gset
+INSERT INTO facts (lifecycle, stream, version, event) VALUES ('task', :s::text, :v + 1, '{"Added":{"title":"t"}}') RETURNING position AS pos \gset
+INSERT INTO states VALUES ('task', :s::text, :v + 1, '{"Open":{"title":"t"}}') ON CONFLICT (lifecycle, stream) DO UPDATE SET version = excluded.version, state = excluded.state;
+SELECT coalesce((SELECT position FROM read_model_positions WHERE name='tally'),0) AS at \gset
+SELECT coalesce((SELECT row::int FROM read_models WHERE name='tally' AND key='all'),0) AS n \gset
+INSERT INTO read_models VALUES ('tally','all', (:n + 1)::text) ON CONFLICT (name, key) DO UPDATE SET row = excluded.row;
+INSERT INTO read_model_positions VALUES ('tally', :pos) ON CONFLICT (name) DO UPDATE SET position = excluded.position;
+COMMIT;

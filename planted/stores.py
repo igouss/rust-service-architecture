@@ -1,3 +1,5 @@
+POSTGRES = ("server", ["cargo", "test", "-q", "--no-fail-fast", "-p", "adapter-postgres", "--features", "server"], "STORE_POSTGRES_URL")
+
 STORES = [
     ("T4 the log ignores the position it resumes after", "adapter-sqlite/src/lib.rs",
      "WHERE lifecycle = ?1 AND position > ?2 ORDER BY position LIMIT ?3", "WHERE lifecycle = ?1 AND position > ?2 - ?2 ORDER BY position LIMIT ?3", "test"),
@@ -41,4 +43,13 @@ STORES = [
      "tables.rejections.extend(pending.rejections);", "drop(pending.rejections);", "test"),
     ("T38 a memory commit does not report its position", "adapter-memory/src/lib.rs",
      "appended.then(|| Position(count(tables.facts.len())))", "appended.then(|| Position(count(tables.facts.len()))).filter(|_position: &Position| false)", "test"),
+    ("T39 the Postgres store takes no writer lock", "adapter-postgres/src/lib.rs",
+     "session.transaction.execute(&statements.lock, &[&self.lock]).map_err(unavailable)?;", "", POSTGRES),
+    ("T40 the Postgres store commits a failed unit", "adapter-postgres/src/lib.rs",
+     "let value: T = work(&mut session)?;\n            let last: Option<Position> = session.last;\n            session.transaction.commit().map_err(unavailable)?;",
+     "let outcome: Result<T, StoreError> = work(&mut session);\n            let last: Option<Position> = session.last;\n            session.transaction.commit().map_err(unavailable)?;\n            let value: T = outcome?;", POSTGRES),
+    ("T41 a failed Postgres request is claimed first again", "adapter-postgres/src/statements.rs", "AND NOT done ORDER BY attempts, id", "AND NOT done ORDER BY id", POSTGRES),
+    ("T42 the Postgres outbox hands out a request already done", "adapter-postgres/src/statements.rs", "AND NOT done ORDER BY attempts, id", "ORDER BY attempts, id", POSTGRES),
+    ("T43 a Postgres read sees commits made after it began", "adapter-postgres/src/lib.rs",
+     ".isolation_level(IsolationLevel::RepeatableRead)", ".isolation_level(IsolationLevel::ReadCommitted)", POSTGRES),
 ]

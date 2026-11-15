@@ -7,6 +7,7 @@ a dotted arrow is a dev-dependency.
 graph TD
     adapter_http["adapter-http<br/><i>driving-adapter</i>"]
     adapter_memory["adapter-memory<br/><i>driven-adapter</i>"]
+    adapter_postgres["adapter-postgres<br/><i>driven-adapter</i>"]
     adapter_sqlite["adapter-sqlite<br/><i>driven-adapter</i>"]
     app["app<br/><i>usecase</i>"]
     bench["bench<br/><i>composition-root</i>"]
@@ -19,6 +20,8 @@ graph TD
     adapter_http --> ports
     adapter_memory -.-> domain
     adapter_memory --> ports
+    adapter_postgres -.-> domain
+    adapter_postgres --> ports
     adapter_sqlite -.-> domain
     adapter_sqlite --> ports
     app -.-> adapter_sqlite
