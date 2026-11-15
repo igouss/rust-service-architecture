@@ -16,7 +16,7 @@ graph TD
     adapter_http --> app
     adapter_http --> domain
     adapter_http --> ports
-    adapter_sqlite --> domain
+    adapter_sqlite -.-> domain
     adapter_sqlite --> ports
     app -.-> adapter_sqlite
     app --> domain

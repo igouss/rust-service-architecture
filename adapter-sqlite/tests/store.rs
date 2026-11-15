@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use adapter_sqlite::{Durability, Sqlite};
 use domain::payment::{Amount, Authorize, Payment, PaymentEvent};
 use domain::task::{AddTask, CompleteTask, Tally, Task, TaskEvent, TaskTally, Title};
-use ports::{Applied, Journal, Position, Recorded, StoreError, StreamId, Unit, Version, View};
+use ports::{Applied, Journal, Position, Recorded, StoreError, StreamId, Version};
 
 static FILES: AtomicU64 = AtomicU64::new(0);
 
@@ -32,17 +32,25 @@ fn add(store: &Sqlite, task: &str) -> Vec<Recorded<TaskEvent>> {
     applied.facts
 }
 
-fn task_facts(store: &Sqlite, after: u64, limit: usize) -> Vec<Recorded<TaskEvent>> {
-    store.write(|unit| unit.facts::<Task>(Position(after), limit)).expect("facts")
+type Seen = (Position, StreamId, Version, TaskEvent);
+
+fn seen(facts: &[Recorded<TaskEvent>]) -> Vec<Seen> {
+    facts
+        .iter()
+        .map(|fact: &Recorded<TaskEvent>| (fact.position(), fact.stream().clone(), fact.version(), fact.event().clone()))
+        .collect()
 }
 
-fn added(position: u64, task: &str) -> Recorded<TaskEvent> {
-    Recorded {
-        position: Position(position),
-        stream: id(task),
-        version: Version(1),
-        event: TaskEvent::Added { title: title(task) },
-    }
+fn task_facts(store: &Sqlite, after: u64, limit: usize) -> Vec<Seen> {
+    seen(&store.write(|unit| unit.facts::<Task>(Position(after), limit)).expect("facts"))
+}
+
+fn added(position: u64, task: &str) -> Seen {
+    (Position(position), id(task), Version(1), TaskEvent::Added { title: title(task) })
+}
+
+fn first_fact(store: &Sqlite, task: &str) -> Recorded<TaskEvent> {
+    add(store, task).into_iter().next().expect("one fact")
 }
 
 #[test]
@@ -54,7 +62,7 @@ fn a_stream_never_written_loads_the_initial_state_at_version_zero() {
 #[test]
 fn an_applied_outcome_returns_its_recorded_facts() {
     let store: Sqlite = Sqlite::in_memory().expect("opens");
-    assert_eq!(add(&store, "t-1"), vec![added(1, "t-1")]);
+    assert_eq!(seen(&add(&store, "t-1")), vec![added(1, "t-1")]);
 }
 
 #[test]
@@ -128,21 +136,13 @@ fn a_second_fact_of_a_stream_takes_the_next_version() {
     let applied: Applied<Task> = store
         .write(|unit| unit.apply(&id("t-1"), |state: Task| ports::decide(CompleteTask, state)))
         .expect("applied");
-    assert_eq!(
-        applied.facts,
-        vec![Recorded {
-            position: Position(2),
-            stream: id("t-1"),
-            version: Version(2),
-            event: TaskEvent::Completed
-        }]
-    );
+    assert_eq!(seen(&applied.facts), vec![(Position(2), id("t-1"), Version(2), TaskEvent::Completed)]);
 }
 
 #[test]
 fn a_change_at_or_below_the_read_models_position_is_refused() {
     let store: Sqlite = Sqlite::in_memory().expect("opens");
-    let fact: Recorded<TaskEvent> = added(1, "t-1");
+    let fact: Recorded<TaskEvent> = first_fact(&store, "t-1");
     store.write(|unit| unit.put(ports::project::<TaskTally>(None, &fact))).expect("first put");
     let second: Result<(), StoreError> = store.write(|unit| unit.put(ports::project::<TaskTally>(None, &fact)));
     assert_eq!(
@@ -158,7 +158,7 @@ fn a_change_at_or_below_the_read_models_position_is_refused() {
 #[test]
 fn a_cleared_read_model_has_no_rows_and_accepts_position_one_again() {
     let store: Sqlite = Sqlite::in_memory().expect("opens");
-    let fact: Recorded<TaskEvent> = added(1, "t-1");
+    let fact: Recorded<TaskEvent> = first_fact(&store, "t-1");
     store.write(|unit| unit.put(ports::project::<TaskTally>(None, &fact))).expect("first put");
     store.write(|unit| unit.clear::<TaskTally>()).expect("cleared");
     assert_eq!(store.read(|view| view.rows::<TaskTally>()), Ok(Vec::new()));
@@ -168,7 +168,7 @@ fn a_cleared_read_model_has_no_rows_and_accepts_position_one_again() {
 #[test]
 fn a_put_row_is_listed_under_its_key() {
     let store: Sqlite = Sqlite::in_memory().expect("opens");
-    let fact: Recorded<TaskEvent> = added(1, "t-1");
+    let fact: Recorded<TaskEvent> = first_fact(&store, "t-1");
     store.write(|unit| unit.put(ports::project::<TaskTally>(None, &fact))).expect("put");
     assert_eq!(
         store.read(|view| view.rows::<TaskTally>()),

@@ -12,7 +12,7 @@ use app::{handle, rebuild, relay};
 use domain::fulfilment::{Fulfilment, FulfilmentRequest, Progress};
 use domain::payment::{Amount, Authorize, Capture, Payment, PaymentRefusal};
 use domain::task::{AddTask, CompleteTask, Tally, Task, TaskRefusal, TaskTally, Title};
-use ports::{Answer, Claimed, Gateway, GatewayError, Journal, Outbox, Position, RequestId, StoreError, StreamId, Version, View};
+use ports::{Answer, Claimed, Gateway, GatewayError, Journal, Outbox, Position, RequestId, StoreError, StreamId, Version};
 
 fn ready<F: Future>(future: F) -> F::Output {
     let mut future = pin!(future);

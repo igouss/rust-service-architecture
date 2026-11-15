@@ -55,7 +55,8 @@ A follow-up task, started from the mutation job's report, not part of starting t
   A test may take `serde` as a dev-dependency for that.
 - An **example** mutant is planted in code you deleted, so its anchor is gone. Re-plant the
   same fault in your own code: a lifecycle with no policy (C8), a command returning a request
-  (C9), a policy skipping its projection or its process manager (T10, T11), a stored type
+  (C9), a fact built outside `ports` (C10), a policy skipping its projection or its process
+  manager (T10, T11), a stored type
   changing its encoding (T20), a refined type accepting what it must refuse (T22 to T24), a
   wildcard arm (G6), and the driving adapter's faults (H1 to H9). Changing a mutant's anchor
   and replacement to plant the same fault in new code is a legitimate edit

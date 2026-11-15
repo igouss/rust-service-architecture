@@ -3,7 +3,7 @@ import os, re, shutil, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 CRATES = ["domain", "ports", "app", "adapter-sqlite", "adapter-http", "server", "bench"]
-FILES = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "clippy.toml", "rustfmt.toml", "justfile", "guide-sync.bb", "mutants.py"]
+FILES = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "clippy.toml", "rustfmt.toml", "justfile", "guide-sync.bb", "mutants.py", "raw-store.py"]
 
 HANDLE = "let applied: Applied<C::Reads> = unit.apply(id, |state: C::Reads| ports::decide(command, state))?;"
 REACT = "let applied: Applied<X::Reads> = unit.apply(id, |state: X::Reads| ports::react(progress, state))?;"
@@ -17,7 +17,7 @@ MUTANTS = [
     ("C3 the private fold is called outside ports", "app/src/lib.rs", REACT,
      "let applied: Applied<X::Reads> = unit.apply(id, |state: X::Reads| ports::Outcome::<X::Reads, X::Request>::Accepted(ports::Transition::fold(state, Vec::new(), Vec::new())))?;", "E0624"),
     ("C4 a change is built outside ports", "app/src/lib.rs", PUT,
-     "unit.put(ports::Change::<P> { position: fact.position, write: ports::Write::Nothing })", "E0451"),
+     "unit.put(ports::Change::<P> { position: fact.position(), write: ports::Write::Nothing })", "E0451"),
     ("C5 an outcome is computed and dropped", "app/src/lib.rs", HANDLE,
      "ports::decide(domain::task::CompleteTask, domain::task::Task::Absent); " + HANDLE, "unused"),
     ("C6 applied facts never reach a policy", "app/src/lib.rs",
@@ -26,33 +26,41 @@ MUTANTS = [
     ("C7 a change is computed and never put", "app/src/lib.rs", PUT,
      "{ ports::project::<P>(row, fact); Ok(()) }", "unused"),
     ("C8 a lifecycle has no policy", "app/src/tasks.rs",
-     "impl Policy for Task {\n    fn after<U: Unit>(unit: &mut U, fact: &Recorded<TaskEvent>) -> Result<(), StoreError> {\n        project::<U, TaskTally>(unit, fact)\n    }\n}",
+     "impl Policy for Task {\n    fn after(unit: &mut Unit<'_>, fact: &Recorded<TaskEvent>) -> Result<(), StoreError> {\n        project::<TaskTally>(unit, fact)\n    }\n}",
      "pub fn unused_task_event(_fact: &Recorded<TaskEvent>) {}", "E0277"),
     ("C9 a command issues a request", "domain/src/task.rs",
      "Task::Open { .. } => Ok(vec![TaskEvent::Completed]),",
      "Task::Open { .. } => Ok(crate::Step { events: vec![TaskEvent::Completed], requests: vec![()] }),", "E0308"),
+    ("C10 a fact is built outside ports", "app/src/tasks.rs", "        project::<TaskTally>(unit, fact)\n",
+     "        project::<TaskTally>(unit, &Recorded { position: ports::Position(1), stream: fact.stream().clone(), version: fact.version(), event: TaskEvent::Completed })\n", "E0451"),
+    ("C11 the key to the raw store is built outside ports", "app/src/lib.rs", "pub trait Policy: Lifecycle {",
+     "pub fn key() -> ports::store::Key {\n    ports::store::Key(())\n}\n\npub trait Policy: Lifecycle {", "E0603"),
+    ("C12 the key to the raw store is minted outside ports", "app/src/lib.rs", "pub trait Policy: Lifecycle {",
+     "pub fn key() -> ports::store::Key {\n    ports::store::Key::new()\n}\n\npub trait Policy: Lifecycle {", "E0624"),
+    ("C13 a unit of work is built around a raw writer outside ports", "app/src/lib.rs", "pub trait Policy: Lifecycle {",
+     "pub fn unit(store: &mut dyn ports::store::Writer) -> Unit<'_> {\n    Unit { store }\n}\n\npub trait Policy: Lifecycle {", "E0451"),
     ("T1 the stored state is not the fold of the facts", "ports/src/lib.rs",
      "let state: S = events.iter().fold(state, S::evolve);", "let state: S = events.iter().fold(state, |state: S, _event: &S::Event| state);", "test"),
-    ("T2 a refusal is not recorded", "adapter-sqlite/src/lib.rs",
-     ".execute(params![S::NAME, id.0, encode(\"rejections\", &refusal)?])", ".execute(params![S::NAME, id.0, encode(\"rejections\", &refusal)?]).and(Ok(0)).and_then(|_: usize| self.transaction.execute(\"DELETE FROM rejections\", []))", "test"),
-    ("T3 the state row is not written", "adapter-sqlite/src/lib.rs", "if next != version {", "if false {", "test"),
+    ("T2 a refusal is not recorded", "ports/src/lib.rs",
+     "self.store.reject(S::NAME, id, &encode(\"rejections\", &refusal)?)?;", "let _unrecorded: String = encode(\"rejections\", &refusal)?;", "test"),
+    ("T3 the state row is not written", "ports/src/lib.rs", "if next != version {", "if false {", "test"),
     ("T4 the log ignores the position it resumes after", "adapter-sqlite/src/lib.rs",
      "WHERE lifecycle = ?1 AND position > ?2 ORDER BY position LIMIT ?3", "WHERE lifecycle = ?1 AND position > ?2 - ?2 ORDER BY position LIMIT ?3", "test"),
     ("T5 the log returns another lifecycle's facts", "adapter-sqlite/src/lib.rs",
      "WHERE lifecycle = ?1 AND position > ?2 ORDER BY position LIMIT ?3", "WHERE ?1 = ?1 AND position > ?2 ORDER BY position LIMIT ?3", "test"),
     ("T6 the log ignores its limit", "adapter-sqlite/src/lib.rs",
      "WHERE lifecycle = ?1 AND position > ?2 ORDER BY position LIMIT ?3", "WHERE lifecycle = ?1 AND position > ?2 ORDER BY position LIMIT ?3 + 1000", "test"),
-    ("T7 a read model accepts a change out of order", "adapter-sqlite/src/lib.rs", "if position <= at {", "if false {", "test"),
+    ("T7 a read model accepts a change out of order", "ports/src/lib.rs", "if position <= at {", "if false {", "test"),
     ("T8 a read model's position does not advance", "adapter-sqlite/src/lib.rs",
-     ".execute(params![P::NAME, stored(position.0)?])", ".execute(params![P::NAME, stored(position.0 - position.0)?])", "test"),
+     "params![read_model, stored(position.0)?],", "params![read_model, stored(position.0 - position.0)?],", "test"),
     ("T9 a failed unit is committed", "adapter-sqlite/src/lib.rs",
-     "let value: T = work(&mut unit)?;\n        let last: Option<Position> = unit.last;\n        transaction.commit().map_err(unavailable)?;",
-     "let outcome: Result<T, StoreError> = work(&mut unit);\n        let last: Option<Position> = unit.last;\n        transaction.commit().map_err(unavailable)?;\n        let value: T = outcome?;", "test"),
+     "let value: T = work(&mut writer)?;\n        let last: Option<Position> = writer.last;\n        transaction.commit().map_err(unavailable)?;",
+     "let outcome: Result<T, StoreError> = work(&mut writer);\n        let last: Option<Position> = writer.last;\n        transaction.commit().map_err(unavailable)?;\n        let value: T = outcome?;", "test"),
     ("T10 a policy skips its projection", "app/src/tasks.rs",
-     "        project::<U, TaskTally>(unit, fact)\n", "        Ok(()).map(|ok: ()| { let _unused: (&mut U, &Recorded<TaskEvent>) = (unit, fact); ok })\n", "test"),
+     "        project::<TaskTally>(unit, fact)\n", "        Ok(()).map(|ok: ()| { let _unused: (&mut Unit<'_>, &Recorded<TaskEvent>) = (unit, fact); ok })\n", "test"),
     ("T11 a policy skips its process manager", "app/src/payments.rs",
-     "PaymentEvent::Captured { .. } => react(unit, &fulfilment_of(&fact.stream), Progress::PaymentCaptured),",
-     "PaymentEvent::Captured { .. } => Ok(()).map(|ok: ()| { let _unused: (&mut U, Progress) = (unit, Progress::PaymentCaptured); ok }),", "test"),
+     "PaymentEvent::Captured { .. } => react(unit, &fulfilment_of(fact.stream()), Progress::PaymentCaptured),",
+     "PaymentEvent::Captured { .. } => Ok(()).map(|ok: ()| { let _unused: (&mut Unit<'_>, Progress) = (unit, Progress::PaymentCaptured); ok }),", "test"),
     ("T12 applied facts skip the policy", "app/src/lib.rs", "S::after(unit, fact)?;", "let _skipped: &Recorded<S::Event> = fact;", "test"),
     ("T13 a projection folds without its previous row", "app/src/lib.rs",
      "Some(key) => unit.row::<P>(&key)?,", "Some(_key) => None,", "test"),
@@ -63,10 +71,10 @@ MUTANTS = [
     ("T16 the outbox hands out a request already done", "adapter-sqlite/src/lib.rs", "AND done = 0 ORDER BY attempts, id", "ORDER BY attempts, id", "test"),
     ("T17 a commit does not report its position", "adapter-sqlite/src/lib.rs", "self.last = Some(position);", "self.last = self.last.and(Some(position));", "test"),
     ("T18 a rebuild keeps the old rows", "app/src/lib.rs", "unit.clear::<P>()?;", "", "test"),
-    ("T19 requests are not written to the outbox", "adapter-sqlite/src/lib.rs", "for request in &requests {", "for request in requests.iter().take(0) {", "test"),
+    ("T19 requests are not written to the outbox", "ports/src/lib.rs", "for request in &requests {", "for request in requests.iter().take(0) {", "test"),
     ("T20 a stored fact changes its encoding", "domain/src/task.rs",
      "pub enum TaskEvent {\n    Added { title: Title },\n    Completed,", "pub enum TaskEvent {\n    Added { title: Title },\n    #[serde(rename = \"Finished\")]\n    Completed,", "test"),
-    ("T21 a fact takes a position that is not its own", "adapter-sqlite/src/lib.rs",
+    ("T21 a fact takes a position that is not its own", "ports/src/lib.rs",
      "                        position,\n                        stream: id.clone(),",
      "                        position: Position(position.0 + 1),\n                        stream: id.clone(),", "test"),
     ("T22 a blank title is accepted", "domain/src/task.rs", "if text.trim().is_empty() {", "if text.is_empty() && !text.is_empty() {", "test"),
@@ -94,6 +102,8 @@ MUTANTS = [
      "self.connection.lock().map_err(|_: PoisonError<MutexGuard<'_, Connection>>| StoreError::Unavailable { cause: String::new() })", "test"),
     ("G1 a driven adapter depends on the shell", "adapter-sqlite/Cargo.toml", 'ports = { path = "../ports" }',
      'ports = { path = "../ports" }\napp = { path = "../app" }', ("gate", ["hex-lint"], "adapter-sqlite")),
+    ("G10 a store adapter depends on a serializer", "adapter-sqlite/Cargo.toml", 'ports = { path = "../ports" }',
+     'ports = { path = "../ports" }\nserde_json = { workspace = true }', ("gate", ["python3", "raw-store.py"], "adapter-sqlite depends on serde_json")),
     ("G8 a driving adapter depends on a driven adapter", "adapter-http/Cargo.toml", 'ports = { path = "../ports" }',
      'ports = { path = "../ports" }\nadapter-sqlite = { path = "../adapter-sqlite" }', ("gate", ["hex-lint"], "adapter-http")),
     ("G2 the core reads the clock", "domain/src/lib.rs", "pub type Facts<S> = Vec<<S as Lifecycle>::Event>;",
@@ -112,7 +122,7 @@ MUTANTS = [
      "pub struct RequestId(pub u32);", ("gate", ["bb", "guide-sync.bb"], "arch-ajd")),
 ]
 
-EXAMPLE = {"C5", "C8", "C9", "T10", "T11", "T20", "T22", "T23", "T24", "G6", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9"}
+EXAMPLE = {"C5", "C8", "C9", "C10", "T10", "T11", "T20", "T22", "T23", "T24", "G6", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9"}
 
 
 def run(name, path, old, new, expect):

@@ -29,8 +29,6 @@ dependencies = [
  "domain",
  "ports",
  "rusqlite",
- "serde",
- "serde_json",
 ]
 
 [[package]]
@@ -432,6 +430,7 @@ version = "0.0.0"
 dependencies = [
  "domain",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

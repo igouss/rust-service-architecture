@@ -1,6 +1,12 @@
 use std::future::Future;
 
 use domain::{Command, Lifecycle, Never, Projection, Reaction, Step};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+
+pub mod store;
+
+use store::{Key, Reader, Store, StoredFact, StoredRequest, Writer};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StreamId(pub String);
@@ -45,10 +51,6 @@ impl<S: Lifecycle, R> Transition<S, R> {
     pub fn state(&self) -> &S {
         &self.state
     }
-
-    pub fn into_parts(self) -> (S, Vec<S::Event>, Vec<R>) {
-        (self.state, self.events, self.requests)
-    }
 }
 
 #[must_use = "an outcome that is never applied loses its facts, its requests or its refusal"]
@@ -77,10 +79,28 @@ pub fn react<X: Reaction>(reaction: X, state: X::Reads) -> Outcome<X::Reads, X::
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Recorded<E> {
-    pub position: Position,
-    pub stream: StreamId,
-    pub version: Version,
-    pub event: E,
+    position: Position,
+    stream: StreamId,
+    version: Version,
+    event: E,
+}
+
+impl<E> Recorded<E> {
+    pub fn position(&self) -> Position {
+        self.position
+    }
+
+    pub fn stream(&self) -> &StreamId {
+        &self.stream
+    }
+
+    pub fn version(&self) -> Version {
+        self.version
+    }
+
+    pub fn event(&self) -> &E {
+        &self.event
+    }
 }
 
 #[must_use = "the facts of an applied outcome must reach their lifecycle's policy"]
@@ -99,12 +119,6 @@ pub enum Write<P: Projection> {
 pub struct Change<P: Projection> {
     position: Position,
     write: Write<P>,
-}
-
-impl<P: Projection> Change<P> {
-    pub fn into_parts(self) -> (Position, Write<P>) {
-        (self.position, self.write)
-    }
 }
 
 pub type Fact<P> = Recorded<<<P as Projection>::Reads as Lifecycle>::Event>;
@@ -127,30 +141,159 @@ pub fn project<P: Projection>(row: Option<P::Row>, fact: &Fact<P>) -> Change<P> 
     }
 }
 
-pub trait Unit {
-    fn apply<S: Lifecycle, R: serde::Serialize>(&mut self, id: &StreamId, decide: impl FnOnce(S) -> Outcome<S, R>) -> Result<Applied<S>, StoreError>;
-    fn row<P: Projection>(&mut self, key: &str) -> Result<Option<P::Row>, StoreError>;
-    fn put<P: Projection>(&mut self, change: Change<P>) -> Result<(), StoreError>;
-    fn clear<P: Projection>(&mut self) -> Result<(), StoreError>;
-    fn facts<S: Lifecycle>(&mut self, after: Position, limit: usize) -> Result<Vec<Recorded<S::Event>>, StoreError>;
+fn encode<T: Serialize>(table: &'static str, value: &T) -> Result<String, StoreError> {
+    serde_json::to_string(value).map_err(|error: serde_json::Error| StoreError::Corrupt {
+        table,
+        cause: error.to_string(),
+    })
 }
 
-pub trait View {
-    fn state<S: Lifecycle>(&mut self, id: &StreamId) -> Result<(Version, S), StoreError>;
-    fn states<S: Lifecycle>(&mut self) -> Result<Vec<(StreamId, S)>, StoreError>;
-    fn row<P: Projection>(&mut self, key: &str) -> Result<Option<P::Row>, StoreError>;
-    fn rows<P: Projection>(&mut self) -> Result<Vec<(String, P::Row)>, StoreError>;
+fn decode<T: DeserializeOwned>(table: &'static str, text: &str) -> Result<T, StoreError> {
+    serde_json::from_str(text).map_err(|error: serde_json::Error| StoreError::Corrupt {
+        table,
+        cause: error.to_string(),
+    })
+}
+
+fn state_in<S: Lifecycle>(found: Option<(Version, String)>) -> Result<(Version, S), StoreError> {
+    match found {
+        None => Ok((Version(0), S::initial())),
+        Some((version, state)) => Ok((version, decode("states", &state)?)),
+    }
+}
+
+fn row_in<P: Projection>(found: Option<String>) -> Result<Option<P::Row>, StoreError> {
+    found.map(|text: String| decode("read_models", &text)).transpose()
+}
+
+pub struct Unit<'a> {
+    store: &'a mut dyn Writer,
+}
+
+impl Unit<'_> {
+    pub fn apply<S: Lifecycle, R: Serialize>(&mut self, id: &StreamId, decide: impl FnOnce(S) -> Outcome<S, R>) -> Result<Applied<S>, StoreError> {
+        let (version, state): (Version, S) = state_in(self.store.state(S::NAME, id)?)?;
+        match decide(state) {
+            Outcome::Refused(refusal) => {
+                self.store.reject(S::NAME, id, &encode("rejections", &refusal)?)?;
+                Ok(Applied {
+                    answer: Answer::Refused(refusal),
+                    facts: Vec::new(),
+                })
+            }
+            Outcome::Accepted(Transition { state, events, requests }) => {
+                let mut next: Version = version;
+                let mut facts: Vec<Recorded<S::Event>> = Vec::with_capacity(events.len());
+                for event in events {
+                    next = Version(next.0 + 1);
+                    let position: Position = self.store.append(S::NAME, id, next, &encode("facts", &event)?)?;
+                    facts.push(Recorded {
+                        position,
+                        stream: id.clone(),
+                        version: next,
+                        event,
+                    });
+                }
+                if next != version {
+                    self.store.save(S::NAME, id, next, &encode("states", &state)?)?;
+                }
+                for request in &requests {
+                    self.store.request(S::NAME, id, &encode("outbox", request)?)?;
+                }
+                Ok(Applied {
+                    answer: Answer::Accepted(next),
+                    facts,
+                })
+            }
+        }
+    }
+
+    pub fn row<P: Projection>(&mut self, key: &str) -> Result<Option<P::Row>, StoreError> {
+        row_in::<P>(self.store.row(P::NAME, key)?)
+    }
+
+    pub fn put<P: Projection>(&mut self, change: Change<P>) -> Result<(), StoreError> {
+        let Change { position, write } = change;
+        let at: Position = self.store.position(P::NAME)?;
+        if position <= at {
+            return Err(StoreError::OutOfOrder {
+                read_model: P::NAME,
+                at,
+                offered: position,
+            });
+        }
+        match write {
+            Write::Nothing => {}
+            Write::Upsert(key, row) => self.store.upsert(P::NAME, &key, &encode("read_models", &row)?)?,
+            Write::Delete(key) => self.store.delete(P::NAME, &key)?,
+        }
+        self.store.advance(P::NAME, position)
+    }
+
+    pub fn clear<P: Projection>(&mut self) -> Result<(), StoreError> {
+        self.store.clear(P::NAME)
+    }
+
+    pub fn facts<S: Lifecycle>(&mut self, after: Position, limit: usize) -> Result<Vec<Recorded<S::Event>>, StoreError> {
+        let mut facts: Vec<Recorded<S::Event>> = Vec::new();
+        self.store.facts(S::NAME, after, limit, &mut |fact: StoredFact<'_>| {
+            facts.push(Recorded {
+                position: fact.position,
+                stream: fact.stream,
+                version: fact.version,
+                event: decode("facts", fact.event)?,
+            });
+            Ok(())
+        })?;
+        Ok(facts)
+    }
+}
+
+pub struct View<'a> {
+    store: &'a mut dyn Reader,
+}
+
+impl View<'_> {
+    pub fn state<S: Lifecycle>(&mut self, id: &StreamId) -> Result<(Version, S), StoreError> {
+        state_in(self.store.state(S::NAME, id)?)
+    }
+
+    pub fn states<S: Lifecycle>(&mut self) -> Result<Vec<(StreamId, S)>, StoreError> {
+        let mut states: Vec<(StreamId, S)> = Vec::new();
+        self.store.states(S::NAME, &mut |stream: StreamId, state: &str| {
+            states.push((stream, decode("states", state)?));
+            Ok(())
+        })?;
+        Ok(states)
+    }
+
+    pub fn row<P: Projection>(&mut self, key: &str) -> Result<Option<P::Row>, StoreError> {
+        row_in::<P>(self.store.row(P::NAME, key)?)
+    }
+
+    pub fn rows<P: Projection>(&mut self) -> Result<Vec<(String, P::Row)>, StoreError> {
+        let mut rows: Vec<(String, P::Row)> = Vec::new();
+        self.store.rows(P::NAME, &mut |key: String, row: &str| {
+            rows.push((key, decode("read_models", row)?));
+            Ok(())
+        })?;
+        Ok(rows)
+    }
 }
 
 pub trait Journal {
-    type Unit<'a>: Unit
-    where
-        Self: 'a;
-    type View<'a>: View
-    where
-        Self: 'a;
-    fn write<T>(&self, work: impl FnOnce(&mut Self::Unit<'_>) -> Result<T, StoreError>) -> Result<T, StoreError>;
-    fn read<T>(&self, work: impl FnOnce(&mut Self::View<'_>) -> Result<T, StoreError>) -> Result<T, StoreError>;
+    fn write<T>(&self, work: impl FnOnce(&mut Unit<'_>) -> Result<T, StoreError>) -> Result<T, StoreError>;
+    fn read<T>(&self, work: impl FnOnce(&mut View<'_>) -> Result<T, StoreError>) -> Result<T, StoreError>;
+}
+
+impl<K: Store> Journal for K {
+    fn write<T>(&self, work: impl FnOnce(&mut Unit<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
+        self.transact(Key::new(), |store: &mut dyn Writer| work(&mut Unit { store }))
+    }
+
+    fn read<T>(&self, work: impl FnOnce(&mut View<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
+        self.snapshot(Key::new(), |store: &mut dyn Reader| work(&mut View { store }))
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -173,4 +316,27 @@ pub struct GatewayError {
 
 pub trait Gateway<R> {
     fn perform(&self, id: RequestId, stream: &StreamId, request: &R) -> impl Future<Output = Result<(), GatewayError>> + Send;
+}
+
+impl<K: Store> Outbox for K {
+    fn claim<X: Reaction>(&self, limit: usize) -> Result<Vec<Claimed<X::Request>>, StoreError> {
+        self.requests(Key::new(), <X::Reads as Lifecycle>::NAME, limit)?
+            .into_iter()
+            .map(|stored: StoredRequest| {
+                Ok(Claimed {
+                    id: stored.id,
+                    stream: stored.stream,
+                    request: decode("outbox", &stored.request)?,
+                })
+            })
+            .collect()
+    }
+
+    fn done(&self, id: RequestId) -> Result<(), StoreError> {
+        self.mark_done(Key::new(), id)
+    }
+
+    fn failed(&self, id: RequestId) -> Result<(), StoreError> {
+        self.mark_failed(Key::new(), id)
+    }
 }

@@ -1,7 +1,7 @@
 default: check
 
 [doc("Everything that must be green before a commit. Seconds, not minutes.")]
-check: fmt clippy test roles purity comments allows docs ids views-current
+check: fmt clippy test roles raw-store purity comments allows docs ids views-current
 
 [doc("Serve the task list. TASKS_DATABASE, TASKS_LISTEN and TASKS_DURABILITY (full|normal) override the defaults.")]
 run:
@@ -21,6 +21,10 @@ test:
 [doc("arch-jxh, arch-yr1: every dependency edge fits the role matrix and stays in its context.")]
 roles:
     hex-lint
+
+[doc("A driven adapter stores text: it depends on no domain crate and no serializer outside its tests.")]
+raw-store:
+    python3 raw-store.py
 
 [doc("arch-zhm: the core does no I/O, reads no clock, runs no async.")]
 purity:

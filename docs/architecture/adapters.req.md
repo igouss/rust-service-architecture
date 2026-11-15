@@ -30,7 +30,7 @@ answers back. Stored types are the domain's own, through their serde derive
 
 ## `arch-0ev` The store adapter shall own the transaction
 
-`Journal::write` opens one `BEGIN IMMEDIATE` transaction, runs the unit of work, and commits
+`Store::transact` opens one `BEGIN IMMEDIATE` transaction, runs the unit of work, and commits
 only if it returns `Ok`. The shell never sees a connection. SQLite runs in WAL mode; the
 durability setting is the composition root's choice between `Durability::Full`, which syncs to
 disk on every commit, and `Durability::Normal`, which survives a process crash but can lose the

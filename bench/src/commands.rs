@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use adapter_sqlite::{Durability, Sqlite, SqliteView};
+use adapter_sqlite::{Durability, Sqlite};
 use app::payments::fulfilment_of;
 use app::tasks::task_tally;
 use app::{handle, rebuild};
@@ -153,7 +153,7 @@ fn capture(store: &Sqlite, call: usize) -> Result<Duration, Fault> {
     let command: Capture = Capture { amount: amount()? };
     let (elapsed, answer): (Duration, Result<Answer<<Payment as Lifecycle>::Refusal>, StoreError>) = timed(|| handle(store, &id, command));
     accepted(answer, 2, &id)?;
-    let fulfilment: (Version, Fulfilment) = store.read(|view: &mut SqliteView<'_>| view.state::<Fulfilment>(&fulfilment_of(&id)))?;
+    let fulfilment: (Version, Fulfilment) = store.read(|view: &mut View<'_>| view.state::<Fulfilment>(&fulfilment_of(&id)))?;
     same("fulfilment after the capture", fulfilment, (Version(1), Fulfilment::Reserving))?;
     Ok(elapsed)
 }

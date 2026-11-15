@@ -21,6 +21,7 @@ names the rule it enforces.
 | `clippy` | workspace lints, warnings denied | wildcard arms, `unwrap`, dropped outcomes, `unsafe` |
 | `test` | `cargo test` | behaviour, through the real SQLite store |
 | `roles` | `hex-lint` | the role matrix and the context axis |
+| `raw-store` | a `cargo metadata` check | a driven adapter depends on no `domain` and no serializer outside its tests |
 | `purity` | `effect-audit --require-domain --strict` | no I/O, clock, async or unvouched dependency in the core |
 | `comments` | a source scan | no comment except a doc comment or `fc-allow` |
 | `allows` | a source scan | no `allow` attribute outside a `tests/` directory |
@@ -33,7 +34,7 @@ weekly; it never blocks a change ([`arch-h6j`](enforcement.req.md)).
 
 ### Acceptance
 
-- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G9.
+- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G10.
 
 ## `arch-4za` The workspace lints shall be set in the root manifest
 

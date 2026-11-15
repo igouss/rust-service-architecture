@@ -57,7 +57,7 @@ Participants: `Journal::write`, `Unit::apply`, `Policy::after`, the store adapte
 
 ### Acceptance
 
-- `arch-0yc.1` No write is reachable outside a unit of work: `Journal::write` is the only way to obtain a `Unit`.
+- `arch-0yc.1` No write is reachable outside a unit of work: `Journal::write` is the only way to obtain a `Unit` (mutant C13).
 - `arch-0yc.2` A unit that fails after applying stores nothing: `a_unit_that_fails_after_applying_stores_nothing` (mutant T9).
 - `arch-0yc.3` A process-manager step and its request are stored with the fact that triggered them: `a_capture_starts_the_fulfilment_and_requests_stock_in_the_same_unit` (mutants T11, T19).
 
@@ -102,6 +102,17 @@ Participants: `Projection`, `ports::project`, `Unit::put`, `app::project`, `app:
 - `arch-oif.3` A change at or below the position is refused: `a_change_at_or_below_the_read_models_position_is_refused` (mutants T7, T8).
 - `arch-oif.4` The fold reads the previous row: `many_added_tasks_are_all_open_and_tallied` (mutant T13).
 - `arch-oif.5` A rebuilt read model equals the live one: `a_rebuilt_read_model_equals_the_live_one` (mutants T4, T18).
+
+## `arch-a90r` A recorded fact shall be built only by ports, from a write or a read of the store
+
+The system shall build a `Recorded` fact only when `Unit::apply` appends it or `Unit::facts`
+reads it back, so every fact a policy or a projection receives is one the store holds.
+
+Participants: `ports::Recorded`, `Unit::apply`, `Unit::facts`.
+
+### Acceptance
+
+- `arch-a90r.1` Building a `Recorded` outside `ports` is a compile error: its fields are private (E0451; mutant C10).
 
 ## `arch-hbw` Aggregates shall issue no requests
 

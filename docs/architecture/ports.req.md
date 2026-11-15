@@ -4,8 +4,9 @@ prefix: arch
 
 # Ring 1: ports
 
-The `ports` crate, role `port-and-adapter`: the traits the outside must implement and the types
-that cross them. It is synchronous except for gateways to other systems.
+The `ports` crate, role `port-and-adapter`: the typed unit of work the shell calls, the raw
+store an adapter implements, and the types that cross them. It is synchronous except for
+gateways to other systems.
 
 ## `arch-s6q` A unit of work shall have exactly one way to change a lifecycle, which takes the whole outcome
 
@@ -18,6 +19,12 @@ agents violate. An invariant the API can make impossible to violate lives in the
 use std::future::Future;
 
 use domain::{Command, Lifecycle, Never, Projection, Reaction, Step};
+use serde::de::DeserializeOwned;
+use serde::Serialize;
+
+pub mod store;
+
+use store::{Key, Reader, Store, StoredFact, StoredRequest, Writer};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StreamId(pub String);
@@ -62,10 +69,6 @@ impl<S: Lifecycle, R> Transition<S, R> {
     pub fn state(&self) -> &S {
         &self.state
     }
-
-    pub fn into_parts(self) -> (S, Vec<S::Event>, Vec<R>) {
-        (self.state, self.events, self.requests)
-    }
 }
 
 #[must_use = "an outcome that is never applied loses its facts, its requests or its refusal"]
@@ -94,10 +97,28 @@ pub fn react<X: Reaction>(reaction: X, state: X::Reads) -> Outcome<X::Reads, X::
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Recorded<E> {
-    pub position: Position,
-    pub stream: StreamId,
-    pub version: Version,
-    pub event: E,
+    position: Position,
+    stream: StreamId,
+    version: Version,
+    event: E,
+}
+
+impl<E> Recorded<E> {
+    pub fn position(&self) -> Position {
+        self.position
+    }
+
+    pub fn stream(&self) -> &StreamId {
+        &self.stream
+    }
+
+    pub fn version(&self) -> Version {
+        self.version
+    }
+
+    pub fn event(&self) -> &E {
+        &self.event
+    }
 }
 
 #[must_use = "the facts of an applied outcome must reach their lifecycle's policy"]
@@ -116,12 +137,6 @@ pub enum Write<P: Projection> {
 pub struct Change<P: Projection> {
     position: Position,
     write: Write<P>,
-}
-
-impl<P: Projection> Change<P> {
-    pub fn into_parts(self) -> (Position, Write<P>) {
-        (self.position, self.write)
-    }
 }
 
 pub type Fact<P> = Recorded<<<P as Projection>::Reads as Lifecycle>::Event>;
@@ -143,45 +158,166 @@ pub fn project<P: Projection>(row: Option<P::Row>, fact: &Fact<P>) -> Change<P> 
         write,
     }
 }
+```
 
-pub trait Unit {
-    fn apply<S: Lifecycle, R: serde::Serialize>(&mut self, id: &StreamId, decide: impl FnOnce(S) -> Outcome<S, R>) -> Result<Applied<S>, StoreError>;
-    fn row<P: Projection>(&mut self, key: &str) -> Result<Option<P::Row>, StoreError>;
-    fn put<P: Projection>(&mut self, change: Change<P>) -> Result<(), StoreError>;
-    fn clear<P: Projection>(&mut self) -> Result<(), StoreError>;
-    fn facts<S: Lifecycle>(&mut self, after: Position, limit: usize) -> Result<Vec<Recorded<S::Event>>, StoreError>;
+`Unit` and `View` are structs in `ports`, not traits an adapter implements. `Unit::apply` is
+the one place that numbers versions, serializes, and builds a `Recorded` fact:
+
+```rust
+pub struct Unit<'a> {
+    store: &'a mut dyn Writer,
 }
 
-pub trait View {
-    fn state<S: Lifecycle>(&mut self, id: &StreamId) -> Result<(Version, S), StoreError>;
-    fn states<S: Lifecycle>(&mut self) -> Result<Vec<(StreamId, S)>, StoreError>;
-    fn row<P: Projection>(&mut self, key: &str) -> Result<Option<P::Row>, StoreError>;
-    fn rows<P: Projection>(&mut self) -> Result<Vec<(String, P::Row)>, StoreError>;
-}
-
-pub trait Journal {
-    type Unit<'a>: Unit
-    where
-        Self: 'a;
-    type View<'a>: View
-    where
-        Self: 'a;
-    fn write<T>(&self, work: impl FnOnce(&mut Self::Unit<'_>) -> Result<T, StoreError>) -> Result<T, StoreError>;
-    fn read<T>(&self, work: impl FnOnce(&mut Self::View<'_>) -> Result<T, StoreError>) -> Result<T, StoreError>;
+impl Unit<'_> {
+    pub fn apply<S: Lifecycle, R: Serialize>(&mut self, id: &StreamId, decide: impl FnOnce(S) -> Outcome<S, R>) -> Result<Applied<S>, StoreError> {
+        let (version, state): (Version, S) = state_in(self.store.state(S::NAME, id)?)?;
+        match decide(state) {
+            Outcome::Refused(refusal) => {
+                self.store.reject(S::NAME, id, &encode("rejections", &refusal)?)?;
+                Ok(Applied {
+                    answer: Answer::Refused(refusal),
+                    facts: Vec::new(),
+                })
+            }
+            Outcome::Accepted(Transition { state, events, requests }) => {
+                let mut next: Version = version;
+                let mut facts: Vec<Recorded<S::Event>> = Vec::with_capacity(events.len());
+                for event in events {
+                    next = Version(next.0 + 1);
+                    let position: Position = self.store.append(S::NAME, id, next, &encode("facts", &event)?)?;
+                    facts.push(Recorded {
+                        position,
+                        stream: id.clone(),
+                        version: next,
+                        event,
+                    });
+                }
+                if next != version {
+                    self.store.save(S::NAME, id, next, &encode("states", &state)?)?;
+                }
+                for request in &requests {
+                    self.store.request(S::NAME, id, &encode("outbox", request)?)?;
+                }
+                Ok(Applied {
+                    answer: Answer::Accepted(next),
+                    facts,
+                })
+            }
+        }
+    }
 }
 ```
 
-What the shape rules out, each seen red against a mutant ([`arch-30c`](invariants.req.md)):
-a state written without a decision (E0308); a state that disagrees with its facts, since
-`Transition`'s fields are private (E0451) and its only constructor is the private fold through
-`evolve` (E0624); an outcome or a change that is computed and dropped (`unused_must_use`); a
-read-model row the projection did not compute (E0451). A decision made on stale state cannot be
-written, because the state it reads and the write share the transaction: there is no expected
-version to pass and no conflict to retry.
+```rust
+pub trait Journal {
+    fn write<T>(&self, work: impl FnOnce(&mut Unit<'_>) -> Result<T, StoreError>) -> Result<T, StoreError>;
+    fn read<T>(&self, work: impl FnOnce(&mut View<'_>) -> Result<T, StoreError>) -> Result<T, StoreError>;
+}
+
+impl<K: Store> Journal for K {
+    fn write<T>(&self, work: impl FnOnce(&mut Unit<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
+        self.transact(Key::new(), |store: &mut dyn Writer| work(&mut Unit { store }))
+    }
+
+    fn read<T>(&self, work: impl FnOnce(&mut View<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
+        self.snapshot(Key::new(), |store: &mut dyn Reader| work(&mut View { store }))
+    }
+}
+```
+
+What the shape rules out, each seen red against a mutant ([`arch-30c`](invariants.req.md),
+[`arch-oif`](invariants.req.md)): a state written without a decision (E0308); a state that
+disagrees with its facts, since `Transition`'s fields are private (E0451) and its only
+constructor is the private fold through `evolve` (E0624); a fact that was never written,
+since `Recorded`'s fields are private too (E0451); an outcome or a change that is computed
+and dropped (`unused_must_use`); a read-model row the projection did not compute (E0451). A
+decision made on stale state cannot be written, because the state it reads and the write share
+the transaction: there is no expected version to pass and no conflict to retry.
 
 ### Acceptance
 
 - `arch-s6q.1` The criteria of [`arch-30c`](invariants.req.md) and [`arch-0yc`](invariants.req.md).
+
+## `arch-iv3d` A store adapter shall implement only the raw store, over text, versions and positions
+
+An adapter implements `Store`, `Writer` and `Reader`: one statement per method, over JSON text.
+It names no domain type, serializes nothing, numbers no version and checks no read model's
+position; `ports` does each of those once, for every store. A rule that each adapter
+implements again is a rule one of them gets wrong, and an adapter that handles typed facts has
+to be able to build one, which lets everything else build one.
+
+Every method of `Store` takes a `Key` that only `ports` can make, and `Unit` and `View` hold
+their writer and reader in a private field, so nothing outside `ports` reaches a raw write: the
+shell cannot call `save` or `append`, although the adapter implements them.
+
+```rust
+use crate::{Position, RequestId, StoreError, StreamId, Version};
+
+pub struct Key(());
+
+impl Key {
+    pub(crate) fn new() -> Key {
+        Key(())
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredFact<'a> {
+    pub position: Position,
+    pub stream: StreamId,
+    pub version: Version,
+    pub event: &'a str,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredRequest {
+    pub id: RequestId,
+    pub stream: StreamId,
+    pub request: String,
+}
+
+pub trait Reader {
+    fn state(&mut self, lifecycle: &'static str, stream: &StreamId) -> Result<Option<(Version, String)>, StoreError>;
+    fn states(&mut self, lifecycle: &'static str, each: &mut dyn FnMut(StreamId, &str) -> Result<(), StoreError>) -> Result<(), StoreError>;
+    fn row(&mut self, read_model: &'static str, key: &str) -> Result<Option<String>, StoreError>;
+    fn rows(&mut self, read_model: &'static str, each: &mut dyn FnMut(String, &str) -> Result<(), StoreError>) -> Result<(), StoreError>;
+}
+
+pub trait Writer: Reader {
+    fn append(&mut self, lifecycle: &'static str, stream: &StreamId, version: Version, event: &str) -> Result<Position, StoreError>;
+    fn save(&mut self, lifecycle: &'static str, stream: &StreamId, version: Version, state: &str) -> Result<(), StoreError>;
+    fn reject(&mut self, lifecycle: &'static str, stream: &StreamId, refusal: &str) -> Result<(), StoreError>;
+    fn request(&mut self, lifecycle: &'static str, stream: &StreamId, request: &str) -> Result<(), StoreError>;
+    fn facts(
+        &mut self,
+        lifecycle: &'static str,
+        after: Position,
+        limit: usize,
+        each: &mut dyn FnMut(StoredFact<'_>) -> Result<(), StoreError>,
+    ) -> Result<(), StoreError>;
+    fn position(&mut self, read_model: &'static str) -> Result<Position, StoreError>;
+    fn advance(&mut self, read_model: &'static str, position: Position) -> Result<(), StoreError>;
+    fn upsert(&mut self, read_model: &'static str, key: &str, row: &str) -> Result<(), StoreError>;
+    fn delete(&mut self, read_model: &'static str, key: &str) -> Result<(), StoreError>;
+    fn clear(&mut self, read_model: &'static str) -> Result<(), StoreError>;
+}
+
+pub trait Store {
+    fn transact<T>(&self, key: Key, work: impl FnOnce(&mut dyn Writer) -> Result<T, StoreError>) -> Result<T, StoreError>;
+    fn snapshot<T>(&self, key: Key, work: impl FnOnce(&mut dyn Reader) -> Result<T, StoreError>) -> Result<T, StoreError>;
+    fn requests(&self, key: Key, lifecycle: &'static str, limit: usize) -> Result<Vec<StoredRequest>, StoreError>;
+    fn mark_done(&self, key: Key, id: RequestId) -> Result<(), StoreError>;
+    fn mark_failed(&self, key: Key, id: RequestId) -> Result<(), StoreError>;
+}
+```
+
+A `Writer` method's contract is its name and the conformance suite, which every adapter runs.
+
+### Acceptance
+
+- `arch-iv3d.1` The key to the raw store cannot be built or minted outside `ports` (E0603, E0624; mutants C11 and C12).
+- `arch-iv3d.2` A `Unit` cannot be built around a writer outside `ports` (E0451; mutant C13).
+- `arch-iv3d.3` The `raw-store` recipe fails when a driven adapter depends on `domain` or on a serializer outside its tests (T2, `just check`; mutant G10).
 
 ## `arch-9q4` Port traits shall live in the ports crate
 

@@ -4,12 +4,12 @@ use ports::{Journal, Recorded, StoreError, StreamId, Unit, View};
 use crate::{project, Policy};
 
 impl Policy for Task {
-    fn after<U: Unit>(unit: &mut U, fact: &Recorded<TaskEvent>) -> Result<(), StoreError> {
-        project::<U, TaskTally>(unit, fact)
+    fn after(unit: &mut Unit<'_>, fact: &Recorded<TaskEvent>) -> Result<(), StoreError> {
+        project::<TaskTally>(unit, fact)
     }
 }
 
-fn open_in<V: View>(view: &mut V) -> Result<Vec<(StreamId, Title)>, StoreError> {
+fn open_in(view: &mut View<'_>) -> Result<Vec<(StreamId, Title)>, StoreError> {
     let tasks: Vec<(StreamId, Task)> = view.states::<Task>()?;
     Ok(tasks
         .into_iter()
@@ -21,11 +21,11 @@ fn open_in<V: View>(view: &mut V) -> Result<Vec<(StreamId, Title)>, StoreError> 
 }
 
 pub fn open_tasks<J: Journal>(journal: &J) -> Result<Vec<(StreamId, Title)>, StoreError> {
-    journal.read(|view: &mut J::View<'_>| open_in(view))
+    journal.read(|view: &mut View<'_>| open_in(view))
 }
 
 pub fn task_tally<J: Journal>(journal: &J) -> Result<Option<Tally>, StoreError> {
-    journal.read(|view: &mut J::View<'_>| view.row::<TaskTally>(TaskTally::KEY))
+    journal.read(|view: &mut View<'_>| view.row::<TaskTally>(TaskTally::KEY))
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -35,7 +35,7 @@ pub struct TaskBoard {
 }
 
 pub fn task_board<J: Journal>(journal: &J) -> Result<TaskBoard, StoreError> {
-    journal.read(|view: &mut J::View<'_>| {
+    journal.read(|view: &mut View<'_>| {
         Ok(TaskBoard {
             open: open_in(view)?,
             tally: view.row::<TaskTally>(TaskTally::KEY)?,

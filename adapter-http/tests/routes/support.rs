@@ -6,14 +6,14 @@ pub use std::thread::{self, ThreadId};
 pub use std::time::Duration;
 
 pub use adapter_http::{router, Changes, BODY_LIMIT};
-pub use adapter_sqlite::{Sqlite, SqliteUnit, SqliteView};
+pub use adapter_sqlite::Sqlite;
 pub use axum::body::Body;
 pub use axum::http::{Request, StatusCode};
 pub use axum::response::Response;
 pub use axum::Router;
 pub use domain::task::{Tally, Title};
 pub use http_body_util::BodyExt;
-pub use ports::{Journal, Position, StoreError, StreamId};
+pub use ports::{Journal, Position, StoreError, StreamId, Unit, View};
 pub use tower::ServiceExt;
 pub use tracing_subscriber::fmt::format::FmtSpan;
 
@@ -136,15 +136,12 @@ impl Witness {
 }
 
 impl Journal for Witness {
-    type Unit<'a> = SqliteUnit<'a>;
-    type View<'a> = SqliteView<'a>;
-
-    fn write<T>(&self, work: impl FnOnce(&mut SqliteUnit<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
+    fn write<T>(&self, work: impl FnOnce(&mut Unit<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
         self.note();
         self.store.write(work)
     }
 
-    fn read<T>(&self, work: impl FnOnce(&mut SqliteView<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
+    fn read<T>(&self, work: impl FnOnce(&mut View<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
         self.note();
         self.store.read(work)
     }
@@ -168,14 +165,11 @@ pub fn calls_and_calls_on_this_thread(witness: &Witness) -> (usize, usize) {
 pub struct Broken;
 
 impl Journal for Broken {
-    type Unit<'a> = SqliteUnit<'a>;
-    type View<'a> = SqliteView<'a>;
-
-    fn write<T>(&self, _work: impl FnOnce(&mut SqliteUnit<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
+    fn write<T>(&self, _work: impl FnOnce(&mut Unit<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
         Err(StoreError::Unavailable { cause: "injected".to_string() })
     }
 
-    fn read<T>(&self, _work: impl FnOnce(&mut SqliteView<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
+    fn read<T>(&self, _work: impl FnOnce(&mut View<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
         Err(StoreError::Unavailable { cause: "injected".to_string() })
     }
 }
@@ -186,14 +180,11 @@ pub struct Exhausted {
 }
 
 impl Journal for Exhausted {
-    type Unit<'a> = SqliteUnit<'a>;
-    type View<'a> = SqliteView<'a>;
-
-    fn write<T>(&self, work: impl FnOnce(&mut SqliteUnit<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
+    fn write<T>(&self, work: impl FnOnce(&mut Unit<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
         self.store.write(work)
     }
 
-    fn read<T>(&self, work: impl FnOnce(&mut SqliteView<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
+    fn read<T>(&self, work: impl FnOnce(&mut View<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
         self.reads_left
             .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |left: usize| left.checked_sub(1))
             .map_err(|_none_left: usize| StoreError::Unavailable { cause: "injected".to_string() })?;
@@ -204,14 +195,11 @@ impl Journal for Exhausted {
 pub struct Panicking;
 
 impl Journal for Panicking {
-    type Unit<'a> = SqliteUnit<'a>;
-    type View<'a> = SqliteView<'a>;
-
-    fn write<T>(&self, _work: impl FnOnce(&mut SqliteUnit<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
+    fn write<T>(&self, _work: impl FnOnce(&mut Unit<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
         panic!("injected")
     }
 
-    fn read<T>(&self, _work: impl FnOnce(&mut SqliteView<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
+    fn read<T>(&self, _work: impl FnOnce(&mut View<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
         panic!("injected")
     }
 }

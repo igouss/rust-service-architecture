@@ -1,5 +1,5 @@
 format: 1
-requirements[58]{id,verification}:
+requirements[60]{id,verification}:
   arch-06ys,test
   arch-0bd,test
   arch-0bz,test
@@ -22,6 +22,7 @@ requirements[58]{id,verification}:
   arch-9ln,test
   arch-9q4,test
   arch-a2v,test
+  arch-a90r,test
   arch-ajd,test
   arch-bim,test
   arch-blp,test
@@ -35,6 +36,7 @@ requirements[58]{id,verification}:
   arch-h1j,test
   arch-h6j,test
   arch-hbw,test
+  arch-iv3d,test
   arch-izj,test
   arch-j0k,test
   arch-jbno,test
@@ -58,7 +60,7 @@ requirements[58]{id,verification}:
   arch-yod,test
   arch-yr1,test
   arch-zhm,test
-criteria[89]{id,requirement}:
+criteria[93]{id,requirement}:
   arch-06ys.1,arch-06ys
   arch-06ys.2,arch-06ys
   arch-0bd.1,arch-0bd
@@ -92,6 +94,7 @@ criteria[89]{id,requirement}:
   arch-9ln.1,arch-9ln
   arch-9q4.1,arch-9q4
   arch-a2v.1,arch-a2v
+  arch-a90r.1,arch-a90r
   arch-ajd.1,arch-ajd
   arch-bim.1,arch-bim
   arch-blp.1,arch-blp
@@ -112,6 +115,9 @@ criteria[89]{id,requirement}:
   arch-h6j.1,arch-h6j
   arch-h6j.2,arch-h6j
   arch-hbw.1,arch-hbw
+  arch-iv3d.1,arch-iv3d
+  arch-iv3d.2,arch-iv3d
+  arch-iv3d.3,arch-iv3d
   arch-izj.1,arch-izj
   arch-izj.2,arch-izj
   arch-j0k.1,arch-j0k
