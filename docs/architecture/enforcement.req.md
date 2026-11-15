@@ -23,6 +23,7 @@ names the rule it enforces.
 | `roles` | `hex-lint` | the role matrix and the context axis |
 | `raw-store` | a `cargo metadata` and source check | a driven adapter depends on no `domain` and no serializer outside its tests; a store adapter includes the conformance suite |
 | `purity` | `effect-audit --require-domain --strict` | no I/O, clock, async or unvouched dependency in the core |
+| `events` | a source scan | no lifecycle's event is named for a generic change |
 | `comments` | a source scan | no comment except a doc comment or `fc-allow` |
 | `allows` | a source scan | no `allow` attribute outside a `tests/` directory |
 | `docs` | `guide-sync.bb` | every Rust block in these documents is code in the workspace |
@@ -39,7 +40,7 @@ weekly; it never blocks a change ([`arch-h6j`](enforcement.req.md)).
 
 ### Acceptance
 
-- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G11.
+- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G13.
 
 ## `arch-4za` The workspace lints shall be set in the root manifest
 
@@ -91,6 +92,8 @@ reported; they do not fail `just check`.
 | banned calls and purity in `app`, where policies and queries live | [`arch-zhm`](core.req.md) | `domain` only |
 | tuple matches with a wildcard element | [`arch-j0k`](core.req.md) | review |
 | a guard on edits that weaken a gate | [`arch-tsu`](enforcement.req.md) | review |
+| a check that an event carries what was decided, not the state after it | [core](core.req.md) | names only (`events`) |
+| a check that no query result enters a command as proof of uniqueness | [core](core.req.md) | review |
 
 ### Acceptance
 

@@ -8,7 +8,7 @@ from planted.stores import STORES
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 CRATES = ["domain", "ports", "app", "adapter-sqlite", "adapter-memory", "adapter-postgres", "adapter-http", "server", "bench"]
-FILES = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "clippy.toml", "rustfmt.toml", "justfile", "guide-sync.bb", "mutants.py", "raw-store.py"]
+FILES = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "clippy.toml", "rustfmt.toml", "justfile", "guide-sync.bb", "mutants.py", "raw-store.py", "events.py"]
 
 MUTANTS = SHELL + STORES + HTTP + GATES
 

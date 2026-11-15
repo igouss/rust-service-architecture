@@ -3,8 +3,8 @@
 use std::thread::{self, JoinHandle};
 
 use adapter_postgres::Postgres;
-use domain::task::{AddTask, Tally, Task, TaskEvent, TaskTally, Title};
-use ports::{Applied, Journal, Position, Recorded, StoreError, StreamId, Unit};
+use domain::task::{AddTask, Tally, Task, TaskEvent, TaskRefusal, TaskTally, Title};
+use ports::{Answer, Applied, Journal, Position, Recorded, StoreError, StreamId, Unit};
 
 const WRITERS: u64 = 4;
 const COMMANDS: u64 = 25;
@@ -79,4 +79,35 @@ fn a_read_keeps_one_snapshot_while_another_writer_commits() {
         .expect("read");
     assert_eq!(seen, (None, 0), "a read saw a commit made after it began");
     assert_eq!(reader.read(|view| view.states::<Task>()).map(|tasks: Vec<(StreamId, Task)>| tasks.len()), Ok(1));
+}
+
+fn claim(schema: &'static str) -> JoinHandle<Result<Answer<TaskRefusal>, StoreError>> {
+    thread::spawn(move || {
+        let store: Postgres = Postgres::connect(&url(), schema, 1)?;
+        let title: Title = Title::new("the one").expect("a title");
+        let applied: Applied<Task> = store.write(|unit| unit.apply(&StreamId("same".to_string()), |state: Task| ports::decide(AddTask { title }, state)))?;
+        Ok(applied.answer)
+    })
+}
+
+#[test]
+fn writers_claiming_one_stream_leave_exactly_one_accepted() {
+    let schema: &'static str = "writers_claim";
+    fresh(schema);
+    drop(Postgres::connect(&url(), schema, 1).expect("opens"));
+    let claims: Vec<JoinHandle<Result<Answer<TaskRefusal>, StoreError>>> = (0..WRITERS).map(|_writer: u64| claim(schema)).collect();
+    let mut answers: Vec<Result<Answer<TaskRefusal>, StoreError>> = claims
+        .into_iter()
+        .map(|claim: JoinHandle<Result<Answer<TaskRefusal>, StoreError>>| claim.join().expect("joined"))
+        .collect();
+    answers.sort_by_key(|answer: &Result<Answer<TaskRefusal>, StoreError>| format!("{answer:?}"));
+    assert_eq!(
+        answers,
+        vec![
+            Ok(Answer::Accepted(ports::Version(1))),
+            Ok(Answer::Refused(TaskRefusal::AlreadyExists)),
+            Ok(Answer::Refused(TaskRefusal::AlreadyExists)),
+            Ok(Answer::Refused(TaskRefusal::AlreadyExists))
+        ]
+    );
 }

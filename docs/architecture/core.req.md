@@ -115,6 +115,46 @@ fact. An event that does not apply returns the state unchanged.
 
 - `arch-h1j.1` The criteria of [`arch-bim`](invariants.req.md).
 
+## `arch-nf8v` An event shall name one fact in the domain's words and carry what that fact decided
+
+`Completed`, `Captured { amount }`, `Renamed { title }`: past tense, one thing that happened.
+Not `TaskUpdated { task }`: an event that carries the whole state says only that something
+changed, so every reader has to compare two states to learn what, a projection cannot tell
+which of its rows the fact concerns, and the history that facts are kept for
+([`arch-jwo4`](invariants.req.md)) holds no more than a log of snapshots would. When several
+things can happen to a lifecycle, they are several events.
+
+### Acceptance
+
+- `arch-nf8v.1` The `events` recipe fails when a lifecycle's event is named `Updated`, `Changed`, `Modified`, `Edited`, `Saved`, `Set`, `Replaced` or `Patched`, alone or after the lifecycle's name (T3, `just check`; mutants G12 and G13).
+- `arch-nf8v.2` Review checks that an event carries what the fact decided and not the state after it (T4, gap ledger).
+
+## `arch-dohm` A value that must be unique shall be the stream of a lifecycle that holds it
+
+A unique email, a unique slug, one booking for a seat: an invariant over a set. A command
+reads one lifecycle and nothing else ([`arch-5mh`](core.req.md)), so `decide` cannot ask
+whether another stream already holds the value, and nothing may ask on its behalf: a query
+before the command is a check and a write in two units, and the second caller passes the
+check before the first one writes.
+
+Make the value a lifecycle. Its stream id is the value in its canonical form, its state says
+whether the value is held and by whom, and the command that takes it refuses when it is held.
+Units of work run one at a time on every store ([adapters](adapters.req.md)), so two commands
+for one value meet in the same state and exactly one is accepted. What the holder needs next
+is advanced by that lifecycle's policy, in the same unit ([`arch-cn9`](shell.req.md)). No
+unique index and no lookup table is involved, and the refusal is a recorded domain value
+([`arch-783`](core.req.md)) with a name.
+
+`Task` is the smallest case: its stream id is the task's identity, and `AddTask` refuses with
+`AlreadyExists`.
+
+### Acceptance
+
+- `arch-dohm.1` A command's `decide` receives its own lifecycle and nothing else, so no other stream and no read model can reach a decision (T1; the signature in [`arch-5mh`](core.req.md)).
+- `arch-dohm.2` A second claim of a stream is refused: `add_of_an_existing_task_is_refused`.
+- `arch-dohm.3` Writers on separate connections that claim one stream leave exactly one accepted: `writers_claiming_one_stream_leave_exactly_one_accepted` (the `postgres` recipe).
+- `arch-dohm.4` Review checks that no query result is passed into a command as proof that a value is free (T4, gap ledger).
+
 ## `arch-fdo` Illegal states shall be unrepresentable
 
 Sum-type state, each variant carrying only the data valid in it; parse, don't validate, at the

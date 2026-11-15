@@ -1,7 +1,7 @@
 default: check
 
 [doc("Everything that must be green before a commit. Seconds, not minutes.")]
-check: fmt clippy test roles raw-store purity comments allows docs ids views-current
+check: fmt clippy test roles raw-store purity events comments allows docs ids views-current
 
 [doc("Serve the task list. TASKS_DATABASE, TASKS_LISTEN and TASKS_DURABILITY (full|normal) override the defaults.")]
 run:
@@ -47,6 +47,10 @@ postgres-local:
 [doc("arch-zhm: the core does no I/O, reads no clock, runs no async.")]
 purity:
     effect-audit --require-domain --strict .
+
+[doc("An event names what happened: no lifecycle's event is called Updated, Changed or their kin.")]
+events:
+    python3 events.py
 
 [doc("arch-0d2: no comments; names and types carry the meaning. Doc comments and fc-allow only.")]
 comments:
