@@ -14,6 +14,7 @@ rusqlite = { version = "0.40", features = ["bundled"] }
 
 [dev-dependencies]
 domain = { path = "../domain" }
+serde = { workspace = true }
 
 [lints]
 workspace = true

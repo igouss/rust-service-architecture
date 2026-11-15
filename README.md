@@ -34,7 +34,7 @@ Each is a crate; dependencies only point inward.
 | Core | `domain` | state types, commands, events, decisions, derived views, process managers | nothing: no I/O, no clock, no async |
 | Ports | `ports` | the traits the outside must implement and the types that cross them | the core |
 | Shell | `app` | the handler, each record type's policy, queries, the relay | core and ports |
-| Adapters | `adapter-sqlite`, `adapter-http` | SQLite storage; HTTP and Datastar server-sent events | the outside world |
+| Adapters | `adapter-sqlite`, `adapter-memory`, `adapter-http` | a store, on SQLite or in memory; HTTP and Datastar server-sent events | the outside world |
 | Root | `server` | `main()`, which plugs adapters into the shell | everything |
 
 The generated picture is [`docs/views/crates.md`](docs/views/crates.md).

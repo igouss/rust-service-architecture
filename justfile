@@ -10,6 +10,7 @@ run:
 [doc("Formatting is checked, never applied, so a red is a diff you can read.")]
 fmt:
     @cargo fmt --check || (echo 'fmt: run `cargo fmt` and commit the result' && false)
+    @rustfmt --check --edition 2021 ports/tests/conformance/*.rs || (echo 'fmt: run `rustfmt --edition 2021 ports/tests/conformance/*.rs` and commit the result' && false)
 
 [doc("Lints in Cargo.toml [workspace.lints]: exhaustive matches, no unwrap, must-use outcomes.")]
 clippy:

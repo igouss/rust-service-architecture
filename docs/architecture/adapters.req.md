@@ -40,6 +40,37 @@ last commits on power loss and was measured about a hundred times faster per com
 
 - `arch-0ev.1` A unit that fails stores nothing ([`arch-0yc`](invariants.req.md)).
 
+## `arch-e5eb` A service shall pick one store adapter in the composition root, and every store adapter shall pass the conformance suite
+
+| The service's state | Store adapter |
+|---|---|
+| must survive the process, on one node | `adapter-sqlite` |
+| is seen by other requests but may die with the process | `adapter-memory` |
+| none: every request is answered from its input and from other systems | none; see below |
+
+The shell and the driving adapters are written against `Journal` and `Outbox` and do not
+change with the store; `main()` names the adapter. A store adapter also offers two functions
+the port does not carry, with the same signatures in every adapter: `on_commit`, which the
+composition root uses to tell driving adapters that a unit appended a fact, and `rejections`,
+which reads the recorded refusals of a stream where there is no SQL to read them with.
+
+`ports/tests/conformance/suite.rs` is the contract of `ports::store`, written once, over
+lifecycles of its own. Each store adapter's `tests/conformance.rs` names the adapter as
+`Subject` and includes the file, so every case runs against every adapter and a new adapter
+is not done until all of them pass. An adapter's own test file holds only what the suite
+cannot ask of every store: for SQLite, a reopened file and a corrupt row.
+
+A service with no state has no lifecycle (`arch-f5d`), so it has no store adapter, no
+`Policy` and no call to `app::handle`. It keeps `domain` for its refined types and pure
+functions, `ports` for its gateways, and its driving adapters, under the same role matrix and
+the same gates.
+
+### Acceptance
+
+- `arch-e5eb.1` Every case of the suite passes against each store adapter (`just test`).
+- `arch-e5eb.2` The `raw-store` recipe fails when a crate that implements `Store` has no `tests/conformance.rs` that includes the suite (T2, `just check`; mutant G11).
+- `arch-e5eb.3` A fault planted in a store adapter fails a case of the suite: mutants T4 to T9, T16 and T26 in the SQLite adapter, mutants T27 to T38 in the memory adapter.
+
 ## `arch-qoy` The wire crate shall exist only once a consumer outside the process exists
 
 Another process, another team or a published bus is the trigger. Minting it is one task that

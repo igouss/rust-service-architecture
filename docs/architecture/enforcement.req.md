@@ -19,9 +19,9 @@ names the rule it enforces.
 |---|---|---|
 | `fmt` | `cargo fmt --check` | one layout, so a diff shows only the change |
 | `clippy` | workspace lints, warnings denied | wildcard arms, `unwrap`, dropped outcomes, `unsafe` |
-| `test` | `cargo test` | behaviour, through the real SQLite store |
+| `test` | `cargo test` | behaviour, through the real SQLite store; the conformance suite against every store adapter |
 | `roles` | `hex-lint` | the role matrix and the context axis |
-| `raw-store` | a `cargo metadata` check | a driven adapter depends on no `domain` and no serializer outside its tests |
+| `raw-store` | a `cargo metadata` and source check | a driven adapter depends on no `domain` and no serializer outside its tests; a store adapter includes the conformance suite |
 | `purity` | `effect-audit --require-domain --strict` | no I/O, clock, async or unvouched dependency in the core |
 | `comments` | a source scan | no comment except a doc comment or `fc-allow` |
 | `allows` | a source scan | no `allow` attribute outside a `tests/` directory |
@@ -34,7 +34,7 @@ weekly; it never blocks a change ([`arch-h6j`](enforcement.req.md)).
 
 ### Acceptance
 
-- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G10.
+- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G11.
 
 ## `arch-4za` The workspace lints shall be set in the root manifest
 
@@ -96,7 +96,7 @@ reported; they do not fail `just check`.
 - Core: given facts, when a command or a reaction, then facts or a refusal; one test per EARS clause, calling `decide` or `react` directly. A projection is tested as a fold: given a row and a fact, then a row.
 - Stored encodings: one assertion per variant in `domain/tests/stored_encoding.rs`.
 - Shell: use cases through `app::handle` against `Sqlite::in_memory()`, asserting on states, read models, the outbox and the rejections.
-- Store adapter: its own tests for what only a file shows (a reopened file, a corrupt row).
+- Store adapter: the conformance suite, and its own tests for what only that store shows (for SQLite, a reopened file and a corrupt row).
 
 A test's cyclomatic complexity is 1: no loop and no branch. Test zero, one and many.
 

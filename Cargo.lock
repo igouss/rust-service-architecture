@@ -23,12 +23,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "adapter-memory"
+version = "0.0.0"
+dependencies = [
+ "domain",
+ "ports",
+ "serde",
+]
+
+[[package]]
 name = "adapter-sqlite"
 version = "0.0.0"
 dependencies = [
  "domain",
  "ports",
  "rusqlite",
+ "serde",
 ]
 
 [[package]]

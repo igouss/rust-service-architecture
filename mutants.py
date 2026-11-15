@@ -2,7 +2,7 @@
 import os, re, shutil, subprocess, sys, tempfile
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
-CRATES = ["domain", "ports", "app", "adapter-sqlite", "adapter-http", "server", "bench"]
+CRATES = ["domain", "ports", "app", "adapter-sqlite", "adapter-memory", "adapter-http", "server", "bench"]
 FILES = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "clippy.toml", "rustfmt.toml", "justfile", "guide-sync.bb", "mutants.py", "raw-store.py"]
 
 HANDLE = "let applied: Applied<C::Reads> = unit.apply(id, |state: C::Reads| ports::decide(command, state))?;"
@@ -100,10 +100,37 @@ MUTANTS = [
     ("T25 a panic inside a unit of work locks the store for good", "adapter-sqlite/src/lib.rs",
      "Ok(self.connection.lock().unwrap_or_else(PoisonError::into_inner))",
      "self.connection.lock().map_err(|_: PoisonError<MutexGuard<'_, Connection>>| StoreError::Unavailable { cause: String::new() })", "test"),
+    ("T27 the memory store commits a failed unit", "adapter-memory/src/lib.rs",
+     "let value: T = work(&mut writer)?;\n        let pending: Pending = writer.pending;\n        let last: Option<Position> = commit(&mut tables, pending);",
+     "let outcome: Result<T, StoreError> = work(&mut writer);\n        let pending: Pending = writer.pending;\n        let last: Option<Position> = commit(&mut tables, pending);\n        let value: T = outcome?;", "test"),
+    ("T28 a memory unit does not read the state it wrote", "adapter-memory/src/lib.rs",
+     "Some(state) => Ok(Some(state.clone())),", "Some(_state) => Ok(state_in(self.tables, lifecycle, stream)),", "test"),
+    ("T29 a cleared memory read model keeps its stored rows", "adapter-memory/src/lib.rs",
+     "tables.rows.retain(|row: &Row, _text: &mut String| row.0 != *read_model);", "tables.rows.retain(|_row: &Row, _text: &mut String| true);", "test"),
+    ("T30 a failed memory request keeps its place", "adapter-memory/src/lib.rs",
+     "(*attempts, *at));", "(*attempts - *attempts, *at));", "test"),
+    ("T31 the memory log returns another lifecycle's facts", "adapter-memory/src/lib.rs",
+     ".filter(|(_at, fact): &(usize, &Fact)| fact.lifecycle == lifecycle)", ".filter(|(_at, fact): &(usize, &Fact)| fact.lifecycle == fact.lifecycle)", "test"),
+    ("T32 the memory outbox hands out a request already done", "adapter-memory/src/lib.rs",
+     "request.lifecycle == lifecycle && !request.done", "request.lifecycle == lifecycle", "test"),
+    ("T33 a memory position ignores the facts the unit already appended", "adapter-memory/src/lib.rs",
+     "Ok(Position(count(self.tables.facts.len() + self.pending.facts.len())))", "Ok(Position(count(self.tables.facts.len() + 1)))", "test"),
+    ("T34 a deleted memory row survives the commit", "adapter-memory/src/lib.rs",
+     "None => tables.rows.remove(&row),", "None => None,", "test"),
+    ("T35 the memory log ignores its limit", "adapter-memory/src/lib.rs",
+     ".take(limit)\n            .try_for_each(", ".take(limit + 1000)\n            .try_for_each(", "test"),
+    ("T36 a memory unit does not read the rows it wrote", "adapter-memory/src/lib.rs",
+     "(Some(text), _) => Ok(text.clone()),", "(Some(_text), _) => Ok(self.tables.rows.get(&row).cloned()),", "test"),
+    ("T37 a refused memory outcome is not recorded", "adapter-memory/src/lib.rs",
+     "tables.rejections.extend(pending.rejections);", "drop(pending.rejections);", "test"),
+    ("T38 a memory commit does not report its position", "adapter-memory/src/lib.rs",
+     "appended.then(|| Position(count(tables.facts.len())))", "appended.then(|| Position(count(tables.facts.len()))).filter(|_position: &Position| false)", "test"),
     ("G1 a driven adapter depends on the shell", "adapter-sqlite/Cargo.toml", 'ports = { path = "../ports" }',
      'ports = { path = "../ports" }\napp = { path = "../app" }', ("gate", ["hex-lint"], "adapter-sqlite")),
     ("G10 a store adapter depends on a serializer", "adapter-sqlite/Cargo.toml", 'ports = { path = "../ports" }',
      'ports = { path = "../ports" }\nserde_json = { workspace = true }', ("gate", ["python3", "raw-store.py"], "adapter-sqlite depends on serde_json")),
+    ("G11 a store adapter does not run the conformance suite", "adapter-memory/tests/conformance.rs", 'include!("../../ports/tests/conformance/suite.rs");',
+     "", ("gate", ["python3", "raw-store.py"], "adapter-memory implements Store and does not include the conformance suite")),
     ("G8 a driving adapter depends on a driven adapter", "adapter-http/Cargo.toml", 'ports = { path = "../ports" }',
      'ports = { path = "../ports" }\nadapter-sqlite = { path = "../adapter-sqlite" }', ("gate", ["hex-lint"], "adapter-http")),
     ("G2 the core reads the clock", "domain/src/lib.rs", "pub type Facts<S> = Vec<<S as Lifecycle>::Event>;",

@@ -1,5 +1,5 @@
 [workspace]
-members = ["domain", "ports", "app", "adapter-sqlite", "adapter-http", "server", "bench"]
+members = ["domain", "ports", "app", "adapter-sqlite", "adapter-memory", "adapter-http", "server", "bench"]
 resolver = "2"
 
 [workspace.package]

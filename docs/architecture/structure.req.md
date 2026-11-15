@@ -105,14 +105,14 @@ team or under agents; with a closed set, review is recognising a form.
 
 ## `arch-izj` A workspace shall start with six crates and grow only on a trigger
 
-Start with `domain`, `ports`, `app`, `adapter-sqlite`, `adapter-http` and the composition
+Start with `domain`, `ports`, `app`, one store adapter ([adapters](adapters.req.md)), `adapter-http` and the composition
 root `server`. Add a crate only when its trigger fires:
 
 | Crate | Trigger |
 |---|---|
 | `kernel` | a second bounded context, or types two contexts genuinely share |
 | `infra` | two adapters share tech glue |
-| a port conformance suite | a second adapter for the same port |
+| a port conformance suite | a second adapter for the same port; the store's is `ports/tests/conformance/suite.rs` |
 | `wire` | a consumer outside this process ([adapters](adapters.req.md)) |
 | a second four-ring stack | a genuinely separate bounded context; the contract between stacks is the wire schema |
 

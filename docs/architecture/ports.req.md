@@ -311,7 +311,8 @@ pub trait Store {
 }
 ```
 
-A `Writer` method's contract is its name and the conformance suite, which every adapter runs.
+A `Writer` method's contract is its name and the conformance suite, which every adapter runs
+([adapters](adapters.req.md)).
 
 ### Acceptance
 

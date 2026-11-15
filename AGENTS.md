@@ -1,7 +1,7 @@
 # For agents working in this repository
 
 This repository is a reference architecture for a Rust service: a pure core, one unit of work
-per command, SQLite as the store. You are either extending it or building a service from it.
+per command, and a store chosen in `main()`: SQLite here, or the in-memory adapter. You are either extending it or building a service from it.
 
 ## The three things to know
 
