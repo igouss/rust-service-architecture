@@ -58,14 +58,14 @@ A test is weakened when an assertion it made is removed or its expected value is
 match new behaviour nobody asked for. A test is not weakened by an edit a type change forces (a
 new field in a struct literal, a new variant in a match), by a new assertion, or by a changed
 expectation that the task itself asks for; name such edits in the commit. A mutant in
-`mutants.py` is not weakened by updating its anchor text to follow code that moved; what it
+`planted/` is not weakened by updating its anchor text to follow code that moved; what it
 plants and how it must die stay as they were. Each anchor must occur exactly once in its file,
 so `just mutants` reports `ANCHOR FOUND n TIMES` when an edit moved or duplicated one.
 
 ### Acceptance
 
 - `arch-tsu.1` The `hex-lint` run fails on a stale exception (T2).
-- `arch-tsu.2` Review of any diff that touches `Cargo.toml` lints, `clippy.toml`, `justfile`, `mutants.py` or a `pure-deps` list (T4).
+- `arch-tsu.2` Review of any diff that touches `Cargo.toml` lints, `clippy.toml`, `justfile`, `mutants.py`, `planted/` or a `pure-deps` list (T4).
 
 ## `arch-ukt` Noisy measurements shall be ratchets, never hard gates
 

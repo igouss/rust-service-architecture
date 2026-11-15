@@ -23,7 +23,7 @@
       docs (sort (fs/glob guide "*.req.md"))
       sources (->> (fs/glob workspace "*/src/**.rs") (map (comp normalize slurp str)))
       rust (->> (fs/glob workspace "*/{src,tests}/**.rs") (map (comp slurp str)) (str/join "\n"))
-      planted (set (map second (re-seq #"\(\"([CTGH]\d+) " (slurp (str (fs/path workspace "mutants.py"))))))
+      planted (set (map second (re-seq #"\(\"([CTGH]\d+) " (str/join "\n" (map (comp slurp str) (fs/glob workspace "planted/*.py"))))))
       missing (for [doc docs
                     [index block] (map-indexed vector (rust-blocks (slurp (str doc))))
                     :when (not-any? #(str/includes? % (open-ended (normalize block))) sources)]

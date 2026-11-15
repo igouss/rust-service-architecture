@@ -16,7 +16,7 @@ form you are copying.
 | `app/tests/use_cases.rs`, `adapter-sqlite/tests/store.rs`, `domain/tests/stored_encoding.rs` | port: keep every assertion's intent, swap the example types for yours |
 | `adapter-http/src/lib.rs`, `adapter-http/tests/routes/` | keep `blocking`, `Changes`, the frame encoding and the request span (rename its `task` field); replace the routes, the page and the renderers |
 | `server/`, `justfile` | keep; rename the `TASKS_*` settings and the default database file |
-| `mutants.py` | keep the machinery mutants; re-plant the example ones (below) and update `CRATES` and `EXAMPLE` |
+| `mutants.py`, `planted/` | keep the runner and the machinery mutants; re-plant the example ones (below) and update `CRATES` and `EXAMPLE` |
 | `docs/architecture/`, `docs/how-to/add-a-use-case.md`, `AGENTS.md` | keep the rules; re-point every pointer at an example file and every cited example test to yours (`just check` names a citation that no longer exists) |
 | `docs/adr/` | keep: they say why the architecture is this way; number your own after them |
 | `bench/` | port it to your commands and queries, or delete it together with its workspace member line, its entry in `mutants.py`'s `CRATES`, and its `justfile` recipe |
