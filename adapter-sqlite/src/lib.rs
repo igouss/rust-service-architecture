@@ -125,19 +125,6 @@ impl Sqlite {
     }
 }
 
-fn state_of(connection: &Connection, lifecycle: &'static str, stream: &StreamId) -> Result<Option<(Version, String)>, StoreError> {
-    let found: Option<(i64, String)> = connection
-        .prepare_cached("SELECT version, state FROM states WHERE lifecycle = ?1 AND stream = ?2")
-        .map_err(unavailable)?
-        .query_row(params![lifecycle, stream.0], |row: &rusqlite::Row<'_>| Ok((row.get(0)?, row.get(1)?)))
-        .optional()
-        .map_err(unavailable)?;
-    match found {
-        None => Ok(None),
-        Some((version, state)) => Ok(Some((Version(loaded("states", version)?), state))),
-    }
-}
-
 fn text<'a>(table: &'static str, row: &'a rusqlite::Row<'_>, column: usize) -> Result<&'a str, StoreError> {
     row.get_ref(column)
         .map_err(unavailable)?
@@ -148,43 +135,12 @@ fn text<'a>(table: &'static str, row: &'a rusqlite::Row<'_>, column: usize) -> R
         })
 }
 
-fn states_of(connection: &Connection, lifecycle: &'static str, each: &mut dyn FnMut(StreamId, &str) -> Result<(), StoreError>) -> Result<(), StoreError> {
-    let mut statement = connection
-        .prepare_cached("SELECT stream, state FROM states WHERE lifecycle = ?1 ORDER BY stream")
-        .map_err(unavailable)?;
-    let mut rows = statement.query(params![lifecycle]).map_err(unavailable)?;
-    while let Some(row) = rows.next().map_err(unavailable)? {
-        each(StreamId(row.get(0).map_err(unavailable)?), text("states", row, 1)?)?;
-    }
-    Ok(())
-}
-
-fn row_of(connection: &Connection, read_model: &'static str, key: &str) -> Result<Option<String>, StoreError> {
-    connection
-        .prepare_cached("SELECT row FROM read_models WHERE name = ?1 AND key = ?2")
-        .map_err(unavailable)?
-        .query_row(params![read_model, key], |row: &rusqlite::Row<'_>| row.get(0))
-        .optional()
-        .map_err(unavailable)
-}
-
-fn rows_of(connection: &Connection, read_model: &'static str, each: &mut dyn FnMut(String, &str) -> Result<(), StoreError>) -> Result<(), StoreError> {
-    let mut statement = connection
-        .prepare_cached("SELECT key, row FROM read_models WHERE name = ?1 ORDER BY key")
-        .map_err(unavailable)?;
-    let mut rows = statement.query(params![read_model]).map_err(unavailable)?;
-    while let Some(row) = rows.next().map_err(unavailable)? {
-        each(row.get(0).map_err(unavailable)?, text("read_models", row, 1)?)?;
-    }
-    Ok(())
-}
-
-struct SqliteWriter<'a> {
+struct Session<'a> {
     transaction: &'a Transaction<'a>,
     last: Option<Position>,
 }
 
-impl SqliteWriter<'_> {
+impl Session<'_> {
     fn execute(&self, sql: &str, values: impl rusqlite::Params) -> Result<(), StoreError> {
         self.transaction
             .prepare_cached(sql)
@@ -195,25 +151,56 @@ impl SqliteWriter<'_> {
     }
 }
 
-impl Reader for SqliteWriter<'_> {
+impl Reader for Session<'_> {
     fn state(&mut self, lifecycle: &'static str, stream: &StreamId) -> Result<Option<(Version, String)>, StoreError> {
-        state_of(self.transaction, lifecycle, stream)
+        let found: Option<(i64, String)> = self
+            .transaction
+            .prepare_cached("SELECT version, state FROM states WHERE lifecycle = ?1 AND stream = ?2")
+            .map_err(unavailable)?
+            .query_row(params![lifecycle, stream.0], |row: &rusqlite::Row<'_>| Ok((row.get(0)?, row.get(1)?)))
+            .optional()
+            .map_err(unavailable)?;
+        match found {
+            None => Ok(None),
+            Some((version, state)) => Ok(Some((Version(loaded("states", version)?), state))),
+        }
     }
 
     fn states(&mut self, lifecycle: &'static str, each: &mut dyn FnMut(StreamId, &str) -> Result<(), StoreError>) -> Result<(), StoreError> {
-        states_of(self.transaction, lifecycle, each)
+        let mut statement = self
+            .transaction
+            .prepare_cached("SELECT stream, state FROM states WHERE lifecycle = ?1 ORDER BY stream")
+            .map_err(unavailable)?;
+        let mut rows = statement.query(params![lifecycle]).map_err(unavailable)?;
+        while let Some(row) = rows.next().map_err(unavailable)? {
+            each(StreamId(row.get(0).map_err(unavailable)?), text("states", row, 1)?)?;
+        }
+        Ok(())
     }
 
     fn row(&mut self, read_model: &'static str, key: &str) -> Result<Option<String>, StoreError> {
-        row_of(self.transaction, read_model, key)
+        self.transaction
+            .prepare_cached("SELECT row FROM read_models WHERE name = ?1 AND key = ?2")
+            .map_err(unavailable)?
+            .query_row(params![read_model, key], |row: &rusqlite::Row<'_>| row.get(0))
+            .optional()
+            .map_err(unavailable)
     }
 
     fn rows(&mut self, read_model: &'static str, each: &mut dyn FnMut(String, &str) -> Result<(), StoreError>) -> Result<(), StoreError> {
-        rows_of(self.transaction, read_model, each)
+        let mut statement = self
+            .transaction
+            .prepare_cached("SELECT key, row FROM read_models WHERE name = ?1 ORDER BY key")
+            .map_err(unavailable)?;
+        let mut rows = statement.query(params![read_model]).map_err(unavailable)?;
+        while let Some(row) = rows.next().map_err(unavailable)? {
+            each(row.get(0).map_err(unavailable)?, text("read_models", row, 1)?)?;
+        }
+        Ok(())
     }
 }
 
-impl Writer for SqliteWriter<'_> {
+impl Writer for Session<'_> {
     fn append(&mut self, lifecycle: &'static str, stream: &StreamId, version: Version, event: &str) -> Result<Position, StoreError> {
         self.execute(
             "INSERT INTO facts (lifecycle, stream, version, event) VALUES (?1, ?2, ?3, ?4)",
@@ -307,33 +294,11 @@ impl Writer for SqliteWriter<'_> {
     }
 }
 
-struct SqliteReader<'a> {
-    connection: &'a Connection,
-}
-
-impl Reader for SqliteReader<'_> {
-    fn state(&mut self, lifecycle: &'static str, stream: &StreamId) -> Result<Option<(Version, String)>, StoreError> {
-        state_of(self.connection, lifecycle, stream)
-    }
-
-    fn states(&mut self, lifecycle: &'static str, each: &mut dyn FnMut(StreamId, &str) -> Result<(), StoreError>) -> Result<(), StoreError> {
-        states_of(self.connection, lifecycle, each)
-    }
-
-    fn row(&mut self, read_model: &'static str, key: &str) -> Result<Option<String>, StoreError> {
-        row_of(self.connection, read_model, key)
-    }
-
-    fn rows(&mut self, read_model: &'static str, each: &mut dyn FnMut(String, &str) -> Result<(), StoreError>) -> Result<(), StoreError> {
-        rows_of(self.connection, read_model, each)
-    }
-}
-
 impl Store for Sqlite {
     fn transact<T>(&self, _key: Key, work: impl FnOnce(&mut dyn Writer) -> Result<T, StoreError>) -> Result<T, StoreError> {
         let mut connection: MutexGuard<'_, Connection> = self.connection()?;
         let transaction: Transaction<'_> = connection.transaction_with_behavior(TransactionBehavior::Immediate).map_err(unavailable)?;
-        let mut writer: SqliteWriter<'_> = SqliteWriter {
+        let mut writer: Session<'_> = Session {
             transaction: &transaction,
             last: None,
         };
@@ -348,8 +313,12 @@ impl Store for Sqlite {
     }
 
     fn snapshot<T>(&self, _key: Key, work: impl FnOnce(&mut dyn Reader) -> Result<T, StoreError>) -> Result<T, StoreError> {
-        let connection: MutexGuard<'_, Connection> = self.connection()?;
-        work(&mut SqliteReader { connection: &connection })
+        let mut connection: MutexGuard<'_, Connection> = self.connection()?;
+        let transaction: Transaction<'_> = connection.transaction().map_err(unavailable)?;
+        work(&mut Session {
+            transaction: &transaction,
+            last: None,
+        })
     }
 
     fn requests(&self, _key: Key, lifecycle: &'static str, limit: usize) -> Result<Vec<StoredRequest>, StoreError> {
