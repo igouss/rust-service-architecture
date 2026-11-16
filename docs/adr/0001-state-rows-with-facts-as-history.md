@@ -6,9 +6,9 @@ Date: 2026-11-11
 
 The readers of the log. The first commit of this repository stored facts only and let process
 managers and read models poll a feed from their own cursors. The review of that state
-(`docs/reviews/2026-11-11-log-as-truth.md`) found a read model corrupted by a late projector
-(finding 2), redelivered facts applied twice (3), cursors tied to no reader (5) and a
-save-before-commit nothing tested (6). No adapter could store a process manager at all (1).
+found a read model corrupted by a late projector, redelivered facts applied twice, cursors
+tied to no reader and a save-before-commit nothing tested. No adapter could store a process
+manager at all.
 
 ## Forces in conflict
 
@@ -50,8 +50,8 @@ facts, because the only constructor of a transition is the private fold.
 
 ## What it closed
 
-Every review finding except 18, and 8 in the rule but not yet in code. The status table in the
-review file names the mutant or the type that covers each.
+Every finding of that review but one, and one more that is in the rule but not yet in code.
+The review is in git history, at `docs/reviews/2026-11-11-log-as-truth.md`.
 
 ## What would reverse it
 

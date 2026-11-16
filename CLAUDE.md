@@ -7,7 +7,7 @@ a gate, `just check` and `just mutants` are that gate here. Rule ids (`cm-…`) 
 the architecture's own rules (`arch-…`) are.
 
 Two references in the rules point outside this repository: "the guides" are the rule documents
-in [`docs/architecture/`](docs/architecture/README.md), and `br` is the operator's issue
+in [`docs/architecture/`](docs/architecture/), and `br` is the operator's issue
 tracker, which a project may not use.
 
 # Rule ids

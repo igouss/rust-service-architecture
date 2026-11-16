@@ -21,12 +21,8 @@ keep them on disk. A service with no database runs for weeks.
 
 ## Move
 
-`Memory::new` takes `Kept { facts, refusals }` from the composition root. A commit drops facts
-and refusals beyond those numbers, oldest first; positions keep counting; a read of facts that
-reaches into the trimmed part is refused. A request is removed when it is marked done.
-`Memory::held` reports the counts. State rows and read-model rows are kept: the rule
-(`docs/architecture/adapters.req.md`) is that a lifecycle is something the business counts,
-and state that may be forgotten lives in the adapter that owns it.
+Bound facts and refusals by numbers the composition root gives, and delete a request once it
+is done. The invariant is `arch-7h52` (`docs/architecture/adapters.req.md`).
 
 ## What it preserved
 

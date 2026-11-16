@@ -22,6 +22,7 @@ per command, and a store chosen in `main()`: SQLite here, or the in-memory or Po
 | start a new service from this repository | `docs/how-to/start-a-service.md` |
 | add a feature | `docs/how-to/add-a-use-case.md` |
 | understand a rule a gate named | `docs/architecture/` (ids look like `arch-s6q`; `grep -rn 'arch-s6q' docs/architecture`) |
+| read the rules whole | `docs/architecture/*.req.md` in this order: structure, core, ports, shell, adapters, invariants, enforcement, specification. Text outside a `##` rule is orientation |
 | see the shape before editing | `docs/views/crates.md`, `docs/views/state-machines.md` |
 | know why it is this way | `docs/adr/` |
 | know the standing rules for how to work (verification, tests, commits) | `CLAUDE.md` |

@@ -79,7 +79,7 @@ The worked example is [`domain/src/task.rs`](domain/src/task.rs); the recipe is
 
 Each guarantee has a planted mutant that must fail, by a compile error, a named test or a
 gate. Mutation testing runs in continuous integration, not while you work: `just check` is the
-whole working loop and takes seconds. The rules, with ids like `arch-s6q`, are in [`docs/architecture/`](docs/architecture/README.md);
+whole working loop and takes seconds. The rules, with ids like `arch-s6q`, are in [`docs/architecture/`](docs/architecture/);
 the reasons are in [`docs/adr/`](docs/adr/).
 
 ## Licence
@@ -97,8 +97,8 @@ command causes. A service that needs commands to commit concurrently changes the
 ## Measured
 
 One laptop, one NVMe disk, 30 timed calls per figure, three runs; `bench/results/` has every
-run and its conditions. Commit ids and the `baseline-2026-11-11` tag named in those files, in
-`docs/adr/` and in `docs/reviews/` belong to the development history, which is not published. Treat these as the shape of the costs, not as promises.
+run and its conditions. Commit ids and the `baseline-2026-11-11` tag named in those files and in
+`docs/adr/` belong to the development history, which is not published. Treat these as the shape of the costs, not as promises.
 
 - **The durability setting decides write speed.** A command costs about 4 ms with
   `TASKS_DURABILITY=full`, which syncs to disk on every commit, and about 60 µs with `normal`,

@@ -20,7 +20,7 @@ form you are copying.
 | `docs/architecture/`, `docs/how-to/add-a-use-case.md`, `AGENTS.md` | keep the rules; re-point every pointer at an example file and every cited example test to yours (`just check` names a citation that no longer exists) |
 | `docs/adr/` | keep: they say why the architecture is this way; number your own after them |
 | `bench/` | port it to your commands and queries, or delete it together with its workspace member line, its entry in `mutants.py`'s `CRATES`, and its `justfile` recipe |
-| `README.md`, `docs/reviews/`, `docs/how-to/start-a-service.md` | replace the first, delete the other two |
+| `README.md`, `docs/how-to/start-a-service.md` | replace the first, delete the second |
 
 ## Steps
 
