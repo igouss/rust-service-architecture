@@ -9,6 +9,7 @@ repository = "https://github.com/igouss/rust-service-architecture"
 
 [workspace.dependencies]
 axum = { version = "0.8", default-features = false, features = ["http1", "tokio"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1" }

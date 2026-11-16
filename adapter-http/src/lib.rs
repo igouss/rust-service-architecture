@@ -42,19 +42,10 @@ const PAGE: &str = r#"<!doctype html>
 </html>
 "#;
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct Changes {
     commits: watch::Sender<u64>,
     stopped: watch::Sender<bool>,
-}
-
-impl Default for Changes {
-    fn default() -> Changes {
-        Changes {
-            commits: watch::Sender::new(0),
-            stopped: watch::Sender::new(false),
-        }
-    }
 }
 
 impl Changes {

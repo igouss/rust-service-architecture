@@ -10,7 +10,7 @@ context = "example"
 
 [dependencies]
 ports = { path = "../ports" }
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { workspace = true }
 
 [dev-dependencies]
 domain = { path = "../domain" }

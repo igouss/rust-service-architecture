@@ -13,7 +13,7 @@ adapter-sqlite = { path = "../adapter-sqlite" }
 app = { path = "../app" }
 domain = { path = "../domain" }
 ports = { path = "../ports" }
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["rt-multi-thread"] }
 
