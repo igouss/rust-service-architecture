@@ -146,6 +146,8 @@ def arms(code, opened):
         after = closing(code, start) + 1 if block else start
         if not block or code[after:end].lstrip()[:1] in (".", "?"):
             after = top(code, ",", after, end)
+        if top(code, ",", k, arrow) != arrow:
+            raise Unread("line %d: the scan cut a match arm at a comma; put the value of the arm before it in braces" % line_of(code, k))
         found.append((re.split(r"\bif\b", code[k:arrow])[0], code[start:after].strip()))
         k = after + len(code[after:end]) - len(code[after:end].lstrip())
         k += code[k] == ","

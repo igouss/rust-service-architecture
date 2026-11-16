@@ -58,7 +58,7 @@ def loose(pattern, element):
         if text.startswith("(") and closing(text, 0, "()") == len(text) - 1:
             for inner in split(text[1:-1], ","):
                 yield from loose(inner, True)
-        elif element and re.fullmatch(r"\.\.|(?:(?:ref|mut)\s+)*[a-z_]\w*", text):
+        elif element and text not in ("true", "false") and re.fullmatch(r"\.\.|(?:(?:ref|mut)\s+)*[a-z_]\w*", text):
             yield " ".join(alternative.split())
 
 

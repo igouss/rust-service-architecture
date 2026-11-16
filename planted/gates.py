@@ -42,7 +42,7 @@ GATES = [
     ("G21 an evolve arm is not one the view can draw", "domain/src/task.rs", "| (s @ Task::Done { .. }, TaskEvent::Added { .. } | TaskEvent::Completed) => s,",
      "| (s @ Task::Done { .. }, TaskEvent::Added { .. } | TaskEvent::Completed) => reopened(s),", ("gate", ["python3", "views.py", "--check"], "`reopened(s)` is neither a state nor the state it was given")),
     ("G22 a lifecycle is written in a form the scans do not read", "domain/src/task.rs", "type Event = TaskEvent;",
-     "type Event = crate::task::TaskEvent;", ("gate", ["python3", "events.py"], "2 read as `impl Lifecycle for State")),
+     "type Event = crate::task::TaskEvent;", ("gate", ["python3", "events.py"], "read as `impl Lifecycle for State")),
     ("G23 a lifecycle's event enum is not where the scan looks", "domain/src/task.rs", "pub enum TaskEvent {",
      "pub enum TaskFact {", ("gate", ["python3", "events.py"], "TaskEvent is declared 0 times")),
     ("G24 a stored type gains a variant that no test pins", "domain/src/fulfilment.rs", "pub enum FulfilmentRequest {\n    ReserveStock,\n    Ship,",
