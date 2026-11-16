@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-import os, re, shutil, subprocess, sys, tempfile
+import glob, os, re, shutil, subprocess, sys, tempfile
 
 from planted.gates import GATES
 from planted.http import HTTP
 from planted.shell import SHELL
 from planted.stores import STORES
+from workspace import ROOT, folders
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
-CRATES = ["domain", "ports", "app", "adapter-sqlite", "adapter-memory", "adapter-postgres", "adapter-http", "server", "bench"]
-FILES = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "clippy.toml", "rustfmt.toml", "justfile", "guide-sync.bb", "mutants.py", "raw-store.py", "events.py"]
+CRATES = folders()
+FILES = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "clippy.toml", "rustfmt.toml", "justfile"] + [os.path.basename(script) for script in glob.glob(os.path.join(ROOT, "*.py")) + glob.glob(os.path.join(ROOT, "*.bb"))]
 
 MUTANTS = SHELL + STORES + HTTP + GATES
 
