@@ -1,7 +1,7 @@
 #![allow(clippy::expect_used, clippy::panic)]
 
 use adapter_memory::{Held, Kept, Memory};
-use domain::fulfilment::{Fulfilment, Progress};
+use domain::fulfilment::{Fulfilment, FulfilmentRequest, Progress};
 use domain::task::{AddTask, CompleteTask, Task, TaskEvent, Title};
 use ports::{Applied, Claimed, Journal, Outbox, Position, Recorded, StoreError, StreamId};
 
@@ -40,16 +40,7 @@ fn positions(store: &Memory, after: u64) -> Result<Vec<Position>, StoreError> {
 
 #[test]
 fn a_new_store_holds_nothing() {
-    assert_eq!(
-        store(2, 2).held(),
-        Held {
-            states: 0,
-            facts: 0,
-            refusals: 0,
-            requests: 0,
-            rows: 0
-        }
-    );
+    assert_eq!(store(2, 2).held(), Held::default());
 }
 
 #[test]
@@ -101,7 +92,7 @@ fn refusals_beyond_the_kept_number_drop_the_oldest() {
 fn a_done_request_is_no_longer_held() {
     let store: Memory = store(2, 2);
     request(&store, "p-1");
-    let claimed: Vec<Claimed<<Progress as domain::Reaction>::Request>> = store.claim::<Progress>(10).expect("claimed");
+    let claimed: Vec<Claimed<FulfilmentRequest>> = store.claim::<Progress>(10).expect("claimed");
     store.done(claimed[0].id).expect("done");
     assert_eq!(store.held().requests, 0);
 }
@@ -110,7 +101,7 @@ fn a_done_request_is_no_longer_held() {
 fn a_failed_request_is_still_held() {
     let store: Memory = store(2, 2);
     request(&store, "p-1");
-    let claimed: Vec<Claimed<<Progress as domain::Reaction>::Request>> = store.claim::<Progress>(10).expect("claimed");
+    let claimed: Vec<Claimed<FulfilmentRequest>> = store.claim::<Progress>(10).expect("claimed");
     store.failed(claimed[0].id).expect("failed");
     assert_eq!(store.held().requests, 1);
 }

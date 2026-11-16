@@ -34,7 +34,7 @@ struct Rejection {
 struct Tables {
     states: BTreeMap<Stream, (Version, String)>,
     facts: VecDeque<Fact>,
-    trimmed: u64,
+    appended: u64,
     rejections: VecDeque<Rejection>,
     outbox: BTreeMap<u64, Request>,
     issued: u64,
@@ -48,7 +48,7 @@ pub struct Kept {
     pub refusals: usize,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct Held {
     pub states: usize,
     pub facts: usize,
@@ -78,10 +78,6 @@ pub struct Memory {
 
 fn count(length: usize) -> u64 {
     u64::try_from(length).unwrap_or(u64::MAX)
-}
-
-fn index(number: u64) -> usize {
-    usize::try_from(number).unwrap_or(usize::MAX)
 }
 
 fn state_in(tables: &Tables, lifecycle: &'static str, stream: &StreamId) -> Option<(Version, String)> {
@@ -245,7 +241,7 @@ impl Writer for MemoryWriter<'_> {
             version,
             event: event.to_string(),
         });
-        Ok(Position(self.tables.trimmed + count(self.tables.facts.len() + self.pending.facts.len())))
+        Ok(Position(self.tables.appended + count(self.pending.facts.len())))
     }
 
     fn save(&mut self, lifecycle: &'static str, stream: &StreamId, version: Version, state: &str) -> Result<(), StoreError> {
@@ -279,7 +275,7 @@ impl Writer for MemoryWriter<'_> {
         limit: usize,
         each: &mut dyn FnMut(StoredFact<'_>) -> Result<(), StoreError>,
     ) -> Result<(), StoreError> {
-        let trimmed: u64 = self.tables.trimmed;
+        let trimmed: u64 = self.tables.appended - count(self.tables.facts.len());
         if after.0 < trimmed {
             return Err(StoreError::Unavailable {
                 cause: format!("facts up to position {trimmed} were trimmed, so they cannot be read after position {}", after.0),
@@ -290,7 +286,7 @@ impl Writer for MemoryWriter<'_> {
             .iter()
             .chain(self.pending.facts.iter())
             .enumerate()
-            .skip(index(after.0 - trimmed))
+            .skip(usize::try_from(after.0 - trimmed).unwrap_or(usize::MAX))
             .filter(|(_at, fact): &(usize, &Fact)| fact.lifecycle == lifecycle)
             .take(limit)
             .try_for_each(|(at, fact): (usize, &Fact)| {
@@ -334,19 +330,19 @@ impl Writer for MemoryWriter<'_> {
     }
 }
 
-fn trim<T>(queue: &mut VecDeque<T>, kept: usize) -> u64 {
+fn trim<T>(queue: &mut VecDeque<T>, kept: usize) {
     let excess: usize = queue.len().saturating_sub(kept);
     queue.drain(..excess);
-    count(excess)
 }
 
 fn commit(tables: &mut Tables, pending: Pending, kept: Kept) -> Option<Position> {
-    let appended: bool = !pending.facts.is_empty();
+    let grew: bool = !pending.facts.is_empty();
     for read_model in &pending.cleared {
         tables.rows.retain(|row: &Row, _text: &mut String| row.0 != *read_model);
         tables.positions.remove(read_model);
     }
     tables.states.extend(pending.states);
+    tables.appended += count(pending.facts.len());
     tables.facts.extend(pending.facts);
     tables.rejections.extend(pending.rejections);
     for request in pending.outbox {
@@ -360,10 +356,9 @@ fn commit(tables: &mut Tables, pending: Pending, kept: Kept) -> Option<Position>
             None => tables.rows.remove(&row),
         };
     }
-    let last: Option<Position> = appended.then(|| Position(tables.trimmed + count(tables.facts.len())));
-    tables.trimmed += trim(&mut tables.facts, kept.facts);
+    trim(&mut tables.facts, kept.facts);
     trim(&mut tables.rejections, kept.refusals);
-    last
+    grew.then_some(Position(tables.appended))
 }
 
 impl Store for Memory {
