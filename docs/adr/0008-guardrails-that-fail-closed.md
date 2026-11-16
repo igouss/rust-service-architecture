@@ -13,8 +13,9 @@ mutant and port changes named below, and nothing else.
 The gates, not the rules. The architecture exists to steer an agent mechanically, and several
 gates reported green after the property was lost: a new crate was scanned by no source gate,
 two greps hid their own errors, the views and the event-name check skipped what they could not
-parse, and `just check` passed with no Postgres case run. Five rules an agent breaks while
-building a feature were checked by review only. In the port, `StoreError::Unavailable` covered
+parse, and `just check` passed with no Postgres case run. Rules an agent breaks while
+building a feature were checked by review only; the gap ledger (`arch-yod`) says which still
+are. In the port, `StoreError::Unavailable` covered
 five conditions, ids were wider than any store's column, and the notify-after-commit rule was
 written once per adapter.
 
@@ -27,7 +28,8 @@ written once per adapter.
   with it.
 - A guard must not decide design. Each check added here rejects a form (a comment, a wildcard,
   a trait outside the kernel, an unpinned stored type), never a choice of lifecycle, policy or
-  adapter.
+  adapter. One form is now required: `evolve` is a single match over (state, event) pairs
+  (`arch-j0k`), because the state-machine view fails on an arm it cannot draw.
 
 ## Move
 
@@ -41,8 +43,9 @@ written once per adapter.
 - `StoreError` has one variant for each thing a caller can do: `Unavailable`, `Misconfigured`,
   `Corrupt`, `Unencodable`, `OutOfOrder`, `Trimmed`.
 - A SQLite read runs in a read transaction, so the session type carries its transaction for
-  reads and writes alike. Measured on the benchmark's queries: `task_tally` 3.2 to 4.0 µs at
-  10 tasks, the linear reads within run-to-run noise.
+  reads and writes alike. Measured on the benchmark's queries
+  (`bench/results/2026-11-15-sqlite-read-transaction.txt` against `-raw-store-after.txt`):
+  `task_tally` 3.2 to 4.0 µs at 10 tasks, the linear reads within run-to-run noise.
 
 ## What it preserved
 
