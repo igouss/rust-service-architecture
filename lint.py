@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os, re, sys
 
-from workspace import Unread, closing, folder, lex, line_of, packages, relative, role, rust_files, split
+from workspace import Unread, arms, closing, folder, lex, line_of, packages, relative, role, rust_files, split, top
 
 CORE = ("domain", "kernel")
 TEST_ALLOWS = {"clippy::expect_used", "clippy::panic"}
@@ -40,32 +40,13 @@ def allows():
     return found, ["The one allow is `#![allow(%s)]` opening a file under tests/." % ", ".join(sorted(TEST_ALLOWS)), "Fix: remove the attribute and fix what the lint names (a type alias, a smaller function)."]
 
 
-def top(code, token, start, end):
-    depth = 0
-    for k in range(start, end):
-        if depth == 0 and code.startswith(token, k):
-            return k
-        depth += (code[k] in "([{") - (code[k] in ")]}")
-    return end
-
-
-def arms(code):
+def patterns(code):
     found = []
     for keyword in re.finditer(r"\bmatch\b", code):
         opened = top(code, "{", keyword.end(), len(code))
         if opened == len(code):
             raise Unread("line %d: a match with no body" % line_of(code, keyword.start()))
-        end, k = closing(code, opened), opened + 1
-        while code[k:end].strip():
-            arrow = top(code, "=>", k, end)
-            found.append(re.split(r"\bif\b", code[k:arrow])[0])
-            k = arrow + 2 + len(code[arrow + 2 : end]) - len(code[arrow + 2 : end].lstrip())
-            block = code[k] == "{"
-            k = closing(code, k) + 1 if block else k
-            if not block or code[k:end].lstrip()[:1] in (".", "?"):
-                k = top(code, ",", k, end)
-            k += len(code[k:end]) - len(code[k:end].lstrip())
-            k += code[k] == ","
+        found += [pattern for pattern, _then in arms(code, opened)]
     if len(found) != code.count("=>"):
         raise Unread("%d `=>` and %d match arms read" % (code.count("=>"), len(found)))
     return found
@@ -88,11 +69,11 @@ def wildcards():
             continue
         for path in rust_files(package, "src"):
             try:
-                patterns = arms(lex(path)[0])
+                read_arms = patterns(lex(path)[0])
             except Unread as unread:
                 raise Unread("%s: %s" % (relative(path), unread))
-            read += len(patterns)
-            found += ["arch-j0k: %s `%s`" % (relative(path), " ".join(alternative.split())) for pattern in patterns for alternative in split(pattern, "|") if any(loose(alternative, False))]
+            read += len(read_arms)
+            found += ["arch-j0k: %s `%s`" % (relative(path), " ".join(alternative.split())) for pattern in read_arms for alternative in split(pattern, "|") if any(loose(alternative, False))]
     if not read:
         raise Unread("no match arm in a crate of role %s; the check has nothing to read" % ", ".join(SHELL_FREE))
     return found, ["A tuple element that is `_`, `..` or a bare name takes every case the arms above left, and a new variant lands there unseen.", "Fix: spell out every pair, naming each variant the element can be (`A | B`)."]

@@ -127,6 +127,31 @@ def closing(code, start, pair="{}"):
     raise Unread("line %d: %s is never closed" % (line_of(code, start), pair[0]))
 
 
+def top(code, token, start, end):
+    depth = 0
+    for k in range(start, end):
+        if depth == 0 and code.startswith(token, k):
+            return k
+        depth += (code[k] in "([{") - (code[k] in ")]}")
+    return end
+
+
+def arms(code, opened):
+    found = []
+    end, k = closing(code, opened), opened + 1
+    while code[k:end].strip():
+        arrow = top(code, "=>", k, end)
+        start = arrow + 2 + len(code[arrow + 2 : end]) - len(code[arrow + 2 : end].lstrip())
+        block = code[start] == "{"
+        after = closing(code, start) + 1 if block else start
+        if not block or code[after:end].lstrip()[:1] in (".", "?"):
+            after = top(code, ",", after, end)
+        found.append((re.split(r"\bif\b", code[k:arrow])[0], code[start:after].strip()))
+        k = after + len(code[after:end]) - len(code[after:end].lstrip())
+        k += code[k] == ","
+    return found
+
+
 def sources():
     return [(package, path, lex(path)[0]) for package in packages() for path in rust_files(package, "src")]
 
