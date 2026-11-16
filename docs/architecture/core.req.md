@@ -156,6 +156,8 @@ unique index and no lookup table is involved, and the refusal is a recorded doma
 - `arch-dohm.4` Review checks that no query result is passed into a command as proof that a value is free (T4, gap ledger).
 
 ## `arch-fdo` Illegal states shall be unrepresentable
+verification: exempt
+verification-reason: review only (T4); no gate is built
 
 Sum-type state, each variant carrying only the data valid in it; parse, don't validate, at the
 edge; refined types at construction (`Amount::new` returns `None` for zero; `Title::new` refuses

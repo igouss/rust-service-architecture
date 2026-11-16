@@ -128,6 +128,8 @@ graph already gives enforceable boundaries inside one binary.
 - `arch-izj.2` Review checks each added crate names its trigger (T4).
 
 ## `arch-pcn` The composition root shall be main()
+verification: exempt
+verification-reason: review only (T4); no gate is built
 
 No runtime DI container, no reflection-shaped registry, no macro that wires the graph at
 startup. `main()` constructs the adapters and plugs them into generic parameters, so the wiring

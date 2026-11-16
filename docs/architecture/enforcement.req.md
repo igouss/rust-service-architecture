@@ -87,6 +87,8 @@ reported; they do not fail `just check`.
 - `arch-ukt.1` The benchmark writes its results beside the previous run's (`bench/results/`).
 
 ## `arch-yod` The gap ledger shall list every rule whose gate is not built
+verification: exempt
+verification-reason: review only (T4); no gate is built
 
 | Gap | Rule | Today |
 |---|---|---|
@@ -132,6 +134,8 @@ reads. An equivalent mutant is named as such in that task.
 - `arch-h6j.2` No recipe that `just check` runs plants a mutant.
 
 ## `arch-7iz` Every rule shall map to a test, a mutant or a gate
+verification: exempt
+verification-reason: review only (T4); no gate is built
 
 A rule with no check is flagged in the gap ledger, not trusted. The mapping is checked
 mechanically or by a human, never self-attested by the agent that did the work.

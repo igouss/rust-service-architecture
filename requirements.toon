@@ -13,27 +13,27 @@ requirements[65]{id,verification}:
   arch-4xd,test
   arch-4za,test
   arch-5mh,test
-  arch-68v,test
+  arch-68v,exempt
   arch-783,test
   arch-7h52,test
-  arch-7iz,test
+  arch-7iz,exempt
   arch-7k8,test
   arch-844,test
   arch-9k6q,test
   arch-9ln,test
   arch-9q4,test
-  arch-a2v,test
+  arch-a2v,exempt
   arch-a90r,test
   arch-ajd,test
   arch-bim,test
   arch-blp,test
   arch-btw1,test
   arch-cn9,test
-  arch-dn0,test
+  arch-dn0,exempt
   arch-dohm,test
   arch-e5eb,test
   arch-f5d,test
-  arch-fdo,test
+  arch-fdo,exempt
   arch-fh9,test
   arch-fif,test
   arch-h1j,test
@@ -45,27 +45,27 @@ requirements[65]{id,verification}:
   arch-jbno,test
   arch-jwo4,test
   arch-jxh,test
-  arch-kpb,test
-  arch-m3z,test
+  arch-kpb,exempt
+  arch-m3z,exempt
   arch-m7du,test
   arch-nf8v,test
   arch-oif,test
-  arch-pcn,test
+  arch-pcn,exempt
   arch-qoy,test
   arch-qve,test
   arch-s6q,test
-  arch-saq,test
+  arch-saq,exempt
   arch-tsu,test
   arch-u8nl,test
   arch-ukt,test
-  arch-v1q,test
+  arch-v1q,exempt
   arch-w0v,test
   arch-wmwy,test
   arch-wp0,test
-  arch-yod,test
+  arch-yod,exempt
   arch-yr1,test
   arch-zhm,test
-criteria[116]{id,requirement}:
+criteria[105]{id,requirement}:
   arch-06ys.1,arch-06ys
   arch-06ys.2,arch-06ys
   arch-0bd.1,arch-0bd
@@ -88,14 +88,12 @@ criteria[116]{id,requirement}:
   arch-4xd.2,arch-4xd
   arch-4za.1,arch-4za
   arch-5mh.1,arch-5mh
-  arch-68v.1,arch-68v
   arch-783.1,arch-783
   arch-7h52.1,arch-7h52
   arch-7h52.2,arch-7h52
   arch-7h52.3,arch-7h52
   arch-7h52.4,arch-7h52
   arch-7h52.5,arch-7h52
-  arch-7iz.1,arch-7iz
   arch-7k8.1,arch-7k8
   arch-844.1,arch-844
   arch-9k6q.1,arch-9k6q
@@ -103,7 +101,6 @@ criteria[116]{id,requirement}:
   arch-9k6q.3,arch-9k6q
   arch-9ln.1,arch-9ln
   arch-9q4.1,arch-9q4
-  arch-a2v.1,arch-a2v
   arch-a90r.1,arch-a90r
   arch-ajd.1,arch-ajd
   arch-bim.1,arch-bim
@@ -113,7 +110,6 @@ criteria[116]{id,requirement}:
   arch-btw1.2,arch-btw1
   arch-cn9.1,arch-cn9
   arch-cn9.2,arch-cn9
-  arch-dn0.1,arch-dn0
   arch-dohm.1,arch-dohm
   arch-dohm.2,arch-dohm
   arch-dohm.3,arch-dohm
@@ -123,7 +119,6 @@ criteria[116]{id,requirement}:
   arch-e5eb.3,arch-e5eb
   arch-f5d.1,arch-f5d
   arch-f5d.2,arch-f5d
-  arch-fdo.1,arch-fdo
   arch-fh9.1,arch-fh9
   arch-fif.1,arch-fif
   arch-fif.2,arch-fif
@@ -146,8 +141,6 @@ criteria[116]{id,requirement}:
   arch-jwo4.3,arch-jwo4
   arch-jxh.1,arch-jxh
   arch-jxh.2,arch-jxh
-  arch-kpb.1,arch-kpb
-  arch-m3z.1,arch-m3z
   arch-m7du.1,arch-m7du
   arch-m7du.2,arch-m7du
   arch-m7du.3,arch-m7du
@@ -163,23 +156,30 @@ criteria[116]{id,requirement}:
   arch-oif.3,arch-oif
   arch-oif.4,arch-oif
   arch-oif.5,arch-oif
-  arch-pcn.1,arch-pcn
   arch-qoy.1,arch-qoy
   arch-qve.2,arch-qve
   arch-s6q.1,arch-s6q
-  arch-saq.1,arch-saq
   arch-tsu.1,arch-tsu
   arch-tsu.2,arch-tsu
   arch-u8nl.1,arch-u8nl
   arch-u8nl.2,arch-u8nl
   arch-ukt.1,arch-ukt
-  arch-v1q.1,arch-v1q
   arch-w0v.1,arch-w0v
   arch-wmwy.1,arch-wmwy
   arch-wp0.1,arch-wp0
-  arch-yod.1,arch-yod
   arch-yr1.1,arch-yr1
   arch-zhm.1,arch-zhm
   arch-zhm.2,arch-zhm
   arch-zhm.3,arch-zhm
-criteria_exempt[0]{id,requirement,reason}:
+criteria_exempt[11]{id,requirement,reason}:
+  arch-68v.1,arch-68v,"review only (T4); no gate is built"
+  arch-7iz.1,arch-7iz,"review only (T4); no gate is built"
+  arch-a2v.1,arch-a2v,"review only (T4); no gate is built"
+  arch-dn0.1,arch-dn0,"review only (T4); no gate is built"
+  arch-fdo.1,arch-fdo,"review only (T4); no gate is built"
+  arch-kpb.1,arch-kpb,"review only (T4); no gate is built"
+  arch-m3z.1,arch-m3z,"review only (T4); no gate is built"
+  arch-pcn.1,arch-pcn,"review only (T4); no gate is built"
+  arch-saq.1,arch-saq,"review only (T4); no gate is built"
+  arch-v1q.1,arch-v1q,"review only (T4); no gate is built"
+  arch-yod.1,arch-yod,"review only (T4); no gate is built"

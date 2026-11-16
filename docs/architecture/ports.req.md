@@ -330,6 +330,8 @@ An adapter can only implement a trait it can name, and its permitted dependencie
 - `arch-9q4.1` Cargo and the role matrix (T1/T2).
 
 ## `arch-v1q` A port shall be async only when its adapter waits on another system
+verification: exempt
+verification-reason: review only (T4); no gate is built
 
 The store is synchronous: SQLite blocks, and a unit of work is one blocking transaction that a
 driving adapter runs off the async executor. A gateway that calls another system is async.
