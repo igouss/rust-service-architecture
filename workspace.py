@@ -156,12 +156,19 @@ def sources():
     return [(package, path, lex(path)[0]) for package in packages() for path in rust_files(package, "src")]
 
 
+def declared(name, texts):
+    heads = [m for text in texts for m in re.finditer(r"\b(enum|struct)\s+%s\b\s*([{(;])" % name, text)]
+    if len(heads) != 1:
+        raise Unread("%s is declared %d times as an enum or a struct in the crate's src; the scan needs exactly one" % (name, len(heads)))
+    head = heads[0]
+    opened = head.end() - 1
+    return head.group(1), "" if head.group(2) == ";" else head.string[opened + 1 : closing(head.string, opened, "{}" if head.group(2) == "{" else "()")]
+
+
 def enum_variants(name, texts):
-    bodies = [m for text in texts for m in re.finditer(r"\benum\s+%s\s*\{" % name, text)]
-    if len(bodies) != 1:
-        raise Unread("enum %s is declared %d times in the crate's src; the scan needs exactly one" % (name, len(bodies)))
-    text = bodies[0].string
-    body = text[bodies[0].end() : closing(text, bodies[0].end() - 1)]
+    kind, body = declared(name, texts)
+    if kind != "enum":
+        raise Unread("%s is a struct where the scan needs an enum" % name)
     return [re.sub(r"#\[[^\]]*\]", "", part).split()[0].split("(")[0].split("{")[0] for part in split(body, ",") if part.strip()]
 
 

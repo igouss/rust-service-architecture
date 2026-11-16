@@ -22,67 +22,156 @@ fn cents(value: u64) -> Amount {
     Amount::new(value).expect("positive")
 }
 
+#[track_caller]
+fn pinned<T: Serialize>(value: &T, form: fn(&T) -> &'static str) {
+    assert_eq!(stored(value), form(value));
+}
+
+fn task(state: &Task) -> &'static str {
+    match state {
+        Task::Absent => r#""Absent""#,
+        Task::Open { .. } => r#"{"Open":{"title":"t"}}"#,
+        Task::Done { .. } => r#"{"Done":{"title":"t"}}"#,
+    }
+}
+
+fn task_event(event: &TaskEvent) -> &'static str {
+    match event {
+        TaskEvent::Added { .. } => r#"{"Added":{"title":"t"}}"#,
+        TaskEvent::Completed => r#""Completed""#,
+    }
+}
+
+fn task_refusal(refusal: &TaskRefusal) -> &'static str {
+    match refusal {
+        TaskRefusal::AlreadyExists => r#""AlreadyExists""#,
+        TaskRefusal::Absent => r#""Absent""#,
+        TaskRefusal::AlreadyDone => r#""AlreadyDone""#,
+    }
+}
+
+fn tally(_row: &Tally) -> &'static str {
+    r#"{"open":1,"done":2}"#
+}
+
+fn payment(state: &Payment) -> &'static str {
+    match state {
+        Payment::Absent => r#""Absent""#,
+        Payment::Authorized { .. } => r#"{"Authorized":{"amount":500}}"#,
+        Payment::Captured { .. } => r#"{"Captured":{"amount":500}}"#,
+        Payment::Declined { .. } => r#"{"Declined":{"reason":"ExceedsAuthorization"}}"#,
+    }
+}
+
+fn payment_event(event: &PaymentEvent) -> &'static str {
+    match event {
+        PaymentEvent::Authorized { .. } => r#"{"Authorized":{"amount":500}}"#,
+        PaymentEvent::Captured { .. } => r#"{"Captured":{"amount":500}}"#,
+        PaymentEvent::Declined { .. } => r#"{"Declined":{"reason":"ExceedsAuthorization"}}"#,
+    }
+}
+
+fn payment_refusal(refusal: &PaymentRefusal) -> &'static str {
+    match refusal {
+        PaymentRefusal::AlreadyAuthorized => r#""AlreadyAuthorized""#,
+        PaymentRefusal::NotAuthorized => r#""NotAuthorized""#,
+    }
+}
+
+fn decline_reason(reason: &DeclineReason) -> &'static str {
+    match reason {
+        DeclineReason::ExceedsAuthorization => r#""ExceedsAuthorization""#,
+    }
+}
+
+fn fulfilment(state: &Fulfilment) -> &'static str {
+    match state {
+        Fulfilment::Idle => r#""Idle""#,
+        Fulfilment::Reserving => r#""Reserving""#,
+        Fulfilment::Shipping => r#""Shipping""#,
+        Fulfilment::Done => r#""Done""#,
+        Fulfilment::Abandoned => r#""Abandoned""#,
+    }
+}
+
+fn fulfilment_event(event: &FulfilmentEvent) -> &'static str {
+    match event {
+        FulfilmentEvent::ReservationRequested => r#""ReservationRequested""#,
+        FulfilmentEvent::ShipmentRequested => r#""ShipmentRequested""#,
+        FulfilmentEvent::Completed => r#""Completed""#,
+        FulfilmentEvent::Abandoned => r#""Abandoned""#,
+    }
+}
+
+fn fulfilment_request(request: &FulfilmentRequest) -> &'static str {
+    match request {
+        FulfilmentRequest::ReserveStock => r#""ReserveStock""#,
+        FulfilmentRequest::Ship => r#""Ship""#,
+    }
+}
+
 #[test]
 fn task_events_keep_their_stored_form() {
-    assert_eq!(stored(&TaskEvent::Added { title: title("t") }), r#"{"Added":{"title":"t"}}"#);
-    assert_eq!(stored(&TaskEvent::Completed), r#""Completed""#);
+    pinned(&TaskEvent::Added { title: title("t") }, task_event);
+    pinned(&TaskEvent::Completed, task_event);
 }
 
 #[test]
 fn task_states_keep_their_stored_form() {
-    assert_eq!(stored(&Task::Absent), r#""Absent""#);
-    assert_eq!(stored(&Task::Open { title: title("t") }), r#"{"Open":{"title":"t"}}"#);
-    assert_eq!(stored(&Task::Done { title: title("t") }), r#"{"Done":{"title":"t"}}"#);
+    pinned(&Task::Absent, task);
+    pinned(&Task::Open { title: title("t") }, task);
+    pinned(&Task::Done { title: title("t") }, task);
 }
 
 #[test]
 fn task_refusals_and_tally_keep_their_stored_form() {
-    assert_eq!(stored(&TaskRefusal::AlreadyExists), r#""AlreadyExists""#);
-    assert_eq!(stored(&TaskRefusal::Absent), r#""Absent""#);
-    assert_eq!(stored(&TaskRefusal::AlreadyDone), r#""AlreadyDone""#);
-    assert_eq!(stored(&Tally { open: 1, done: 2 }), r#"{"open":1,"done":2}"#);
+    pinned(&TaskRefusal::AlreadyExists, task_refusal);
+    pinned(&TaskRefusal::Absent, task_refusal);
+    pinned(&TaskRefusal::AlreadyDone, task_refusal);
+    pinned(&Tally { open: 1, done: 2 }, tally);
 }
 
 #[test]
 fn payment_events_keep_their_stored_form() {
-    assert_eq!(stored(&PaymentEvent::Authorized { amount: cents(500) }), r#"{"Authorized":{"amount":500}}"#);
-    assert_eq!(stored(&PaymentEvent::Captured { amount: cents(500) }), r#"{"Captured":{"amount":500}}"#);
-    assert_eq!(
-        stored(&PaymentEvent::Declined {
-            reason: DeclineReason::ExceedsAuthorization
-        }),
-        r#"{"Declined":{"reason":"ExceedsAuthorization"}}"#
+    pinned(&PaymentEvent::Authorized { amount: cents(500) }, payment_event);
+    pinned(&PaymentEvent::Captured { amount: cents(500) }, payment_event);
+    pinned(
+        &PaymentEvent::Declined {
+            reason: DeclineReason::ExceedsAuthorization,
+        },
+        payment_event,
     );
+    pinned(&DeclineReason::ExceedsAuthorization, decline_reason);
 }
 
 #[test]
 fn payment_states_and_refusals_keep_their_stored_form() {
-    assert_eq!(stored(&Payment::Absent), r#""Absent""#);
-    assert_eq!(stored(&Payment::Authorized { amount: cents(500) }), r#"{"Authorized":{"amount":500}}"#);
-    assert_eq!(stored(&Payment::Captured { amount: cents(500) }), r#"{"Captured":{"amount":500}}"#);
-    assert_eq!(
-        stored(&Payment::Declined {
-            reason: DeclineReason::ExceedsAuthorization
-        }),
-        r#"{"Declined":{"reason":"ExceedsAuthorization"}}"#
+    pinned(&Payment::Absent, payment);
+    pinned(&Payment::Authorized { amount: cents(500) }, payment);
+    pinned(&Payment::Captured { amount: cents(500) }, payment);
+    pinned(
+        &Payment::Declined {
+            reason: DeclineReason::ExceedsAuthorization,
+        },
+        payment,
     );
-    assert_eq!(stored(&PaymentRefusal::AlreadyAuthorized), r#""AlreadyAuthorized""#);
-    assert_eq!(stored(&PaymentRefusal::NotAuthorized), r#""NotAuthorized""#);
+    pinned(&PaymentRefusal::AlreadyAuthorized, payment_refusal);
+    pinned(&PaymentRefusal::NotAuthorized, payment_refusal);
 }
 
 #[test]
 fn fulfilment_keeps_its_stored_form() {
-    assert_eq!(stored(&Fulfilment::Idle), r#""Idle""#);
-    assert_eq!(stored(&Fulfilment::Reserving), r#""Reserving""#);
-    assert_eq!(stored(&Fulfilment::Shipping), r#""Shipping""#);
-    assert_eq!(stored(&Fulfilment::Done), r#""Done""#);
-    assert_eq!(stored(&Fulfilment::Abandoned), r#""Abandoned""#);
-    assert_eq!(stored(&FulfilmentEvent::ReservationRequested), r#""ReservationRequested""#);
-    assert_eq!(stored(&FulfilmentEvent::ShipmentRequested), r#""ShipmentRequested""#);
-    assert_eq!(stored(&FulfilmentEvent::Completed), r#""Completed""#);
-    assert_eq!(stored(&FulfilmentEvent::Abandoned), r#""Abandoned""#);
-    assert_eq!(stored(&FulfilmentRequest::ReserveStock), r#""ReserveStock""#);
-    assert_eq!(stored(&FulfilmentRequest::Ship), r#""Ship""#);
+    pinned(&Fulfilment::Idle, fulfilment);
+    pinned(&Fulfilment::Reserving, fulfilment);
+    pinned(&Fulfilment::Shipping, fulfilment);
+    pinned(&Fulfilment::Done, fulfilment);
+    pinned(&Fulfilment::Abandoned, fulfilment);
+    pinned(&FulfilmentEvent::ReservationRequested, fulfilment_event);
+    pinned(&FulfilmentEvent::ShipmentRequested, fulfilment_event);
+    pinned(&FulfilmentEvent::Completed, fulfilment_event);
+    pinned(&FulfilmentEvent::Abandoned, fulfilment_event);
+    pinned(&FulfilmentRequest::ReserveStock, fulfilment_request);
+    pinned(&FulfilmentRequest::Ship, fulfilment_request);
 }
 
 #[test]

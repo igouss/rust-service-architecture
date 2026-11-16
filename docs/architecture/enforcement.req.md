@@ -28,6 +28,7 @@ names the rule it enforces.
 | `allows` | a lexed scan of every member | no `allow` or `expect` attribute, bare or under `cfg_attr`, except the one of [`arch-4za`](enforcement.req.md) |
 | `wildcards` | a lexed scan of `domain` and `app` | no element of a tuple pattern is `_`, `..` or a bare name |
 | `traits` | a lexed scan of every member | no `trait` is declared outside `domain/src/lib.rs`, `app/src/lib.rs` and `ports/src` |
+| `stored` | a lexed scan of each crate that declares a lifecycle | every state, event, refusal, request and row, and every enum they hold, has each variant sampled in `tests/stored_encoding.rs` |
 | `docs` | `guide-sync.bb` | every Rust block in these documents is code in the workspace |
 | `ids` | `req check` | the requirement ids and their projection are current |
 | `views-current` | `views.py --check` | the committed crate graph and state machines are the code's; red when a lifecycle or an `evolve` arm cannot be drawn |
@@ -43,7 +44,7 @@ weekly; it never blocks a change ([`arch-h6j`](enforcement.req.md)).
 
 ### Acceptance
 
-- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G23.
+- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G25.
 
 ## `arch-4za` The workspace lints shall be set in the root manifest
 
@@ -91,7 +92,7 @@ reported; they do not fail `just check`.
 |---|---|---|
 | a lint that every public item of `domain` and `app` is a named primitive | [`arch-u8nl`](structure.req.md) | review; a new trait only (`traits`) |
 | a check that a crate's role matches its shape | [`arch-4xd`](structure.req.md) | review |
-| a check that every stored type appears in the stored-encoding test | [`arch-btw1`](core.req.md) | review |
+| a check that a struct stored only as a field (a refined type) is pinned | [`arch-btw1`](core.req.md) | review |
 | banned calls and purity in `app`, where policies and queries live | [`arch-zhm`](core.req.md) | `domain` only |
 | a wildcard nested in a variant (`Err(_)`), or in a tuple pattern outside `domain` and `app` | [`arch-j0k`](core.req.md) | review |
 | a guard on edits that weaken a gate | [`arch-tsu`](enforcement.req.md) | review |

@@ -45,4 +45,8 @@ GATES = [
      "type Event = crate::task::TaskEvent;", ("gate", ["python3", "events.py"], "2 read as `impl Lifecycle for State")),
     ("G23 a lifecycle's event enum is not where the scan looks", "domain/src/task.rs", "pub enum TaskEvent {",
      "pub enum TaskFact {", ("gate", ["python3", "events.py"], "enum TaskEvent is declared 0 times")),
+    ("G24 a stored type gains a variant that no test pins", "domain/src/fulfilment.rs", "pub enum FulfilmentRequest {\n    ReserveStock,\n    Ship,",
+     "pub enum FulfilmentRequest {\n    ReserveStock,\n    Ship,\n    Cancel,", "E0004"),
+    ("G25 a stored variant has no pinned sample", "domain/src/fulfilment.rs", "pub enum FulfilmentRequest {\n    ReserveStock,\n    Ship,",
+     "pub enum FulfilmentRequest {\n    ReserveStock,\n    Ship,\n    Cancel,", ("gate", ["just", "stored"], "does not pin FulfilmentRequest::Cancel")),
 ]

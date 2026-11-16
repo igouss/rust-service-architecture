@@ -222,4 +222,4 @@ may not, because facts are never rewritten.
 ### Acceptance
 
 - `arch-btw1.1` The test `domain/tests/stored_encoding.rs` pins the JSON of every variant of every stored type and fails when one changes (mutant T20).
-- `arch-btw1.2` Review checks that a new stored type is added to that test (T4→T3, gap ledger).
+- `arch-btw1.2` A new variant does not compile until that test's match names its JSON (T1; mutant G24), and the `stored` recipe rejects a stored type or variant with no sample there (T3; mutant G25). Review checks a struct stored only as a field (T4, gap ledger).
