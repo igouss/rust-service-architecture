@@ -15,7 +15,15 @@ MUTANTS = SHELL + STORES + HTTP + GATES
 EXAMPLE = {"C5", "C8", "C9", "C10", "T10", "T11", "T20", "T22", "T23", "T24", "G6", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9"}
 
 
-def run(name, path, old, new, expect):
+def uncompiled(output):
+    return "DID NOT COMPILE: " + " ".join(sorted(set(re.findall(r"error\[E\d+\]", output))))
+
+
+def failed_tests(output):
+    return sorted(set(re.findall(r"^---- (\S+) stdout ----", output, re.M)))
+
+
+def run(path, old, new, expect):
     scratch = tempfile.mkdtemp(prefix="mutant-")
     try:
         for crate in CRATES:
@@ -34,10 +42,10 @@ def run(name, path, old, new, expect):
                 return False, "NEEDS %s: this mutant is killed by tests that run against a server" % expect[2]
             done = subprocess.run(expect[1], cwd=scratch, env=env, capture_output=True, text=True)
             output = done.stdout + done.stderr
-            failed = sorted(set(re.findall(r"^---- (\S+) stdout ----", output, re.M)))
+            failed = failed_tests(output)
             passed = sum(int(count) for count in re.findall(r"test result: \w+\. (\d+) passed", output))
             if "could not compile" in output:
-                return False, "DID NOT COMPILE: " + " ".join(sorted(set(re.findall(r"error\[E\d+\]", output))))
+                return False, uncompiled(output)
             if passed == 0:
                 return False, "NO TEST PASSED: the server is not reachable, so a failure proves nothing"
             return done.returncode != 0 and bool(failed), "killed by " + ", ".join(failed) if failed else "SURVIVED"
@@ -54,8 +62,8 @@ def run(name, path, old, new, expect):
             return False, "SURVIVED"
         if expect == "test":
             if "could not compile" in output:
-                return False, "DID NOT COMPILE: " + " ".join(sorted(set(re.findall(r"error\[E\d+\]", output))))
-            failed = sorted(set(re.findall(r"^---- (\S+) stdout ----", output, re.M)))
+                return False, uncompiled(output)
+            failed = failed_tests(output)
             return bool(failed), "killed by " + ", ".join(failed)
         codes = sorted(set(re.findall(r"error\[(E\d+)\]", output)))
         unused = "unused" in output and "must be used" in output
@@ -75,7 +83,7 @@ def main():
     for name, path, old, new, expect in MUTANTS:
         if wanted and name.split()[0] not in wanted:
             continue
-        ok, detail = run(name, path, old, new, expect)
+        ok, detail = run(path, old, new, expect)
         red += 0 if ok else 1
         print("%-4s %s [%s] %s" % ("ok" if ok else "FAIL", name, expect if isinstance(expect, str) else " ".join(expect[1][:2]), detail), flush=True)
     print("%d mutant(s) not killed as expected" % red)
