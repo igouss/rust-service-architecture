@@ -154,7 +154,7 @@ fn capture(store: &Sqlite, call: usize) -> Result<Duration, Fault> {
     let (elapsed, answer): (Duration, Result<Answer<<Payment as Lifecycle>::Refusal>, StoreError>) = timed(|| handle(store, &id, command));
     accepted(answer, 2, &id)?;
     let fulfilment: (Version, Fulfilment) = store.read(|view: &mut View<'_>| view.state::<Fulfilment>(&fulfilment_of(&id)))?;
-    same("fulfilment after the capture", fulfilment, (Version(1), Fulfilment::Reserving))?;
+    same("fulfilment after the capture", fulfilment, (Version::from(1), Fulfilment::Reserving))?;
     Ok(elapsed)
 }
 

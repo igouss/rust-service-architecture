@@ -39,7 +39,7 @@ fn a_reopened_file_loads_the_same_state_and_version() {
     let second: Sqlite = Sqlite::open(&path, Durability::Full).expect("reopens");
     assert_eq!(
         second.read(|view| view.state::<Task>(&id("t-1"))),
-        Ok((Version(1), Task::Open { title: title("t-1") }))
+        Ok((Version::from(1), Task::Open { title: title("t-1") }))
     );
 }
 

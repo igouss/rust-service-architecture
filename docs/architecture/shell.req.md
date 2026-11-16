@@ -164,7 +164,7 @@ code path writes a read-model row except `Unit::put`.
 pub fn rebuild<J: Journal, P: Projection>(journal: &J, batch: usize) -> Result<usize, StoreError> {
     journal.write(|unit: &mut Unit<'_>| {
         unit.clear::<P>()?;
-        let mut after: Position = Position(0);
+        let mut after: Position = Position::ZERO;
         let mut folded: usize = 0;
         loop {
             let facts: Vec<ports::Fact<P>> = unit.facts::<P::Reads>(after, batch)?;

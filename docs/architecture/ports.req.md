@@ -29,14 +29,42 @@ use store::{Key, Reader, Store, StoredFact, StoredRequest, Writer};
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct StreamId(pub String);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Version(pub u64);
+macro_rules! ordinal {
+    ($name:ident) => {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        pub struct $name(u64);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct Position(pub u64);
+        impl $name {
+            pub const ZERO: $name = $name(0);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct RequestId(pub u64);
+            pub fn get(self) -> u64 {
+                self.0
+            }
+
+            pub fn after(self, more: u64) -> $name {
+                $name(self.0.saturating_add(more).min(i64::MAX.unsigned_abs()))
+            }
+
+            pub fn stored(self) -> i64 {
+                i64::try_from(self.0).unwrap_or(i64::MAX)
+            }
+
+            pub fn loaded(value: i64) -> Option<$name> {
+                u64::try_from(value).ok().map($name)
+            }
+        }
+
+        impl From<u32> for $name {
+            fn from(value: u32) -> $name {
+                $name(u64::from(value))
+            }
+        }
+    };
+}
+
+ordinal!(Version);
+ordinal!(Position);
+ordinal!(RequestId);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StoreError {
@@ -184,7 +212,7 @@ impl Unit<'_> {
                 let mut next: Version = version;
                 let mut facts: Vec<Recorded<S::Event>> = Vec::with_capacity(events.len());
                 for event in events {
-                    next = Version(next.0 + 1);
+                    next = next.after(1);
                     let position: Position = self.store.append(S::NAME, id, next, &encode("facts", &event)?)?;
                     self.last = Some(position);
                     facts.push(Recorded {

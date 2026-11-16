@@ -64,14 +64,8 @@ fn unavailable(error: rusqlite::Error) -> StoreError {
     StoreError::Unavailable { cause: error.to_string() }
 }
 
-fn stored(value: u64) -> Result<i64, StoreError> {
-    i64::try_from(value).map_err(|_| StoreError::Unavailable {
-        cause: format!("{value} exceeds the store's integer range"),
-    })
-}
-
-fn loaded(table: &'static str, value: i64) -> Result<u64, StoreError> {
-    u64::try_from(value).map_err(|_| StoreError::Corrupt {
+fn loaded<T>(table: &'static str, value: i64, read: fn(i64) -> Option<T>) -> Result<T, StoreError> {
+    read(value).ok_or_else(|| StoreError::Corrupt {
         table,
         cause: format!("negative integer {value}"),
     })
@@ -148,7 +142,7 @@ impl Reader for Session<'_> {
             .map_err(unavailable)?;
         match found {
             None => Ok(None),
-            Some((version, state)) => Ok(Some((Version(loaded("states", version)?), state))),
+            Some((version, state)) => Ok(Some((loaded("states", version, Version::loaded)?, state))),
         }
     }
 
@@ -201,16 +195,16 @@ impl Writer for Session<'_> {
     fn append(&mut self, lifecycle: &'static str, stream: &StreamId, version: Version, event: &str) -> Result<Position, StoreError> {
         self.execute(
             "INSERT INTO facts (lifecycle, stream, version, event) VALUES (?1, ?2, ?3, ?4)",
-            params![lifecycle, stream.0, stored(version.0)?, event],
+            params![lifecycle, stream.0, version.stored(), event],
         )?;
-        Ok(Position(loaded("facts", self.transaction.last_insert_rowid())?))
+        loaded("facts", self.transaction.last_insert_rowid(), Position::loaded)
     }
 
     fn save(&mut self, lifecycle: &'static str, stream: &StreamId, version: Version, state: &str) -> Result<(), StoreError> {
         self.execute(
             "INSERT INTO states (lifecycle, stream, version, state) VALUES (?1, ?2, ?3, ?4)
              ON CONFLICT (lifecycle, stream) DO UPDATE SET version = excluded.version, state = excluded.state",
-            params![lifecycle, stream.0, stored(version.0)?, state],
+            params![lifecycle, stream.0, version.stored(), state],
         )
     }
 
@@ -240,12 +234,12 @@ impl Writer for Session<'_> {
             .transaction
             .prepare_cached("SELECT position, stream, version, event FROM facts WHERE lifecycle = ?1 AND position > ?2 ORDER BY position LIMIT ?3")
             .map_err(unavailable)?;
-        let mut rows = statement.query(params![lifecycle, stored(after.0)?, limit]).map_err(unavailable)?;
+        let mut rows = statement.query(params![lifecycle, after.stored(), limit]).map_err(unavailable)?;
         while let Some(row) = rows.next().map_err(unavailable)? {
             each(StoredFact {
-                position: Position(loaded("facts", row.get(0).map_err(unavailable)?)?),
+                position: loaded("facts", row.get(0).map_err(unavailable)?, Position::loaded)?,
                 stream: StreamId(row.get(1).map_err(unavailable)?),
-                version: Version(loaded("facts", row.get(2).map_err(unavailable)?)?),
+                version: loaded("facts", row.get(2).map_err(unavailable)?, Version::loaded)?,
                 event: text("facts", row, 3)?,
             })?;
         }
@@ -260,14 +254,14 @@ impl Writer for Session<'_> {
             .query_row(params![read_model], |row: &rusqlite::Row<'_>| row.get(0))
             .optional()
             .map_err(unavailable)?;
-        Ok(Position(loaded("read_model_positions", found.unwrap_or(0))?))
+        loaded("read_model_positions", found.unwrap_or(0), Position::loaded)
     }
 
     fn advance(&mut self, read_model: &'static str, position: Position) -> Result<(), StoreError> {
         self.execute(
             "INSERT INTO read_model_positions (name, position) VALUES (?1, ?2)
              ON CONFLICT (name) DO UPDATE SET position = excluded.position",
-            params![read_model, stored(position.0)?],
+            params![read_model, position.stored()],
         )
     }
 
@@ -326,7 +320,7 @@ impl Store for Sqlite {
         for row in rows {
             let (id, stream, request) = row.map_err(unavailable)?;
             requests.push(StoredRequest {
-                id: RequestId(loaded("outbox", id)?),
+                id: loaded("outbox", id, RequestId::loaded)?,
                 stream: StreamId(stream),
                 request,
             });
@@ -337,7 +331,7 @@ impl Store for Sqlite {
     fn mark_done(&self, _key: Key, id: RequestId) -> Result<(), StoreError> {
         let connection: MutexGuard<'_, Connection> = self.connection()?;
         connection
-            .execute("UPDATE outbox SET done = 1 WHERE id = ?1", params![stored(id.0)?])
+            .execute("UPDATE outbox SET done = 1 WHERE id = ?1", params![id.stored()])
             .map_err(unavailable)?;
         Ok(())
     }
@@ -345,7 +339,7 @@ impl Store for Sqlite {
     fn mark_failed(&self, _key: Key, id: RequestId) -> Result<(), StoreError> {
         let connection: MutexGuard<'_, Connection> = self.connection()?;
         connection
-            .execute("UPDATE outbox SET attempts = attempts + 1 WHERE id = ?1", params![stored(id.0)?])
+            .execute("UPDATE outbox SET attempts = attempts + 1 WHERE id = ?1", params![id.stored()])
             .map_err(unavailable)?;
         Ok(())
     }

@@ -51,7 +51,7 @@ pub fn project<P: Projection>(unit: &mut Unit<'_>, fact: &ports::Fact<P>) -> Res
 pub fn rebuild<J: Journal, P: Projection>(journal: &J, batch: usize) -> Result<usize, StoreError> {
     journal.write(|unit: &mut Unit<'_>| {
         unit.clear::<P>()?;
-        let mut after: Position = Position(0);
+        let mut after: Position = Position::ZERO;
         let mut folded: usize = 0;
         loop {
             let facts: Vec<ports::Fact<P>> = unit.facts::<P::Reads>(after, batch)?;

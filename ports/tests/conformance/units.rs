@@ -7,7 +7,7 @@ fn a_commit_tells_the_listener_the_position_of_its_last_fact() {
     let _twice: Applied<Counter> = store
         .write(|unit| unit.apply(&id("c-1"), |state: Counter| ports::decide(AddTwice { by: 3 }, state)))
         .expect("applied");
-    assert_eq!(*told.lock().expect("lock"), vec![Position(1), Position(3)]);
+    assert_eq!(*told.lock().expect("lock"), vec![Position::from(1), Position::from(3)]);
 }
 
 #[test]
@@ -33,8 +33,8 @@ fn a_unit_reads_the_state_it_wrote() {
             Ok((first.facts[0].version(), second.facts[0].version()))
         })
         .expect("applied twice");
-    assert_eq!(versions, (Version(1), Version(2)));
-    assert_eq!(counter(&store, "c-1"), (Version(2), Counter::Holding { total: 3 }));
+    assert_eq!(versions, (Version::from(1), Version::from(2)));
+    assert_eq!(counter(&store, "c-1"), (Version::from(2), Counter::Holding { total: 3 }));
 }
 
 #[test]
@@ -44,7 +44,7 @@ fn a_unit_reads_the_facts_and_rows_it_wrote() {
         .write(|unit| {
             let applied: Applied<Counter> = unit.apply(&id("c-1"), |state: Counter| ports::decide(Add { by: 4 }, state))?;
             unit.put(ports::project::<Total>(None, &applied.facts[0]))?;
-            Ok((unit.facts::<Counter>(Position(0), 10)?.len(), unit.row::<Total>("all")?))
+            Ok((unit.facts::<Counter>(Position::ZERO, 10)?.len(), unit.row::<Total>("all")?))
         })
         .expect("unit");
     assert_eq!(read, (1, Some(4)));
@@ -75,7 +75,7 @@ fn a_unit_that_fails_stores_no_state_fact_row_or_request() {
         Err(StoreError::Unavailable { cause: "injected".to_string() })
     });
     assert_eq!(failed, Err(StoreError::Unavailable { cause: "injected".to_string() }));
-    assert_eq!(counter(&store, "c-1"), (Version(0), Counter::Empty));
+    assert_eq!(counter(&store, "c-1"), (Version::ZERO, Counter::Empty));
     assert_eq!(counter_facts(&store, 0, 10), Vec::new());
     assert_eq!(store.read(|view| view.rows::<Total>()), Ok(Vec::new()));
     assert_eq!(parcels(&store, 10), Vec::new());
@@ -89,7 +89,7 @@ fn a_fact_after_a_failed_unit_takes_the_next_free_version() {
         Err(StoreError::Unavailable { cause: "injected".to_string() })
     });
     let facts: Vec<Recorded<Counted>> = add(&store, "c-1", 2);
-    assert_eq!((facts[0].stream().clone(), facts[0].version()), (id("c-1"), Version(1)));
+    assert_eq!((facts[0].stream().clone(), facts[0].version()), (id("c-1"), Version::from(1)));
 }
 
 #[test]
@@ -102,6 +102,6 @@ fn a_unit_that_panics_stores_nothing_and_leaves_the_store_usable() {
         })
     }));
     assert!(panicked.is_err());
-    assert_eq!(counter(&store, "c-1"), (Version(0), Counter::Empty));
+    assert_eq!(counter(&store, "c-1"), (Version::ZERO, Counter::Empty));
     assert_eq!(add(&store, "c-2", 1).len(), 1);
 }

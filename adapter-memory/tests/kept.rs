@@ -34,7 +34,7 @@ fn request(store: &Memory, stream: &str) {
 
 fn positions(store: &Memory, after: u64) -> Result<Vec<Position>, StoreError> {
     store
-        .write(|unit| unit.facts::<Task>(Position(after), 10))
+        .write(|unit| unit.facts::<Task>(Position::ZERO.after(after), 10))
         .map(|facts: Vec<Recorded<TaskEvent>>| facts.iter().map(Recorded::position).collect())
 }
 
@@ -48,7 +48,7 @@ fn with_as_many_facts_as_are_kept_none_is_trimmed() {
     let store: Memory = store(2, 2);
     add(&store, "t-1");
     add(&store, "t-2");
-    assert_eq!(positions(&store, 0), Ok(vec![Position(1), Position(2)]));
+    assert_eq!(positions(&store, 0), Ok(vec![Position::from(1), Position::from(2)]));
 }
 
 #[test]
@@ -58,7 +58,7 @@ fn facts_beyond_the_kept_number_are_dropped_and_positions_keep_counting() {
     add(&store, "t-2");
     add(&store, "t-3");
     assert_eq!(store.held().facts, 2);
-    assert_eq!(positions(&store, 1), Ok(vec![Position(2), Position(3)]));
+    assert_eq!(positions(&store, 1), Ok(vec![Position::from(2), Position::from(3)]));
 }
 
 #[test]

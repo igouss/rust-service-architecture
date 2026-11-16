@@ -44,7 +44,7 @@ fn many_writers_on_one_schema_keep_the_tally_equal_to_the_facts() {
         .map(|writer: JoinHandle<Result<(), StoreError>>| writer.join().expect("joined"))
         .collect();
     let positions: Vec<Position> = store
-        .write(|unit| unit.facts::<Task>(Position(0), 1000))
+        .write(|unit| unit.facts::<Task>(Position::ZERO, 1000))
         .expect("facts")
         .iter()
         .map(Recorded::position)
@@ -54,7 +54,9 @@ fn many_writers_on_one_schema_keep_the_tally_equal_to_the_facts() {
         (outcomes, positions, tally),
         (
             vec![Ok(()); 4],
-            (1..=WRITERS * COMMANDS).map(Position).collect::<Vec<Position>>(),
+            (1..=WRITERS * COMMANDS)
+                .map(|position: u64| Position::ZERO.after(position))
+                .collect::<Vec<Position>>(),
             Some(Tally {
                 open: WRITERS * COMMANDS,
                 done: 0
@@ -104,7 +106,7 @@ fn writers_claiming_one_stream_leave_exactly_one_accepted() {
     assert_eq!(
         answers,
         vec![
-            Ok(Answer::Accepted(ports::Version(1))),
+            Ok(Answer::Accepted(ports::Version::from(1))),
             Ok(Answer::Refused(TaskRefusal::AlreadyExists)),
             Ok(Answer::Refused(TaskRefusal::AlreadyExists)),
             Ok(Answer::Refused(TaskRefusal::AlreadyExists))

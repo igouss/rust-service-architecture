@@ -248,7 +248,7 @@ impl Writer for MemoryWriter<'_> {
             version,
             event: event.to_string(),
         });
-        Ok(Position(self.tables.appended + count(self.pending.facts.len())))
+        Ok(Position::ZERO.after(self.tables.appended + count(self.pending.facts.len())))
     }
 
     fn save(&mut self, lifecycle: &'static str, stream: &StreamId, version: Version, state: &str) -> Result<(), StoreError> {
@@ -283,9 +283,12 @@ impl Writer for MemoryWriter<'_> {
         each: &mut dyn FnMut(StoredFact<'_>) -> Result<(), StoreError>,
     ) -> Result<(), StoreError> {
         let trimmed: u64 = self.tables.appended - count(self.tables.facts.len());
-        if after.0 < trimmed {
+        if after.get() < trimmed {
             return Err(StoreError::Unavailable {
-                cause: format!("facts up to position {trimmed} were trimmed, so they cannot be read after position {}", after.0),
+                cause: format!(
+                    "facts up to position {trimmed} were trimmed, so they cannot be read after position {}",
+                    after.get()
+                ),
             });
         }
         self.tables
@@ -293,12 +296,12 @@ impl Writer for MemoryWriter<'_> {
             .iter()
             .chain(self.pending.facts.iter())
             .enumerate()
-            .skip(usize::try_from(after.0 - trimmed).unwrap_or(usize::MAX))
+            .skip(usize::try_from(after.get() - trimmed).unwrap_or(usize::MAX))
             .filter(|(_at, fact): &(usize, &Fact)| fact.lifecycle == lifecycle)
             .take(limit)
             .try_for_each(|(at, fact): (usize, &Fact)| {
                 each(StoredFact {
-                    position: Position(trimmed + count(at + 1)),
+                    position: Position::ZERO.after(trimmed + count(at + 1)),
                     stream: fact.stream.clone(),
                     version: fact.version,
                     event: &fact.event,
@@ -309,8 +312,8 @@ impl Writer for MemoryWriter<'_> {
     fn position(&mut self, read_model: &'static str) -> Result<Position, StoreError> {
         match (self.pending.positions.get(read_model), self.pending.cleared.contains(read_model)) {
             (Some(position), _) => Ok(*position),
-            (None, true) => Ok(Position(0)),
-            (None, false) => Ok(self.tables.positions.get(read_model).copied().unwrap_or(Position(0))),
+            (None, true) => Ok(Position::ZERO),
+            (None, false) => Ok(self.tables.positions.get(read_model).copied().unwrap_or(Position::ZERO)),
         }
     }
 
@@ -403,7 +406,7 @@ impl Store for Memory {
             .into_iter()
             .take(limit)
             .map(|(_attempts, id, request): (u64, u64, &Request)| StoredRequest {
-                id: RequestId(id),
+                id: RequestId::ZERO.after(id),
                 stream: request.stream.clone(),
                 request: request.request.clone(),
             })
@@ -411,12 +414,12 @@ impl Store for Memory {
     }
 
     fn mark_done(&self, _key: Key, id: RequestId) -> Result<(), StoreError> {
-        self.writing().outbox.remove(&id.0);
+        self.writing().outbox.remove(&id.get());
         Ok(())
     }
 
     fn mark_failed(&self, _key: Key, id: RequestId) -> Result<(), StoreError> {
-        if let Some(request) = self.writing().outbox.get_mut(&id.0) {
+        if let Some(request) = self.writing().outbox.get_mut(&id.get()) {
             request.attempts += 1;
         }
         Ok(())

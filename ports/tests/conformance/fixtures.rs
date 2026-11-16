@@ -234,7 +234,7 @@ fn seen(facts: &[Recorded<Counted>]) -> Vec<Seen> {
 }
 
 fn added(position: u64, stream: &str, version: u64, by: u64) -> Seen {
-    (Position(position), id(stream), Version(version), Counted::Added { by })
+    (Position::ZERO.after(position), id(stream), Version::ZERO.after(version), Counted::Added { by })
 }
 
 fn add(store: &Subject, stream: &str, by: u64) -> Vec<Recorded<Counted>> {
@@ -253,7 +253,7 @@ fn counter(store: &Subject, stream: &str) -> (Version, Counter) {
 }
 
 fn counter_facts(store: &Subject, after: u64, limit: usize) -> Vec<Seen> {
-    seen(&store.write(|unit| unit.facts::<Counter>(Position(after), limit)).expect("facts"))
+    seen(&store.write(|unit| unit.facts::<Counter>(Position::ZERO.after(after), limit)).expect("facts"))
 }
 
 fn send(store: &Subject, stream: &str, number: u64) {

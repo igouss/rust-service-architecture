@@ -57,7 +57,7 @@ fn a_unit_of_work_runs_through_spawn_blocking_on_a_multi_thread_runtime() {
     let worker: Arc<Postgres> = Arc::clone(&store);
     let answer: Result<Answer<TaskRefusal>, StoreError> =
         runtime.block_on(async move { tokio::task::spawn_blocking(move || add(&worker, "t-1")).await.expect("joined") });
-    assert_eq!(answer, Ok(Answer::Accepted(Version(1))));
+    assert_eq!(answer, Ok(Answer::Accepted(Version::from(1))));
 }
 
 #[test]
@@ -89,7 +89,7 @@ fn the_store_may_be_opened_and_used_inside_a_runtime() {
     let runtime: Runtime = Builder::new_current_thread().build().expect("runtime");
     let answer: Result<Answer<TaskRefusal>, StoreError> =
         runtime.block_on(async { add(&Postgres::connect(&url(), "runtime_open", 2, Durability::Full)?, "t-1") });
-    assert_eq!(answer, Ok(Answer::Accepted(Version(1))));
+    assert_eq!(answer, Ok(Answer::Accepted(Version::from(1))));
 }
 
 #[test]
@@ -105,7 +105,7 @@ fn a_store_whose_connections_the_server_closed_recovers() {
         )
         .expect("terminated");
     assert_eq!(closed.get::<_, i64>(0), 2);
-    assert_eq!(add(&store, "t-1"), Ok(Answer::Accepted(Version(1))));
+    assert_eq!(add(&store, "t-1"), Ok(Answer::Accepted(Version::from(1))));
 }
 
 #[test]
@@ -137,5 +137,5 @@ fn a_store_opened_as_normal_does_not_wait_for_the_disk() {
     fresh("runtime_normal");
     let store: Postgres = Postgres::connect(&url(), "runtime_normal", 1, Durability::Normal).expect("opens");
     assert_eq!(store.durability(), Ok(Durability::Normal));
-    assert_eq!(add(&store, "t-1"), Ok(Answer::Accepted(Version(1))));
+    assert_eq!(add(&store, "t-1"), Ok(Answer::Accepted(Version::from(1))));
 }

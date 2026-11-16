@@ -40,7 +40,7 @@ pub fn same<T: PartialEq + fmt::Debug>(what: &str, found: T, expected: T) -> Res
 }
 
 pub fn accepted<J: PartialEq + fmt::Debug>(answer: Result<Answer<J>, StoreError>, version: u64, id: &StreamId) -> Result<(), Fault> {
-    same(&id.0, answer, Ok(Answer::Accepted(Version(version))))
+    same(&id.0, answer, Ok(Answer::Accepted(Version::ZERO.after(version))))
 }
 
 pub fn summary(samples: Vec<Duration>) -> Result<Summary, Fault> {

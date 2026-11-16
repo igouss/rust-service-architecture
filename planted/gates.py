@@ -23,6 +23,6 @@ GATES = [
      "_ => Err(TaskRefusal::AlreadyExists),", ("gate", ["cargo", "clippy", "-q", "--all-targets", "--", "-D", "warnings"], "wildcard_enum_match_arm")),
     ("G9 a lint is silenced where it fires", "app/src/lib.rs", "pub trait Policy: Lifecycle {",
      "#[allow(dead_code)]\npub trait Policy: Lifecycle {", ("gate", ["just", "allows"], "arch-tsu")),
-    ("G7 a rule document shows code the workspace does not hold", "ports/src/lib.rs", "pub struct RequestId(pub u64);",
-     "pub struct RequestId(pub u32);", ("gate", ["bb", "guide-sync.bb"], "arch-ajd")),
+    ("G7 a rule document shows code the workspace does not hold", "ports/src/lib.rs", "pub struct $name(u64);",
+     "pub struct $name(u32);", ("gate", ["bb", "guide-sync.bb"], "arch-ajd")),
 ]

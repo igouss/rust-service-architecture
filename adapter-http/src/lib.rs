@@ -51,7 +51,7 @@ pub struct Changes {
 impl Changes {
     pub fn on_commit(&self) -> impl Fn(Position) + Send + Sync + 'static {
         let commits: watch::Sender<u64> = self.commits.clone();
-        move |position: Position| commits.send_modify(|seen: &mut u64| *seen = position.0)
+        move |position: Position| commits.send_modify(|seen: &mut u64| *seen = position.get())
     }
 
     pub fn stop(&self) {
@@ -160,7 +160,7 @@ fn answered(span: &Span, outcome: Result<Answer<TaskRefusal>, Failure>) -> Respo
     match outcome {
         Ok(Answer::Accepted(version)) => {
             span.record("outcome", "accepted");
-            span.record("version", version.0);
+            span.record("version", version.get());
             StatusCode::NO_CONTENT.into_response()
         }
         Ok(Answer::Refused(refusal)) => {

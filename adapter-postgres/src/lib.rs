@@ -100,21 +100,12 @@ fn stopped() -> StoreError {
     }
 }
 
-fn stored(value: u64) -> Result<i64, StoreError> {
-    i64::try_from(value).map_err(|_| StoreError::Unavailable {
-        cause: format!("{value} exceeds the store's integer range"),
-    })
-}
-
-fn loaded(table: &'static str, value: i64) -> Result<u64, StoreError> {
-    u64::try_from(value).map_err(|_| StoreError::Corrupt {
+fn number<T>(table: &'static str, row: &Row, column: usize, read: fn(i64) -> Option<T>) -> Result<T, StoreError> {
+    let value: i64 = row.try_get(column).map_err(unavailable)?;
+    read(value).ok_or_else(|| StoreError::Corrupt {
         table,
         cause: format!("negative integer {value}"),
     })
-}
-
-fn number(table: &'static str, row: &Row, column: usize) -> Result<u64, StoreError> {
-    loaded(table, row.try_get(column).map_err(unavailable)?)
 }
 
 fn text(row: &Row, column: usize) -> Result<&str, StoreError> {
@@ -291,7 +282,7 @@ impl Reader for Session<'_> {
             .call(move |client: &mut Client, statements: &Statements| client.query_opt(&statements.state, &[&lifecycle, &stream]))?
         {
             None => Ok(None),
-            Some(row) => Ok(Some((Version(number("states", &row, 0)?), text(&row, 1)?.to_string()))),
+            Some(row) => Ok(Some((number("states", &row, 0, Version::loaded)?, text(&row, 1)?.to_string()))),
         }
     }
 
@@ -332,15 +323,15 @@ impl Reader for Session<'_> {
 
 impl Writer for Session<'_> {
     fn append(&mut self, lifecycle: &'static str, stream: &StreamId, version: Version, event: &str) -> Result<Position, StoreError> {
-        let (stream, version, event): (String, i64, String) = (stream.0.clone(), stored(version.0)?, event.to_string());
+        let (stream, version, event): (String, i64, String) = (stream.0.clone(), version.stored(), event.to_string());
         let row: Row = self
             .worker
             .call(move |client: &mut Client, statements: &Statements| client.query_one(&statements.append, &[&lifecycle, &stream, &version, &event]))?;
-        Ok(Position(number("facts", &row, 0)?))
+        number("facts", &row, 0, Position::loaded)
     }
 
     fn save(&mut self, lifecycle: &'static str, stream: &StreamId, version: Version, state: &str) -> Result<(), StoreError> {
-        let (stream, version, state): (String, i64, String) = (stream.0.clone(), stored(version.0)?, state.to_string());
+        let (stream, version, state): (String, i64, String) = (stream.0.clone(), version.stored(), state.to_string());
         self.worker
             .call(move |client: &mut Client, statements: &Statements| client.execute(&statements.save, &[&lifecycle, &stream, &version, &state]))
             .map(|_changed: u64| ())
@@ -367,15 +358,15 @@ impl Writer for Session<'_> {
         limit: usize,
         each: &mut dyn FnMut(StoredFact<'_>) -> Result<(), StoreError>,
     ) -> Result<(), StoreError> {
-        let (after, limit): (i64, i64) = (stored(after.0)?, i64::try_from(limit).unwrap_or(i64::MAX));
+        let (after, limit): (i64, i64) = (after.stored(), i64::try_from(limit).unwrap_or(i64::MAX));
         self.worker
             .call(move |client: &mut Client, statements: &Statements| client.query(&statements.facts, &[&lifecycle, &after, &limit]))?
             .iter()
             .try_for_each(|row: &Row| {
                 each(StoredFact {
-                    position: Position(number("facts", row, 0)?),
+                    position: number("facts", row, 0, Position::loaded)?,
                     stream: StreamId(text(row, 1)?.to_string()),
-                    version: Version(number("facts", row, 2)?),
+                    version: number("facts", row, 2, Version::loaded)?,
                     event: text(row, 3)?,
                 })
             })
@@ -386,13 +377,13 @@ impl Writer for Session<'_> {
             .worker
             .call(move |client: &mut Client, statements: &Statements| client.query_opt(&statements.position, &[&read_model]))?
         {
-            None => Ok(Position(0)),
-            Some(row) => Ok(Position(number("read_model_positions", &row, 0)?)),
+            None => Ok(Position::ZERO),
+            Some(row) => Ok(number("read_model_positions", &row, 0, Position::loaded)?),
         }
     }
 
     fn advance(&mut self, read_model: &'static str, position: Position) -> Result<(), StoreError> {
-        let position: i64 = stored(position.0)?;
+        let position: i64 = position.stored();
         self.worker
             .call(move |client: &mut Client, statements: &Statements| client.execute(&statements.advance, &[&read_model, &position]))
             .map(|_changed: u64| ())
@@ -454,7 +445,7 @@ impl Store for Postgres {
             .iter()
             .map(|row: &Row| {
                 Ok(StoredRequest {
-                    id: RequestId(number("outbox", row, 0)?),
+                    id: number("outbox", row, 0, RequestId::loaded)?,
                     stream: StreamId(text(row, 1)?.to_string()),
                     request: text(row, 2)?.to_string(),
                 })
@@ -463,14 +454,14 @@ impl Store for Postgres {
     }
 
     fn mark_done(&self, _key: Key, id: RequestId) -> Result<(), StoreError> {
-        let id: i64 = stored(id.0)?;
+        let id: i64 = id.stored();
         self.checked()?
             .call(move |client: &mut Client, statements: &Statements| client.execute(&statements.done, &[&id]))
             .map(|_changed: u64| ())
     }
 
     fn mark_failed(&self, _key: Key, id: RequestId) -> Result<(), StoreError> {
-        let id: i64 = stored(id.0)?;
+        let id: i64 = id.stored();
         self.checked()?
             .call(move |client: &mut Client, statements: &Statements| client.execute(&statements.failed, &[&id]))
             .map(|_changed: u64| ())

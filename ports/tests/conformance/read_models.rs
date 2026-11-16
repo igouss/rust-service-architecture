@@ -59,8 +59,8 @@ fn a_change_at_or_below_the_read_models_position_is_refused() {
         second,
         Err(StoreError::OutOfOrder {
             read_model: "suite_total_v1",
-            at: Position(1),
-            offered: Position(1)
+            at: Position::from(1),
+            offered: Position::from(1)
         })
     );
 }

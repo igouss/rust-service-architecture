@@ -116,8 +116,8 @@ fn the_board_of_many_tasks_lists_the_open_ones_and_tallies_all() {
 #[test]
 fn an_added_task_is_stored_open_at_version_one_and_tallied() {
     let store: Sqlite = store();
-    assert_eq!(add(&store, "t-1"), Answer::Accepted(Version(1)));
-    assert_eq!(state::<Task>(&store, "t-1"), (Version(1), Task::Open { title: title_of("t-1") }));
+    assert_eq!(add(&store, "t-1"), Answer::Accepted(Version::from(1)));
+    assert_eq!(state::<Task>(&store, "t-1"), (Version::from(1), Task::Open { title: title_of("t-1") }));
     assert_eq!(task_tally(&store), Ok(Some(Tally { open: 1, done: 0 })));
 }
 
@@ -135,7 +135,7 @@ fn a_completed_task_leaves_the_open_list_and_moves_in_the_tally() {
     let store: Sqlite = store();
     add(&store, "t-1");
     add(&store, "t-2");
-    assert_eq!(handle(&store, &id("t-1"), CompleteTask), Ok(Answer::Accepted(Version(2))));
+    assert_eq!(handle(&store, &id("t-1"), CompleteTask), Ok(Answer::Accepted(Version::from(2))));
     assert_eq!(open_tasks(&store), Ok(vec![(id("t-2"), title_of("t-2"))]));
     assert_eq!(task_tally(&store), Ok(Some(Tally { open: 1, done: 1 })));
 }
@@ -149,7 +149,7 @@ fn a_refused_command_is_answered_recorded_and_changes_nothing() {
         store.read(|view: &mut View<'_>| view.refusals::<Task>(&id("t-1"))),
         Ok(vec![TaskRefusal::AlreadyExists])
     );
-    assert_eq!(state::<Task>(&store, "t-1"), (Version(1), Task::Open { title: title_of("t-1") }));
+    assert_eq!(state::<Task>(&store, "t-1"), (Version::from(1), Task::Open { title: title_of("t-1") }));
     assert_eq!(task_tally(&store), Ok(Some(Tally { open: 1, done: 0 })));
 }
 
@@ -164,19 +164,19 @@ fn an_accepted_command_records_no_rejection() {
 fn an_authorization_starts_no_fulfilment() {
     let store: Sqlite = store();
     handle(&store, &id("p-1"), Authorize { amount: cents(500) }).expect("authorized");
-    assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version(0), Fulfilment::Idle));
+    assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version::ZERO, Fulfilment::Idle));
     assert_eq!(store.claim::<Progress>(10), Ok(Vec::new()));
 }
 
 #[test]
 fn a_capture_starts_the_fulfilment_and_requests_stock_in_the_same_unit() {
     let store: Sqlite = captured_payment();
-    assert_eq!(state::<Payment>(&store, "p-1"), (Version(2), Payment::Captured { amount: cents(500) }));
-    assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version(1), Fulfilment::Reserving));
+    assert_eq!(state::<Payment>(&store, "p-1"), (Version::from(2), Payment::Captured { amount: cents(500) }));
+    assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version::from(1), Fulfilment::Reserving));
     assert_eq!(
         store.claim::<Progress>(10),
         Ok(vec![Claimed {
-            id: RequestId(1),
+            id: RequestId::from(1),
             stream: id("p-1"),
             request: FulfilmentRequest::ReserveStock
         }])
@@ -190,7 +190,7 @@ fn a_refused_capture_starts_nothing() {
         handle(&store, &id("p-1"), Capture { amount: cents(500) }),
         Ok(Answer::Refused(PaymentRefusal::NotAuthorized))
     );
-    assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version(0), Fulfilment::Idle));
+    assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version::ZERO, Fulfilment::Idle));
 }
 
 #[test]
@@ -201,7 +201,10 @@ fn the_relay_performs_a_claimed_request_once_and_marks_it_done() {
     };
     assert_eq!(ready(relay::<Progress, Sqlite, Recording>(&store, &gateway, 10)), Ok(1));
     assert_eq!(ready(relay::<Progress, Sqlite, Recording>(&store, &gateway, 10)), Ok(0));
-    assert_eq!(*gateway.performed.lock().expect("lock"), vec![(RequestId(1), FulfilmentRequest::ReserveStock)]);
+    assert_eq!(
+        *gateway.performed.lock().expect("lock"),
+        vec![(RequestId::from(1), FulfilmentRequest::ReserveStock)]
+    );
 }
 
 #[test]
@@ -239,7 +242,7 @@ fn a_rebuild_over_no_facts_leaves_no_rows() {
 fn a_commit_tells_the_listener_its_last_position() {
     let seen: Arc<AtomicU64> = Arc::new(AtomicU64::new(0));
     let sink: Arc<AtomicU64> = Arc::clone(&seen);
-    let store: Sqlite = store().on_commit(move |position: Position| sink.store(position.0, Ordering::SeqCst));
+    let store: Sqlite = store().on_commit(move |position: Position| sink.store(position.get(), Ordering::SeqCst));
     handle(&store, &id("p-1"), Authorize { amount: cents(500) }).expect("authorized");
     handle(&store, &id("p-1"), Capture { amount: cents(500) }).expect("captured");
     assert_eq!(seen.load(Ordering::SeqCst), 3);
@@ -249,7 +252,7 @@ fn a_commit_tells_the_listener_its_last_position() {
 fn a_refusal_tells_the_listener_nothing() {
     let seen: Arc<AtomicU64> = Arc::new(AtomicU64::new(0));
     let sink: Arc<AtomicU64> = Arc::clone(&seen);
-    let store: Sqlite = store().on_commit(move |position: Position| sink.store(position.0, Ordering::SeqCst));
+    let store: Sqlite = store().on_commit(move |position: Position| sink.store(position.get(), Ordering::SeqCst));
     handle(&store, &id("t-1"), CompleteTask).expect("handled");
     assert_eq!(seen.load(Ordering::SeqCst), 0);
 }
@@ -262,7 +265,7 @@ fn a_unit_that_fails_after_applying_stores_nothing() {
         Err(StoreError::Unavailable { cause: "injected".to_string() })
     });
     assert_eq!(failed, Err(StoreError::Unavailable { cause: "injected".to_string() }));
-    assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version(0), Fulfilment::Idle));
+    assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version::ZERO, Fulfilment::Idle));
     assert_eq!(store.claim::<Progress>(10), Ok(Vec::new()));
 }
 
@@ -270,9 +273,9 @@ struct FailsTheFirst;
 
 impl Gateway<FulfilmentRequest> for FailsTheFirst {
     async fn perform(&self, id: RequestId, _stream: &StreamId, _request: &FulfilmentRequest) -> Result<(), GatewayError> {
-        match id {
-            RequestId(1) => Err(GatewayError { cause: "down".to_string() }),
-            RequestId(_) => Ok(()),
+        match id.get() {
+            1 => Err(GatewayError { cause: "down".to_string() }),
+            _later => Ok(()),
         }
     }
 }
@@ -290,7 +293,7 @@ fn a_request_that_keeps_failing_does_not_hold_back_the_next_one() {
 fn progress_from_outside_advances_the_process_manager_and_issues_its_request() {
     let store: Sqlite = captured_payment();
     assert_eq!(app::advance(&store, &id("p-1"), Progress::StockReserved), Ok(()));
-    assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version(2), Fulfilment::Shipping));
+    assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version::from(2), Fulfilment::Shipping));
     assert_eq!(store.claim::<Progress>(10).map(|claimed| claimed.len()), Ok(2));
 }
 
@@ -298,5 +301,5 @@ fn progress_from_outside_advances_the_process_manager_and_issues_its_request() {
 fn progress_that_does_not_apply_changes_nothing() {
     let store: Sqlite = store();
     assert_eq!(app::advance(&store, &id("p-1"), Progress::Shipped), Ok(()));
-    assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version(0), Fulfilment::Idle));
+    assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version::ZERO, Fulfilment::Idle));
 }

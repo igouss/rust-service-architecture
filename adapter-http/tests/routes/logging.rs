@@ -48,7 +48,7 @@ async fn a_store_error_that_ends_an_event_stream_is_logged() {
     });
     let mut stream: Body = send(&router(journal, changes.clone()), get("/events")).await.into_body();
     frame(&mut stream).await;
-    changes.on_commit()(Position(1));
+    changes.on_commit()(Position::from(1));
     tokio::time::timeout(Duration::from_secs(5), stream.frame())
         .await
         .expect("an end within five seconds");

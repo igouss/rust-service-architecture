@@ -66,6 +66,6 @@ fn a_step_that_requests_without_a_fact_keeps_the_version_and_stores_the_request(
         .write(|unit| unit.apply(&id("p-1"), |state: Courier| ports::react(Remind { number: 3 }, state)))
         .expect("applied");
     assert_eq!(applied.facts.len(), 0);
-    assert_eq!(store.read(|view| view.state::<Courier>(&id("p-1"))), Ok((Version(0), Courier::Idle)));
+    assert_eq!(store.read(|view| view.state::<Courier>(&id("p-1"))), Ok((Version::ZERO, Courier::Idle)));
     assert_eq!(parcels(&store, 10), vec![(id("p-1"), Parcel { number: 3 })]);
 }
