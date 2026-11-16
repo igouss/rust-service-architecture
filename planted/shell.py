@@ -31,7 +31,7 @@ SHELL = [
     ("C12 the key to the raw store is minted outside ports", "app/src/lib.rs", "pub trait Policy: Lifecycle {",
      "pub fn key() -> ports::store::Key {\n    ports::store::Key::new()\n}\n\npub trait Policy: Lifecycle {", "E0624"),
     ("C13 a unit of work is built around a raw writer outside ports", "app/src/lib.rs", "pub trait Policy: Lifecycle {",
-     "pub fn unit(store: &mut dyn ports::store::Writer) -> Unit<'_> {\n    Unit { store }\n}\n\npub trait Policy: Lifecycle {", "E0451"),
+     "pub fn unit(store: &mut dyn ports::store::Writer) -> Unit<'_> {\n    Unit { store, last: None }\n}\n\npub trait Policy: Lifecycle {", "E0451"),
     ("T1 the stored state is not the fold of the facts", "ports/src/lib.rs",
      "let state: S = events.iter().fold(state, S::evolve);", "let state: S = events.iter().fold(state, |state: S, _event: &S::Event| state);", "test"),
     ("T2 a refusal is not recorded", "ports/src/lib.rs",
