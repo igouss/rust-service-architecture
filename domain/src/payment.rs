@@ -45,7 +45,6 @@ pub struct Authorize {
 
 impl Command for Authorize {
     type Reads = Payment;
-    type Rejection = PaymentRefusal;
 
     /// While the payment is `Absent`, when `Authorize` is decided, `decide` shall emit `Authorized` with the amount.
     /// If the payment is not `Absent`, then `decide` shall refuse with `AlreadyAuthorized`.
@@ -63,7 +62,6 @@ pub struct Capture {
 
 impl Command for Capture {
     type Reads = Payment;
-    type Rejection = PaymentRefusal;
 
     /// While the payment is `Authorized`, when the amount is at most the authorized amount, `decide` shall emit `Captured` with the amount.
     /// While the payment is `Authorized`, when the amount exceeds the authorized amount, `decide` shall emit `Declined` with `ExceedsAuthorization`.

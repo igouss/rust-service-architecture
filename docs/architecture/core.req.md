@@ -51,8 +51,7 @@ pub type Facts<S> = Vec<<S as Lifecycle>::Event>;
 
 pub trait Command {
     type Reads: Lifecycle;
-    type Rejection: Into<<Self::Reads as Lifecycle>::Refusal>;
-    fn decide(self, reads: &Self::Reads) -> Result<Facts<Self::Reads>, Self::Rejection>;
+    fn decide(self, reads: &Self::Reads) -> Result<Facts<Self::Reads>, <Self::Reads as Lifecycle>::Refusal>;
 }
 
 #[derive(Debug, PartialEq, Eq)]

@@ -42,7 +42,7 @@ Participants: `ports::Transition`, `Unit::apply`, the store adapter.
 If `decide` refuses a command, then the system shall record the refusal and change neither the
 state nor its version.
 
-Participants: `Command::Rejection`, `Lifecycle::Refusal`, `Unit::apply`.
+Participants: `Command::decide`, `Lifecycle::Refusal`, `Unit::apply`.
 
 ### Acceptance
 

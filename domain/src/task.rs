@@ -79,7 +79,6 @@ pub struct AddTask {
 
 impl Command for AddTask {
     type Reads = Task;
-    type Rejection = TaskRefusal;
 
     /// While the task is `Absent`, when `AddTask` is decided, `decide` shall emit `Added` with the title.
     /// If the task is `Open` or `Done`, then `decide` shall refuse with `AlreadyExists`.
@@ -95,7 +94,6 @@ pub struct CompleteTask;
 
 impl Command for CompleteTask {
     type Reads = Task;
-    type Rejection = TaskRefusal;
 
     /// While the task is `Open`, when `CompleteTask` is decided, `decide` shall emit `Completed`.
     /// If the task is `Absent`, then `decide` shall refuse with `Absent`.

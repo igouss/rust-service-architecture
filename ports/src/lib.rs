@@ -68,7 +68,7 @@ pub enum Answer<J> {
 pub fn decide<C: Command>(command: C, state: C::Reads) -> Outcome<C::Reads, Never> {
     match command.decide(&state) {
         Ok(events) => Outcome::Accepted(Transition::fold(state, events, Vec::new())),
-        Err(rejection) => Outcome::Refused(rejection.into()),
+        Err(refusal) => Outcome::Refused(refusal),
     }
 }
 

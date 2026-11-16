@@ -43,7 +43,6 @@ struct Add {
 
 impl Command for Add {
     type Reads = Counter;
-    type Rejection = CounterRefusal;
 
     fn decide(self, _reads: &Counter) -> Result<Facts<Counter>, CounterRefusal> {
         match self.by {
@@ -59,7 +58,6 @@ struct AddTwice {
 
 impl Command for AddTwice {
     type Reads = Counter;
-    type Rejection = CounterRefusal;
 
     fn decide(self, _reads: &Counter) -> Result<Facts<Counter>, CounterRefusal> {
         Ok(vec![Counted::Added { by: self.by }, Counted::Added { by: self.by }])
@@ -70,7 +68,6 @@ struct Reset;
 
 impl Command for Reset {
     type Reads = Counter;
-    type Rejection = CounterRefusal;
 
     fn decide(self, _reads: &Counter) -> Result<Facts<Counter>, CounterRefusal> {
         Ok(vec![Counted::Reset])
