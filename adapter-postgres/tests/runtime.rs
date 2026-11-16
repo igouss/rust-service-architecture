@@ -139,3 +139,9 @@ fn a_store_opened_as_normal_does_not_wait_for_the_disk() {
     assert_eq!(store.durability(), Ok(Durability::Normal));
     assert_eq!(add(&store, "t-1"), Ok(Answer::Accepted(Version::from(1))));
 }
+
+#[test]
+fn a_schema_name_that_is_not_plain_is_refused_as_a_misconfiguration() {
+    let opened: Result<Postgres, StoreError> = Postgres::connect(&url(), "Tasks; DROP", 1, Durability::Full);
+    assert!(matches!(opened.map(|_store: Postgres| ()), Err(StoreError::Misconfigured { .. })));
+}

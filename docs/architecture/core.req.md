@@ -204,7 +204,10 @@ No wildcard arm on a state, event or refusal type. Spell out every pair in a tup
 ## `arch-1q6` Errors that are matched on shall be concrete enums
 
 No `Box<dyn Error>` and no `anyhow` in `domain`, `ports` or `app`. `StoreError` names its
-cause: `Unavailable`, `Corrupt` with the table, `OutOfOrder` with the read model.
+cause, one variant for each thing a caller can do about it: `Unavailable` (try again),
+`Misconfigured` (fix the setting), `Corrupt` with the table (repair what is stored),
+`Unencodable` with the table (fix the type), `OutOfOrder` with the read model, `Trimmed` with
+the oldest position still held (read from there).
 
 ### Acceptance
 

@@ -284,11 +284,9 @@ impl Writer for MemoryWriter<'_> {
     ) -> Result<(), StoreError> {
         let trimmed: u64 = self.tables.appended - count(self.tables.facts.len());
         if after.get() < trimmed {
-            return Err(StoreError::Unavailable {
-                cause: format!(
-                    "facts up to position {trimmed} were trimmed, so they cannot be read after position {}",
-                    after.get()
-                ),
+            return Err(StoreError::Trimmed {
+                after,
+                oldest: Position::ZERO.after(trimmed + 1),
             });
         }
         self.tables

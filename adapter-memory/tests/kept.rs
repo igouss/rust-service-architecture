@@ -67,7 +67,13 @@ fn a_read_of_facts_that_were_trimmed_is_refused() {
     add(&store, "t-1");
     add(&store, "t-2");
     add(&store, "t-3");
-    assert!(matches!(positions(&store, 0), Err(StoreError::Unavailable { .. })));
+    assert_eq!(
+        positions(&store, 0),
+        Err(StoreError::Trimmed {
+            after: Position::ZERO,
+            oldest: Position::from(2)
+        })
+    );
 }
 
 #[test]

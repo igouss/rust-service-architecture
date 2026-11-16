@@ -53,7 +53,14 @@ pub enum StoreError {
     Unavailable {
         cause: String,
     },
+    Misconfigured {
+        cause: String,
+    },
     Corrupt {
+        table: &'static str,
+        cause: String,
+    },
+    Unencodable {
         table: &'static str,
         cause: String,
     },
@@ -61,6 +68,10 @@ pub enum StoreError {
         read_model: &'static str,
         at: Position,
         offered: Position,
+    },
+    Trimmed {
+        after: Position,
+        oldest: Position,
     },
 }
 
@@ -170,7 +181,7 @@ pub fn project<P: Projection>(row: Option<P::Row>, fact: &Fact<P>) -> Change<P> 
 }
 
 fn encode<T: Serialize>(table: &'static str, value: &T) -> Result<String, StoreError> {
-    serde_json::to_string(value).map_err(|error: serde_json::Error| StoreError::Corrupt {
+    serde_json::to_string(value).map_err(|error: serde_json::Error| StoreError::Unencodable {
         table,
         cause: error.to_string(),
     })

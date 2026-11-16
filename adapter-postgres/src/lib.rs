@@ -101,15 +101,16 @@ fn stopped() -> StoreError {
 }
 
 fn number<T>(table: &'static str, row: &Row, column: usize, read: fn(i64) -> Option<T>) -> Result<T, StoreError> {
-    let value: i64 = row.try_get(column).map_err(unavailable)?;
-    read(value).ok_or_else(|| StoreError::Corrupt {
-        table,
-        cause: format!("negative integer {value}"),
-    })
+    let corrupt = |cause: String| StoreError::Corrupt { table, cause };
+    let value: i64 = row.try_get(column).map_err(|error: postgres::Error| corrupt(error.to_string()))?;
+    read(value).ok_or_else(|| corrupt(format!("negative integer {value}")))
 }
 
-fn text(row: &Row, column: usize) -> Result<&str, StoreError> {
-    row.try_get(column).map_err(unavailable)
+fn text<'a>(table: &'static str, row: &'a Row, column: usize) -> Result<&'a str, StoreError> {
+    row.try_get(column).map_err(|error: postgres::Error| StoreError::Corrupt {
+        table,
+        cause: error.to_string(),
+    })
 }
 
 fn named(schema: &str) -> Result<&str, StoreError> {
@@ -118,7 +119,7 @@ fn named(schema: &str) -> Result<&str, StoreError> {
         .all(|letter: char| letter.is_ascii_lowercase() || letter.is_ascii_digit() || letter == '_');
     match plain && schema.starts_with(|letter: char| letter.is_ascii_lowercase()) {
         true => Ok(schema),
-        false => Err(StoreError::Unavailable {
+        false => Err(StoreError::Misconfigured {
             cause: format!("schema name {schema:?} must be lower-case letters, digits and underscores, starting with a letter"),
         }),
     }
@@ -224,7 +225,7 @@ impl Postgres {
         let row: Row = self
             .checked()?
             .call(|client: &mut Client, _statements: &Statements| client.query_one("SELECT current_setting('synchronous_commit')", &[]))?;
-        match text(&row, 0)? {
+        match text("pg_settings", &row, 0)? {
             "off" => Ok(Durability::Normal),
             _synchronous => Ok(Durability::Full),
         }
@@ -282,7 +283,7 @@ impl Reader for Session<'_> {
             .call(move |client: &mut Client, statements: &Statements| client.query_opt(&statements.state, &[&lifecycle, &stream]))?
         {
             None => Ok(None),
-            Some(row) => Ok(Some((number("states", &row, 0, Version::loaded)?, text(&row, 1)?.to_string()))),
+            Some(row) => Ok(Some((number("states", &row, 0, Version::loaded)?, text("states", &row, 1)?.to_string()))),
         }
     }
 
@@ -290,7 +291,7 @@ impl Reader for Session<'_> {
         self.worker
             .call(move |client: &mut Client, statements: &Statements| client.query(&statements.states, &[&lifecycle]))?
             .iter()
-            .try_for_each(|row: &Row| each(StreamId(text(row, 0)?.to_string()), text(row, 1)?))
+            .try_for_each(|row: &Row| each(StreamId(text("states", row, 0)?.to_string()), text("states", row, 1)?))
     }
 
     fn row(&mut self, read_model: &'static str, key: &str) -> Result<Option<String>, StoreError> {
@@ -300,7 +301,7 @@ impl Reader for Session<'_> {
             .call(move |client: &mut Client, statements: &Statements| client.query_opt(&statements.row, &[&read_model, &key]))?
         {
             None => Ok(None),
-            Some(row) => Ok(Some(text(&row, 0)?.to_string())),
+            Some(row) => Ok(Some(text("read_models", &row, 0)?.to_string())),
         }
     }
 
@@ -308,7 +309,7 @@ impl Reader for Session<'_> {
         self.worker
             .call(move |client: &mut Client, statements: &Statements| client.query(&statements.rows, &[&read_model]))?
             .iter()
-            .try_for_each(|row: &Row| each(text(row, 0)?.to_string(), text(row, 1)?))
+            .try_for_each(|row: &Row| each(text("read_models", row, 0)?.to_string(), text("read_models", row, 1)?))
     }
 
     fn refusals(&mut self, lifecycle: &'static str, stream: &StreamId) -> Result<Vec<String>, StoreError> {
@@ -316,7 +317,7 @@ impl Reader for Session<'_> {
         self.worker
             .call(move |client: &mut Client, statements: &Statements| client.query(&statements.rejections, &[&lifecycle, &stream]))?
             .iter()
-            .map(|row: &Row| text(row, 0).map(str::to_string))
+            .map(|row: &Row| text("rejections", row, 0).map(str::to_string))
             .collect()
     }
 }
@@ -365,9 +366,9 @@ impl Writer for Session<'_> {
             .try_for_each(|row: &Row| {
                 each(StoredFact {
                     position: number("facts", row, 0, Position::loaded)?,
-                    stream: StreamId(text(row, 1)?.to_string()),
+                    stream: StreamId(text("facts", row, 1)?.to_string()),
                     version: number("facts", row, 2, Version::loaded)?,
-                    event: text(row, 3)?,
+                    event: text("facts", row, 3)?,
                 })
             })
     }
@@ -446,8 +447,8 @@ impl Store for Postgres {
             .map(|row: &Row| {
                 Ok(StoredRequest {
                     id: number("outbox", row, 0, RequestId::loaded)?,
-                    stream: StreamId(text(row, 1)?.to_string()),
-                    request: text(row, 2)?.to_string(),
+                    stream: StreamId(text("outbox", row, 1)?.to_string()),
+                    request: text("outbox", row, 2)?.to_string(),
                 })
             })
             .collect()

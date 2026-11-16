@@ -71,7 +71,14 @@ pub enum StoreError {
     Unavailable {
         cause: String,
     },
+    Misconfigured {
+        cause: String,
+    },
     Corrupt {
+        table: &'static str,
+        cause: String,
+    },
+    Unencodable {
         table: &'static str,
         cause: String,
     },
@@ -79,6 +86,10 @@ pub enum StoreError {
         read_model: &'static str,
         at: Position,
         offered: Position,
+    },
+    Trimmed {
+        after: Position,
+        oldest: Position,
     },
 }
 

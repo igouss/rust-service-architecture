@@ -105,3 +105,14 @@ fn a_unit_that_panics_stores_nothing_and_leaves_the_store_usable() {
     assert_eq!(counter(&store, "c-1"), (Version::ZERO, Counter::Empty));
     assert_eq!(add(&store, "c-2", 1).len(), 1);
 }
+
+#[test]
+fn a_fact_that_cannot_be_encoded_is_refused_and_stores_nothing() {
+    let store: Subject = subject();
+    let applied: Result<Applied<Atlas>, StoreError> = store.write(|unit| unit.apply(&id("a-1"), |state: Atlas| ports::decide(Chart, state)));
+    assert!(matches!(
+        applied.map(|applied: Applied<Atlas>| applied.answer),
+        Err(StoreError::Unencodable { table: "facts", .. })
+    ));
+    assert_eq!(store.read(|view: &mut View<'_>| view.state::<Atlas>(&id("a-1"))), Ok((Version::ZERO, Atlas)));
+}

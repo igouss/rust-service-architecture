@@ -74,6 +74,12 @@ STORES = [
      "$name(self.0.saturating_add(more).min(i64::MAX.unsigned_abs()))", "$name(self.0.saturating_add(more))", "test"),
     ("T55 a negative stored integer loads as an id", "ports/src/lib.rs",
      "u64::try_from(value).ok().map($name)", "Some($name(value.unsigned_abs()))", "test"),
+    ("T56 a value that cannot be encoded is reported as corrupt storage", "ports/src/lib.rs",
+     "serde_json::to_string(value).map_err(|error: serde_json::Error| StoreError::Unencodable {", "serde_json::to_string(value).map_err(|error: serde_json::Error| StoreError::Corrupt {", "test"),
+    ("T57 a read into trimmed facts names the wrong oldest position", "adapter-memory/src/lib.rs",
+     "oldest: Position::ZERO.after(trimmed + 1),", "oldest: Position::ZERO.after(trimmed),", "test"),
+    ("T58 a bad Postgres schema name is reported as an outage", "adapter-postgres/src/lib.rs",
+     "false => Err(StoreError::Misconfigured {", "false => Err(StoreError::Unavailable {", POSTGRES),
     ("T45 a failed Postgres unit leaves its transaction open on the pooled connection", "adapter-postgres/src/lib.rs",
      "if self.open {", "if self.open && false {", POSTGRES),
 ]

@@ -103,7 +103,7 @@ enum Failure {
 
 fn reported(span: &Span, failure: &Failure, message: &'static str) {
     match failure {
-        Failure::Store(error @ (StoreError::Unavailable { .. } | StoreError::Corrupt { .. } | StoreError::OutOfOrder { .. })) => {
+        Failure::Store(error) => {
             tracing::error!(parent: span, error = ?error, "{message}");
         }
         Failure::Worker => tracing::error!(parent: span, error = "the blocking worker did not finish", "{message}"),

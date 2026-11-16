@@ -270,3 +270,32 @@ fn parcels(store: &Subject, limit: usize) -> Vec<(StreamId, Parcel)> {
         .map(|claimed: Claimed<Parcel>| (claimed.stream, claimed.request))
         .collect()
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+struct Atlas;
+
+type Charted = std::collections::BTreeMap<(u8, u8), u8>;
+
+impl Lifecycle for Atlas {
+    const NAME: &'static str = "suite_atlas";
+    type Event = Charted;
+    type Refusal = Never;
+
+    fn initial() -> Atlas {
+        Atlas
+    }
+
+    fn evolve(self, _event: &Charted) -> Atlas {
+        Atlas
+    }
+}
+
+struct Chart;
+
+impl Command for Chart {
+    type Reads = Atlas;
+
+    fn decide(self, _reads: &Atlas) -> Result<Facts<Atlas>, Never> {
+        Ok(vec![Charted::from([((0, 0), 0)])])
+    }
+}
