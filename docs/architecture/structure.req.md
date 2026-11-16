@@ -102,6 +102,7 @@ team or under agents; with a closed set, review is recognising a form.
 ### Acceptance
 
 - `arch-u8nl.1` Review checks that every public item of `domain` and `app` is one of the primitives or a type one of them names (T4→T3, gap ledger).
+- `arch-u8nl.2` The `traits` recipe rejects a `trait` declared outside `domain/src/lib.rs`, `app/src/lib.rs` and `ports/src` (T3; mutant G20).
 
 ## `arch-izj` A workspace shall start with six crates and grow only on a trigger
 

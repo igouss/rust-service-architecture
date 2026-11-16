@@ -98,7 +98,25 @@ def wildcards():
     return found, ["A tuple element that is `_`, `..` or a bare name takes every case the arms above left, and a new variant lands there unseen.", "Fix: spell out every pair, naming each variant the element can be (`A | B`)."]
 
 
-CHECKS = {"comments": comments, "allows": allows, "wildcards": wildcards}
+def traits():
+    found = []
+    for package in packages():
+        roots = {target["src_path"] for target in package["targets"] if "lib" in target["kind"]}
+        home = set(rust_files(package, "src")) if role(package) == "port-and-adapter" else roots if role(package) in ("domain", "usecase") else set()
+        kept = 0
+        for path in rust_files(package):
+            code = lex(path)[0]
+            declared = list(re.finditer(r"\btrait\s+(\w+)", code))
+            if len(declared) != len(re.findall(r"\btrait\b", code)):
+                raise Unread("%s: a `trait` the scan could not name" % relative(path))
+            kept += len(declared) if path in home else 0
+            found += ["arch-u8nl: %s:%d trait %s" % (relative(path), line_of(code, match.start()), match.group(1)) for match in declared if path not in home]
+        if home and not kept:
+            raise Unread("%s declares no trait where its primitives live; the check has nothing to read" % package["name"])
+    return found, ["A trait is a new kind of thing; the kinds are the traits of domain/src/lib.rs, app/src/lib.rs and ports/src.", "Fix: make the feature an instance of one of them: a lifecycle, a command, a reaction, a projection, a policy, a query, a port."]
+
+
+CHECKS = {"comments": comments, "allows": allows, "wildcards": wildcards, "traits": traits}
 
 
 def main():

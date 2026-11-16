@@ -37,4 +37,6 @@ GATES = [
      "#![allow(clippy::expect_used, clippy::panic, clippy::wildcard_enum_match_arm)]", ("gate", ["just", "allows"], "arch-tsu: domain/tests/stored_encoding.rs:1 #![allow(clippy::expect_used, clippy::panic, clippy::wildcard_enum_match_arm)]")),
     ("G19 a tuple match has a wildcard element", "domain/src/task.rs", "| (s @ Task::Done { .. }, TaskEvent::Added { .. } | TaskEvent::Completed) => s,",
      "| (s @ Task::Done { .. }, _) => s,", ("gate", ["just", "wildcards"], "arch-j0k: domain/src/task.rs `(s @ Task::Done { .. }, _)`")),
+    ("G20 a feature declares a new kind of thing", "app/src/tasks.rs", "#[derive(Debug, Clone, PartialEq, Eq)]\npub struct TaskBoard {",
+     "pub trait Board {\n    fn open(&self) -> usize;\n}\n\n#[derive(Debug, Clone, PartialEq, Eq)]\npub struct TaskBoard {", ("gate", ["just", "traits"], "trait Board")),
 ]

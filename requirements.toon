@@ -65,7 +65,7 @@ requirements[65]{id,verification}:
   arch-yod,test
   arch-yr1,test
   arch-zhm,test
-criteria[115]{id,requirement}:
+criteria[116]{id,requirement}:
   arch-06ys.1,arch-06ys
   arch-06ys.2,arch-06ys
   arch-0bd.1,arch-0bd
@@ -171,6 +171,7 @@ criteria[115]{id,requirement}:
   arch-tsu.1,arch-tsu
   arch-tsu.2,arch-tsu
   arch-u8nl.1,arch-u8nl
+  arch-u8nl.2,arch-u8nl
   arch-ukt.1,arch-ukt
   arch-v1q.1,arch-v1q
   arch-w0v.1,arch-w0v
