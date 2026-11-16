@@ -26,7 +26,7 @@ A new command on an existing lifecycle:
 3. If it can refuse for a new reason, add the variant to the lifecycle's refusal `enum`.
 4. Add one test per EARS clause in the file's `tests` module: `given(&[facts])`, call
    `decide`, compare.
-5. Add the new variants to `domain/tests/stored_encoding.rs`, as new assertions.
+5. Add the new variants to `domain/tests/stored_encoding.rs`: each one's JSON in its type's match, and a `pinned(&…)` sample.
 
 A new event or refusal variant is not contained in `domain`: the compiler names every
 exhaustive `match` on it, in `app` (the policy) and in the driving adapter (the refusal's name

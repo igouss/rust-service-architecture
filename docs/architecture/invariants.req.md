@@ -134,7 +134,7 @@ Participants: every `Lifecycle` implementation.
 
 ### Acceptance
 
-- `arch-bim.1` Every `match` on a state type spells out each pair: `clippy::wildcard_enum_match_arm` is denied, plus review of tuple matches.
+- `arch-bim.1` Every `match` on a state type spells out each pair: `clippy::wildcard_enum_match_arm` is denied, and the `wildcards` recipe reads tuple matches (mutants G6 and G19).
 
 ## `arch-7k8` The internal-to-wire event mapping shall be total and versioned
 

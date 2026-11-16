@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
-import os, re, shutil, subprocess, sys, tempfile
+import glob, os, re, shutil, subprocess, sys, tempfile
 
 from planted.gates import GATES
 from planted.http import HTTP
 from planted.shell import SHELL
 from planted.stores import STORES
+from workspace import ROOT, folders
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
-CRATES = ["domain", "ports", "app", "adapter-sqlite", "adapter-memory", "adapter-postgres", "adapter-http", "server", "bench"]
-FILES = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "clippy.toml", "rustfmt.toml", "justfile", "guide-sync.bb", "mutants.py", "raw-store.py", "events.py"]
+CRATES = folders()
+FILES = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "clippy.toml", "rustfmt.toml", "justfile"] + [os.path.basename(script) for script in glob.glob(os.path.join(ROOT, "*.py")) + glob.glob(os.path.join(ROOT, "*.bb"))]
 
 MUTANTS = SHELL + STORES + HTTP + GATES
 
-EXAMPLE = {"C5", "C8", "C9", "C10", "T10", "T11", "T20", "T22", "T23", "T24", "G6", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9"}
+EXAMPLE = {"C5", "C8", "C9", "C10", "T10", "T11", "T20", "T22", "T23", "T24", "G6", "G12", "G13", "G19", "G20", "G21", "G22", "G23", "G24", "G25", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9"}
 
 
 def uncompiled(output):

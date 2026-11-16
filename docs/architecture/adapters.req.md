@@ -9,6 +9,8 @@ other systems) and, once triggered, the `wire` crate. Tokio lives here and in th
 root, nowhere further in.
 
 ## `arch-68v` Driving adapters shall be thin
+verification: exempt
+verification-reason: review only (T4); no gate is built
 
 Deserialize, refine into a command (bad input is answered here with a 400), call the handler,
 map the `Answer` or the shell error to a status. Each shell error maps to a status exhaustively,
@@ -19,6 +21,8 @@ with no wildcard arm. An `if` about business state in a handler is a ring violat
 - `arch-68v.1` Review (T4).
 
 ## `arch-m3z` Request and response types shall live only in adapters
+verification: exempt
+verification-reason: review only (T4); no gate is built
 
 DTOs, form structs and HTML live in the driving adapter, which maps them to commands and maps
 answers back. Stored types are the domain's own, through their serde derive
@@ -68,7 +72,7 @@ the same gates.
 
 ### Acceptance
 
-- `arch-e5eb.1` Every case of the suite passes against the SQLite and memory adapters (`just test`) and against the Postgres adapter (`just postgres`, which needs a server).
+- `arch-e5eb.1` Every case of the suite passes against the SQLite and memory adapters (`just test`) and against the Postgres adapter (`just postgres`, which needs a server and fails unless it counts every case as passed; mutant G26).
 - `arch-e5eb.2` The `raw-store` recipe fails when a crate that implements `Store` has no `tests/conformance.rs` that includes the suite (T2, `just check`; mutant G11).
 - `arch-e5eb.3` A fault planted in a store adapter fails a case of the suite: mutants T4 to T9, T16, T26 and T51 in the SQLite adapter, mutants T27 to T38 in the memory adapter, mutants T40 to T42 and T52 in the Postgres adapter, mutants T17 and T53 in the port.
 

@@ -11,6 +11,8 @@ on an agent-picked structure grow exponentially
 skeleton can be wrong; it is revised, never worked around.
 
 ## `arch-dn0` The operator shall draft the skeleton and the implementer only the bodies
+verification: exempt
+verification-reason: review only (T4); no gate is built
 
 | Ring | Operator drafts | Implementer writes | Verified by |
 |---|---|---|---|
@@ -27,6 +29,8 @@ lifecycle, holding its state, events, refusals, commands, projections and tests.
 - `arch-dn0.1` Review checks the skeleton is drafted before bodies are written (T4).
 
 ## `arch-a2v` Skeleton files shall be read-only to implementing agents
+verification: exempt
+verification-reason: review only (T4); no gate is built
 
 An agent writes only inside its own crate's bodies and tests. A change to the skeleton goes
 through the operator. An agent that thinks the skeleton is wrong stops and proposes the change;
@@ -56,7 +60,7 @@ after the fact, that each clause's test would catch a change to it.
 
 ### Acceptance
 
-- `arch-0d2.1` The comment scan of `just check` rejects any `//` comment that is not a doc comment or a toolchain directive (T3).
+- `arch-0d2.1` The comment scan of `just check` rejects any line or block comment that is not a doc comment or a toolchain directive (T3; mutants G5, G14 and G15).
 - `arch-0d2.2` The mutation job reports no survivor in the file ([`arch-h6j`](enforcement.req.md)).
 
 ## `arch-0id` Invariants shall live in a req document with minted ids
@@ -72,6 +76,8 @@ after each edit.
 - `arch-0id.1` The `req check --out requirements.toon` run exits 0 (CI).
 
 ## `arch-saq` A service shall be built inward-out
+verification: exempt
+verification-reason: review only (T4); no gate is built
 
 1. The operator drafts the lifecycle's enums, command structs and signatures with their EARS
    contracts, and names its readers.

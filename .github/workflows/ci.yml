@@ -16,6 +16,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: dtolnay/rust-toolchain@1.95
         with:
           components: rustfmt, clippy
@@ -28,6 +30,8 @@ jobs:
       - run: cargo install --locked --git https://github.com/igouss/req
       - run: curl -sSL https://raw.githubusercontent.com/babashka/babashka/master/install | sudo bash
       - run: just check
+      - run: just guarded origin/${{ github.base_ref }}
+        if: github.event_name == 'pull_request'
 
   postgres:
     runs-on: ubuntu-latest
@@ -78,8 +82,8 @@ jobs:
       - run: cargo install --locked --git https://github.com/igouss/hex-lint
       - run: cargo install --locked --git https://github.com/igouss/effect-audit
       - run: curl -sSL https://raw.githubusercontent.com/babashka/babashka/master/install | sudo bash
-      - run: python3 mutants.py | tee mutants-architecture.txt
-      - run: cargo mutants -p domain --no-shuffle | tee mutants-core.txt
+      - run: just mutants | tee mutants-architecture.txt
+      - run: just mutants-core | tee mutants-core.txt
         if: always()
       - uses: actions/upload-artifact@v4
         if: always()

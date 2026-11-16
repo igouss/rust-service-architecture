@@ -23,11 +23,15 @@ names the rule it enforces.
 | `roles` | `hex-lint` | the role matrix and the context axis |
 | `raw-store` | a `cargo metadata` and source check | a driven adapter depends on no `domain` and no serializer outside its tests; a store adapter includes the conformance suite |
 | `purity` | `effect-audit --require-domain --strict` | no I/O, clock, async or unvouched dependency in the core |
-| `events` | a source scan | no lifecycle's event is named for a generic change |
-| `comments` | a source scan | no comment except a doc comment or `fc-allow` |
-| `allows` | a source scan | no `allow` attribute outside a `tests/` directory |
+| `events` | a lexed scan of every member's `src` | no lifecycle's event is named for a generic change; red when a lifecycle or its event enum is not read |
+| `comments` | a lexed scan of every member | no line or block comment except a `///` or `//!` doc comment, and `fc-allow` in the core |
+| `allows` | a lexed scan of every member | no `allow` or `expect` attribute, bare or under `cfg_attr`, except the one of [`arch-4za`](enforcement.req.md) |
+| `wildcards` | a lexed scan of `domain` and `app` | no element of a tuple pattern is `_`, `..` or a bare name |
+| `traits` | a lexed scan of every member | no `trait` is declared outside `domain/src/lib.rs`, `app/src/lib.rs` and `ports/src` |
+| `stored` | a lexed scan of each crate that declares a lifecycle | every state, event, refusal, request and row, and every enum they hold, has each variant sampled in `tests/stored_encoding.rs` |
 | `docs` | `guide-sync.bb` | every Rust block in these documents is code in the workspace |
 | `ids` | `req check` | the requirement ids and their projection are current |
+| `views-current` | `views.py --check` | the committed crate graph and state machines are the code's; red when a lifecycle or an `evolve` arm cannot be drawn |
 
 `just postgres` runs the Postgres adapter's lints and tests against the server that
 `STORE_POSTGRES_URL` names, and `just postgres-local` starts a throwaway one for it. Neither is
@@ -40,7 +44,7 @@ weekly; it never blocks a change ([`arch-h6j`](enforcement.req.md)).
 
 ### Acceptance
 
-- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G13.
+- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G26.
 
 ## `arch-4za` The workspace lints shall be set in the root manifest
 
@@ -51,7 +55,7 @@ helpers. That attribute, in a file under `tests/`, is the one `allow` this repos
 
 ### Acceptance
 
-- `arch-4za.1` Every build applies the lints (T3; mutant G6).
+- `arch-4za.1` Every build applies the lints (T3; mutant G6), and the `allows` recipe rejects any other silencing attribute (T3; mutants G9, G16, G17 and G18).
 
 ## `arch-tsu` Escapes shall go through the ledgers only
 
@@ -71,7 +75,7 @@ so `just mutants` reports `ANCHOR FOUND n TIMES` when an edit moved or duplicate
 ### Acceptance
 
 - `arch-tsu.1` The `hex-lint` run fails on a stale exception (T2).
-- `arch-tsu.2` Review of any diff that touches `Cargo.toml` lints, `clippy.toml`, `justfile`, `mutants.py`, `planted/` or a `pure-deps` list (T4).
+- `arch-tsu.2` The `guarded` recipe fails a pull request whose range changes `justfile`, a gate script, `planted/`, `clippy.toml`, `rustfmt.toml`, a workflow, or a manifest's lints or `hex-arch` table, and adds or amends no file under `docs/adr/` (T3, CI). Review checks that the record justifies the change and that no test is weakened (T4).
 
 ## `arch-ukt` Noisy measurements shall be ratchets, never hard gates
 
@@ -83,15 +87,17 @@ reported; they do not fail `just check`.
 - `arch-ukt.1` The benchmark writes its results beside the previous run's (`bench/results/`).
 
 ## `arch-yod` The gap ledger shall list every rule whose gate is not built
+verification: exempt
+verification-reason: review only (T4); no gate is built
 
 | Gap | Rule | Today |
 |---|---|---|
-| a lint that every public item of `domain` and `app` is a named primitive | [`arch-u8nl`](structure.req.md) | review |
+| a lint that every public item of `domain` and `app` is a named primitive | [`arch-u8nl`](structure.req.md) | review; a new trait only (`traits`) |
 | a check that a crate's role matches its shape | [`arch-4xd`](structure.req.md) | review |
-| a check that every stored type appears in the stored-encoding test | [`arch-btw1`](core.req.md) | review |
+| a check that a struct stored only as a field (a refined type) is pinned | [`arch-btw1`](core.req.md) | review |
 | banned calls and purity in `app`, where policies and queries live | [`arch-zhm`](core.req.md) | `domain` only |
-| tuple matches with a wildcard element | [`arch-j0k`](core.req.md) | review |
-| a guard on edits that weaken a gate | [`arch-tsu`](enforcement.req.md) | review |
+| a wildcard nested in a variant (`Err(_)`), or in a tuple pattern outside `domain` and `app` | [`arch-j0k`](core.req.md) | review |
+| a guard on a weakened test, and on whether a recorded gate edit weakens it | [`arch-tsu`](enforcement.req.md) | review; a gate edit needs a decision record (`guarded`) |
 | a check that an event carries what was decided, not the state after it | [core](core.req.md) | names only (`events`) |
 | a check that no query result enters a command as proof of uniqueness | [core](core.req.md) | review |
 | a check that forgettable state with unbounded keys is not a lifecycle | [adapters](adapters.req.md) | review |
@@ -124,10 +130,12 @@ reads. An equivalent mutant is named as such in that task.
 
 ### Acceptance
 
-- `arch-h6j.1` The `mutation` job runs `python3 mutants.py` and `cargo mutants -p domain` and reports their results.
+- `arch-h6j.1` The `mutation` job runs `just mutants` and `just mutants-core` and reports their results.
 - `arch-h6j.2` No recipe that `just check` runs plants a mutant.
 
 ## `arch-7iz` Every rule shall map to a test, a mutant or a gate
+verification: exempt
+verification-reason: review only (T4); no gate is built
 
 A rule with no check is flagged in the gap ledger, not trusted. The mapping is checked
 mechanically or by a human, never self-attested by the agent that did the work.

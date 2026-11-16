@@ -9,17 +9,17 @@ form you are copying.
 | Path | What to do |
 |---|---|
 | `ports/src/`, `ports/tests/conformance/` | keep, byte for byte |
-| `adapter-sqlite/`, `adapter-memory/`, `adapter-postgres/` | keep the one store adapter your service uses, byte for byte, with its tests; delete the others together with their workspace member lines, their entries in `mutants.py`'s `CRATES` and their mutants ([adapters](../architecture/adapters.req.md)). Without `adapter-postgres`, delete the `postgres` recipes and the `postgres` job too |
+| `adapter-sqlite/`, `adapter-memory/`, `adapter-postgres/` | keep the one store adapter your service uses, byte for byte, with its tests; delete the others together with their workspace member lines and their mutants ([adapters](../architecture/adapters.req.md)). Without `adapter-postgres`, delete the `postgres` recipes and the `postgres` job too |
 | `app/src/lib.rs`, `domain/src/lib.rs` | keep; only their `pub mod` lines change |
-| `clippy.toml`, `rustfmt.toml`, the root `Cargo.toml`, `views.py`, `guide-sync.bb`, `CLAUDE.md`, `.req/`, `requirements.toon`, `LICENSE-*`, `.gitignore` | keep |
+| `clippy.toml`, `rustfmt.toml`, the root `Cargo.toml`, `workspace.py`, `lint.py`, `guarded.py`, `views.py`, `guide-sync.bb`, `CLAUDE.md`, `.req/`, `requirements.toon`, `LICENSE-*`, `.gitignore` | keep |
 | `domain/src/task.rs`, `payment.rs`, `fulfilment.rs`; `app/src/tasks.rs`, `payments.rs` | replace with your lifecycles, policies and queries |
 | `app/tests/use_cases.rs`, `adapter-sqlite/tests/store.rs`, `domain/tests/stored_encoding.rs` | port: keep every assertion's intent, swap the example types for yours |
 | `adapter-http/src/lib.rs`, `adapter-http/tests/routes/` | keep `blocking`, `Changes`, the frame encoding and the request span (rename its `task` field); replace the routes, the page and the renderers |
 | `server/`, `justfile` | keep; rename the `TASKS_*` settings and the default database file |
-| `mutants.py`, `planted/` | keep the runner and the machinery mutants; re-plant the example ones (below) and update `CRATES` and `EXAMPLE` |
+| `mutants.py`, `planted/` | keep the runner and the machinery mutants; re-plant the example ones (below) and update `EXAMPLE` |
 | `docs/architecture/`, `docs/how-to/add-a-use-case.md`, `AGENTS.md` | keep the rules; re-point every pointer at an example file and every cited example test to yours (`just check` names a citation that no longer exists) |
 | `docs/adr/` | keep: they say why the architecture is this way; number your own after them |
-| `bench/` | port it to your commands and queries, or delete it together with its workspace member line, its entry in `mutants.py`'s `CRATES`, and its `justfile` recipe |
+| `bench/` | port it to your commands and queries, or delete it together with its workspace member line and its `justfile` recipe |
 | `README.md`, `docs/how-to/start-a-service.md` | replace the first, delete the second |
 
 ## Steps
@@ -58,8 +58,8 @@ A follow-up task, started from the mutation job's report, not part of starting t
   same fault in your own code: a lifecycle with no policy (C8), a command returning a request
   (C9), a fact built outside `ports` (C10), a policy skipping its projection or its process
   manager (T10, T11), a stored type
-  changing its encoding (T20), a refined type accepting what it must refuse (T22 to T24), a
-  wildcard arm (G6), and the driving adapter's faults (H1 to H9). Changing a mutant's anchor
+  changing its encoding or gaining an unpinned variant (T20, G24, G25), a refined type accepting what it must refuse (T22 to T24), a
+  wildcard arm or tuple element (G6, G19), a trait declared by a feature (G20), an event named for a change and a lifecycle the scans cannot read (G12, G13, G21 to G23), and the driving adapter's faults (H1 to H9). Changing a mutant's anchor
   and replacement to plant the same fault in new code is a legitimate edit
   ([`arch-tsu`](../architecture/enforcement.req.md)); dropping the fault is not. If your
   service has nothing the fault applies to (no process manager, so no T11), remove that mutant

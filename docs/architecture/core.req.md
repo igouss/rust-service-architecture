@@ -155,6 +155,8 @@ unique index and no lookup table is involved, and the refusal is a recorded doma
 - `arch-dohm.4` Review checks that no query result is passed into a command as proof that a value is free (T4, gap ledger).
 
 ## `arch-fdo` Illegal states shall be unrepresentable
+verification: exempt
+verification-reason: review only (T4); no gate is built
 
 Sum-type state, each variant carrying only the data valid in it; parse, don't validate, at the
 edge; refined types at construction (`Amount::new` returns `None` for zero; `Title::new` refuses
@@ -199,7 +201,7 @@ No wildcard arm on a state, event or refusal type. Spell out every pair in a tup
 ### Acceptance
 
 - `arch-j0k.1` The workspace denies `clippy::wildcard_enum_match_arm` (T3, every `just check`).
-- `arch-j0k.2` Review checks tuple matches, which the lint does not see (T4).
+- `arch-j0k.2` The `wildcards` recipe rejects a tuple element in `domain` or `app` that is `_`, `..` or a bare name, which the lint does not see (T3; mutant G19). Review checks a wildcard nested in a variant, and tuple matches elsewhere (T4, gap ledger).
 
 ## `arch-1q6` Errors that are matched on shall be concrete enums
 
@@ -224,4 +226,4 @@ may not, because facts are never rewritten.
 ### Acceptance
 
 - `arch-btw1.1` The test `domain/tests/stored_encoding.rs` pins the JSON of every variant of every stored type and fails when one changes (mutant T20).
-- `arch-btw1.2` Review checks that a new stored type is added to that test (T4→T3, gap ledger).
+- `arch-btw1.2` A new variant does not compile until that test's match names its JSON (T1; mutant G24), and the `stored` recipe rejects a stored type or variant with no sample there (T3; mutant G25). Review checks a struct stored only as a field (T4, gap ledger).

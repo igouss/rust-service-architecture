@@ -1,7 +1,7 @@
 default: check
 
 [doc("Everything that must be green before a commit. Seconds, not minutes.")]
-check: fmt clippy test roles raw-store purity events comments allows docs ids views-current
+check: fmt clippy test roles raw-store purity events comments allows wildcards traits stored docs ids views-current
 
 [doc("Serve the task list. TASKS_DATABASE, TASKS_LISTEN and TASKS_DURABILITY (full|normal) override the defaults.")]
 run:
@@ -27,11 +27,12 @@ roles:
 raw-store:
     python3 raw-store.py
 
-[doc("The Postgres adapter against a server: lints, the conformance suite, concurrent writers. Not in `check`: it needs STORE_POSTGRES_URL.")]
+[doc("The Postgres adapter against a server: lints, concurrent writers, and every case of the conformance suite counted as passed. Not in `check`: it needs STORE_POSTGRES_URL.")]
 postgres:
     @test -n "${STORE_POSTGRES_URL:-}" || (echo 'postgres: set STORE_POSTGRES_URL to a database these tests may write to, or run `just postgres-local`' && false)
     cargo clippy -q -p adapter-postgres --all-targets --features server -- -D warnings
     cargo test -q -p adapter-postgres --features server
+    python3 raw-store.py --ran adapter-postgres server
 
 [doc("Start a throwaway Postgres under target/, run `just postgres` against it, stop it.")]
 postgres-local:
@@ -52,13 +53,29 @@ purity:
 events:
     python3 events.py
 
-[doc("arch-0d2: no comments; names and types carry the meaning. Doc comments and fc-allow only.")]
+[doc("arch-0d2: no comments; names and types carry the meaning. Doc comments, and fc-allow in the core, only.")]
 comments:
-    @! grep -rnE '^[[:space:]]*//([^/!]|$)' --include='*.rs' domain ports app adapter-* server bench 2>/dev/null | grep -v 'fc-allow:' || (echo 'arch-0d2: remove the comment, or make it a contract in a doc comment' && false)
+    @python3 lint.py comments
 
-[doc("arch-tsu: no allow attribute outside a tests/ directory; fix what the lint names.")]
+[doc("arch-tsu: no allow or expect attribute, but the one that opens a file under tests/; fix what the lint names.")]
 allows:
-    @! grep -rnE '#!?\[allow\(' --include='*.rs' domain ports app adapter-* server bench 2>/dev/null | grep -v '/tests/' || (echo 'arch-tsu: remove the allow attribute and fix what the lint names (a type alias, a smaller function)' && false)
+    @python3 lint.py allows
+
+[doc("arch-j0k: no element of a tuple pattern in domain or app catches every remaining case.")]
+wildcards:
+    @python3 lint.py wildcards
+
+[doc("arch-u8nl: a trait is declared only where the primitives live; a feature is an instance, never a new kind.")]
+traits:
+    @python3 lint.py traits
+
+[doc("arch-btw1: every variant of every stored type has a pinned sample in the crate's tests/stored_encoding.rs.")]
+stored:
+    @python3 lint.py stored
+
+[doc("arch-tsu: a range that changes a gate also adds or amends a decision record under docs/adr/. Needs git, so not in `check`: `just guarded origin/main`.")]
+guarded base:
+    @python3 guarded.py {{base}}
 
 [doc("Every Rust block in docs/architecture is code that compiles in this workspace.")]
 docs:

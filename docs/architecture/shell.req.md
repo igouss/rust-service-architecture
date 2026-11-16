@@ -195,6 +195,8 @@ any decision reads it. What was never recorded cannot be replayed or explained.
 - `arch-jbno.2` Review checks that a scheduler only submits, and that fetched data is recorded before use (T4).
 
 ## `arch-kpb` Every external input shall be bounded
+verification: exempt
+verification-reason: review only (T4); no gate is built
 
 Bound inputs at the edge: body size limits, pagination, a limit on every `claim` and `facts`
 call. Unbounded growth driven by a client's request is a denial-of-service vector.
