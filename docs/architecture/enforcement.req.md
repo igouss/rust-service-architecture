@@ -75,7 +75,7 @@ so `just mutants` reports `ANCHOR FOUND n TIMES` when an edit moved or duplicate
 ### Acceptance
 
 - `arch-tsu.1` The `hex-lint` run fails on a stale exception (T2).
-- `arch-tsu.2` Review of any diff that touches `Cargo.toml` lints, `clippy.toml`, `justfile`, `mutants.py`, `planted/` or a `pure-deps` list (T4).
+- `arch-tsu.2` The `guarded` recipe fails a pull request whose range changes `justfile`, a gate script, `planted/`, `clippy.toml`, `rustfmt.toml`, a workflow, or a manifest's lints or `hex-arch` table, and adds or amends no file under `docs/adr/` (T3, CI). Review checks that the record justifies the change and that no test is weakened (T4).
 
 ## `arch-ukt` Noisy measurements shall be ratchets, never hard gates
 
@@ -97,7 +97,7 @@ verification-reason: review only (T4); no gate is built
 | a check that a struct stored only as a field (a refined type) is pinned | [`arch-btw1`](core.req.md) | review |
 | banned calls and purity in `app`, where policies and queries live | [`arch-zhm`](core.req.md) | `domain` only |
 | a wildcard nested in a variant (`Err(_)`), or in a tuple pattern outside `domain` and `app` | [`arch-j0k`](core.req.md) | review |
-| a guard on edits that weaken a gate | [`arch-tsu`](enforcement.req.md) | review |
+| a guard on a weakened test, and on whether a recorded gate edit weakens it | [`arch-tsu`](enforcement.req.md) | review; a gate edit needs a decision record (`guarded`) |
 | a check that an event carries what was decided, not the state after it | [core](core.req.md) | names only (`events`) |
 | a check that no query result enters a command as proof of uniqueness | [core](core.req.md) | review |
 | a check that forgettable state with unbounded keys is not a lifecycle | [adapters](adapters.req.md) | review |
@@ -130,7 +130,7 @@ reads. An equivalent mutant is named as such in that task.
 
 ### Acceptance
 
-- `arch-h6j.1` The `mutation` job runs `python3 mutants.py` and `cargo mutants -p domain` and reports their results.
+- `arch-h6j.1` The `mutation` job runs `just mutants` and `just mutants-core` and reports their results.
 - `arch-h6j.2` No recipe that `just check` runs plants a mutant.
 
 ## `arch-7iz` Every rule shall map to a test, a mutant or a gate
