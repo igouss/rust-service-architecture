@@ -26,6 +26,7 @@ names the rule it enforces.
 | `events` | a source scan | no lifecycle's event is named for a generic change |
 | `comments` | a lexed scan of every member | no line or block comment except a `///` or `//!` doc comment, and `fc-allow` in the core |
 | `allows` | a lexed scan of every member | no `allow` or `expect` attribute, bare or under `cfg_attr`, except the one of [`arch-4za`](enforcement.req.md) |
+| `wildcards` | a lexed scan of `domain` and `app` | no element of a tuple pattern is `_`, `..` or a bare name |
 | `docs` | `guide-sync.bb` | every Rust block in these documents is code in the workspace |
 | `ids` | `req check` | the requirement ids and their projection are current |
 
@@ -40,7 +41,7 @@ weekly; it never blocks a change ([`arch-h6j`](enforcement.req.md)).
 
 ### Acceptance
 
-- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G18.
+- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G19.
 
 ## `arch-4za` The workspace lints shall be set in the root manifest
 
@@ -90,7 +91,7 @@ reported; they do not fail `just check`.
 | a check that a crate's role matches its shape | [`arch-4xd`](structure.req.md) | review |
 | a check that every stored type appears in the stored-encoding test | [`arch-btw1`](core.req.md) | review |
 | banned calls and purity in `app`, where policies and queries live | [`arch-zhm`](core.req.md) | `domain` only |
-| tuple matches with a wildcard element | [`arch-j0k`](core.req.md) | review |
+| a wildcard nested in a variant (`Err(_)`), or in a tuple pattern outside `domain` and `app` | [`arch-j0k`](core.req.md) | review |
 | a guard on edits that weaken a gate | [`arch-tsu`](enforcement.req.md) | review |
 | a check that an event carries what was decided, not the state after it | [core](core.req.md) | names only (`events`) |
 | a check that no query result enters a command as proof of uniqueness | [core](core.req.md) | review |

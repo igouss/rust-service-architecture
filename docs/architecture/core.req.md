@@ -200,7 +200,7 @@ No wildcard arm on a state, event or refusal type. Spell out every pair in a tup
 ### Acceptance
 
 - `arch-j0k.1` The workspace denies `clippy::wildcard_enum_match_arm` (T3, every `just check`).
-- `arch-j0k.2` Review checks tuple matches, which the lint does not see (T4).
+- `arch-j0k.2` The `wildcards` recipe rejects a tuple element in `domain` or `app` that is `_`, `..` or a bare name, which the lint does not see (T3; mutant G19). Review checks a wildcard nested in a variant, and tuple matches elsewhere (T4, gap ledger).
 
 ## `arch-1q6` Errors that are matched on shall be concrete enums
 

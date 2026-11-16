@@ -1,7 +1,7 @@
 default: check
 
 [doc("Everything that must be green before a commit. Seconds, not minutes.")]
-check: fmt clippy test roles raw-store purity events comments allows docs ids views-current
+check: fmt clippy test roles raw-store purity events comments allows wildcards docs ids views-current
 
 [doc("Serve the task list. TASKS_DATABASE, TASKS_LISTEN and TASKS_DURABILITY (full|normal) override the defaults.")]
 run:
@@ -59,6 +59,10 @@ comments:
 [doc("arch-tsu: no allow or expect attribute, but the one that opens a file under tests/; fix what the lint names.")]
 allows:
     @python3 lint.py allows
+
+[doc("arch-j0k: no element of a tuple pattern in domain or app catches every remaining case.")]
+wildcards:
+    @python3 lint.py wildcards
 
 [doc("Every Rust block in docs/architecture is code that compiles in this workspace.")]
 docs:
