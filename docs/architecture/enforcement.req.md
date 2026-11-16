@@ -23,13 +23,14 @@ names the rule it enforces.
 | `roles` | `hex-lint` | the role matrix and the context axis |
 | `raw-store` | a `cargo metadata` and source check | a driven adapter depends on no `domain` and no serializer outside its tests; a store adapter includes the conformance suite |
 | `purity` | `effect-audit --require-domain --strict` | no I/O, clock, async or unvouched dependency in the core |
-| `events` | a source scan | no lifecycle's event is named for a generic change |
+| `events` | a lexed scan of every member's `src` | no lifecycle's event is named for a generic change; red when a lifecycle or its event enum is not read |
 | `comments` | a lexed scan of every member | no line or block comment except a `///` or `//!` doc comment, and `fc-allow` in the core |
 | `allows` | a lexed scan of every member | no `allow` or `expect` attribute, bare or under `cfg_attr`, except the one of [`arch-4za`](enforcement.req.md) |
 | `wildcards` | a lexed scan of `domain` and `app` | no element of a tuple pattern is `_`, `..` or a bare name |
 | `traits` | a lexed scan of every member | no `trait` is declared outside `domain/src/lib.rs`, `app/src/lib.rs` and `ports/src` |
 | `docs` | `guide-sync.bb` | every Rust block in these documents is code in the workspace |
 | `ids` | `req check` | the requirement ids and their projection are current |
+| `views-current` | `views.py --check` | the committed crate graph and state machines are the code's; red when a lifecycle or an `evolve` arm cannot be drawn |
 
 `just postgres` runs the Postgres adapter's lints and tests against the server that
 `STORE_POSTGRES_URL` names, and `just postgres-local` starts a throwaway one for it. Neither is
@@ -42,7 +43,7 @@ weekly; it never blocks a change ([`arch-h6j`](enforcement.req.md)).
 
 ### Acceptance
 
-- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G20.
+- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G23.
 
 ## `arch-4za` The workspace lints shall be set in the root manifest
 

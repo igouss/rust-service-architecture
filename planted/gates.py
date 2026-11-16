@@ -39,4 +39,10 @@ GATES = [
      "| (s @ Task::Done { .. }, _) => s,", ("gate", ["just", "wildcards"], "arch-j0k: domain/src/task.rs `(s @ Task::Done { .. }, _)`")),
     ("G20 a feature declares a new kind of thing", "app/src/tasks.rs", "#[derive(Debug, Clone, PartialEq, Eq)]\npub struct TaskBoard {",
      "pub trait Board {\n    fn open(&self) -> usize;\n}\n\n#[derive(Debug, Clone, PartialEq, Eq)]\npub struct TaskBoard {", ("gate", ["just", "traits"], "trait Board")),
+    ("G21 an evolve arm is not one the view can draw", "domain/src/task.rs", "| (s @ Task::Done { .. }, TaskEvent::Added { .. } | TaskEvent::Completed) => s,",
+     "| (s @ Task::Done { .. }, TaskEvent::Added { .. } | TaskEvent::Completed) => reopened(s),", ("gate", ["python3", "views.py", "--check"], "`reopened(s)` is neither a state nor the state it was given")),
+    ("G22 a lifecycle is written in a form the scans do not read", "domain/src/task.rs", "type Event = TaskEvent;",
+     "type Event = crate::task::TaskEvent;", ("gate", ["python3", "events.py"], "2 read as `impl Lifecycle for State")),
+    ("G23 a lifecycle's event enum is not where the scan looks", "domain/src/task.rs", "pub enum TaskEvent {",
+     "pub enum TaskFact {", ("gate", ["python3", "events.py"], "enum TaskEvent is declared 0 times")),
 ]
