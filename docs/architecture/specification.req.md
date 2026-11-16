@@ -56,7 +56,7 @@ after the fact, that each clause's test would catch a change to it.
 
 ### Acceptance
 
-- `arch-0d2.1` The comment scan of `just check` rejects any `//` comment that is not a doc comment or a toolchain directive (T3).
+- `arch-0d2.1` The comment scan of `just check` rejects any line or block comment that is not a doc comment or a toolchain directive (T3; mutants G5, G14 and G15).
 - `arch-0d2.2` The mutation job reports no survivor in the file ([`arch-h6j`](enforcement.req.md)).
 
 ## `arch-0id` Invariants shall live in a req document with minted ids

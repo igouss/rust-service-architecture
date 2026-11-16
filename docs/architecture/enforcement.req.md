@@ -24,8 +24,8 @@ names the rule it enforces.
 | `raw-store` | a `cargo metadata` and source check | a driven adapter depends on no `domain` and no serializer outside its tests; a store adapter includes the conformance suite |
 | `purity` | `effect-audit --require-domain --strict` | no I/O, clock, async or unvouched dependency in the core |
 | `events` | a source scan | no lifecycle's event is named for a generic change |
-| `comments` | a source scan | no comment except a doc comment or `fc-allow` |
-| `allows` | a source scan | no `allow` attribute outside a `tests/` directory |
+| `comments` | a lexed scan of every member | no line or block comment except a `///` or `//!` doc comment, and `fc-allow` in the core |
+| `allows` | a lexed scan of every member | no `allow` or `expect` attribute, bare or under `cfg_attr`, except the one of [`arch-4za`](enforcement.req.md) |
 | `docs` | `guide-sync.bb` | every Rust block in these documents is code in the workspace |
 | `ids` | `req check` | the requirement ids and their projection are current |
 
@@ -40,7 +40,7 @@ weekly; it never blocks a change ([`arch-h6j`](enforcement.req.md)).
 
 ### Acceptance
 
-- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G13.
+- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G18.
 
 ## `arch-4za` The workspace lints shall be set in the root manifest
 
@@ -51,7 +51,7 @@ helpers. That attribute, in a file under `tests/`, is the one `allow` this repos
 
 ### Acceptance
 
-- `arch-4za.1` Every build applies the lints (T3; mutant G6).
+- `arch-4za.1` Every build applies the lints (T3; mutant G6), and the `allows` recipe rejects any other silencing attribute (T3; mutants G9, G16, G17 and G18).
 
 ## `arch-tsu` Escapes shall go through the ledgers only
 

@@ -52,13 +52,13 @@ purity:
 events:
     python3 events.py
 
-[doc("arch-0d2: no comments; names and types carry the meaning. Doc comments and fc-allow only.")]
+[doc("arch-0d2: no comments; names and types carry the meaning. Doc comments, and fc-allow in the core, only.")]
 comments:
-    @! grep -rnE '^[[:space:]]*//([^/!]|$)' --include='*.rs' domain ports app adapter-* server bench 2>/dev/null | grep -v 'fc-allow:' || (echo 'arch-0d2: remove the comment, or make it a contract in a doc comment' && false)
+    @python3 lint.py comments
 
-[doc("arch-tsu: no allow attribute outside a tests/ directory; fix what the lint names.")]
+[doc("arch-tsu: no allow or expect attribute, but the one that opens a file under tests/; fix what the lint names.")]
 allows:
-    @! grep -rnE '#!?\[allow\(' --include='*.rs' domain ports app adapter-* server bench 2>/dev/null | grep -v '/tests/' || (echo 'arch-tsu: remove the allow attribute and fix what the lint names (a type alias, a smaller function)' && false)
+    @python3 lint.py allows
 
 [doc("Every Rust block in docs/architecture is code that compiles in this workspace.")]
 docs:
