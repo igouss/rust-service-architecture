@@ -44,7 +44,7 @@ weekly; it never blocks a change ([`arch-h6j`](enforcement.req.md)).
 
 ### Acceptance
 
-- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G25.
+- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G26.
 
 ## `arch-4za` The workspace lints shall be set in the root manifest
 

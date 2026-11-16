@@ -49,4 +49,6 @@ GATES = [
      "pub enum FulfilmentRequest {\n    ReserveStock,\n    Ship,\n    Cancel,", "E0004"),
     ("G25 a stored variant has no pinned sample", "domain/src/fulfilment.rs", "pub enum FulfilmentRequest {\n    ReserveStock,\n    Ship,",
      "pub enum FulfilmentRequest {\n    ReserveStock,\n    Ship,\n    Cancel,", ("gate", ["just", "stored"], "does not pin FulfilmentRequest::Cancel")),
+    ("G26 a store adapter's conformance suite is built under a feature nobody sets", "adapter-postgres/Cargo.toml", "[[test]]\nname = \"conformance\"\nrequired-features = [\"server\"]",
+     "[[test]]\nname = \"conformance\"\nrequired-features = [\"server\", \"unbuilt\"]", ("gate", ["python3", "raw-store.py", "--ran", "adapter-postgres", "server"], "adapter-postgres ran 0 of the")),
 ]
