@@ -1,7 +1,7 @@
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::{PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
-use ports::store::{Key, Reader, Store, StoredFact, StoredRequest, Writer};
+use ports::store::{Key, Listener, Reader, Store, StoredFact, StoredRequest, Writer};
 use ports::{Position, RequestId, StoreError, StreamId, Version};
 
 type Stream = (&'static str, String);
@@ -68,8 +68,6 @@ struct Pending {
     cleared: BTreeSet<&'static str>,
 }
 
-type Listener = Box<dyn Fn(Position) + Send + Sync>;
-
 pub struct Memory {
     tables: RwLock<Tables>,
     kept: Kept,
@@ -89,6 +87,13 @@ fn states_in<'a>(tables: &'a Tables, lifecycle: &'static str) -> impl Iterator<I
         .states
         .range((lifecycle, String::new())..)
         .take_while(move |(stream, _state): &(&Stream, &(Version, String))| stream.0 == lifecycle)
+}
+
+fn refusals_in<'a>(rejections: impl Iterator<Item = &'a Rejection>, lifecycle: &'static str, stream: &StreamId) -> Vec<String> {
+    rejections
+        .filter(|rejection: &&Rejection| rejection.lifecycle == lifecycle && rejection.stream == *stream)
+        .map(|rejection: &Rejection| rejection.refusal.clone())
+        .collect()
 }
 
 fn rows_in<'a>(tables: &'a Tables, read_model: &'static str) -> impl Iterator<Item = (&'a Row, &'a String)> {
@@ -125,16 +130,6 @@ impl Memory {
         }
     }
 
-    pub fn rejections(&self, lifecycle: &str, stream: &StreamId) -> Result<Vec<String>, StoreError> {
-        Ok(self
-            .reading()
-            .rejections
-            .iter()
-            .filter(|rejection: &&Rejection| rejection.lifecycle == lifecycle && rejection.stream == *stream)
-            .map(|rejection: &Rejection| rejection.refusal.clone())
-            .collect())
-    }
-
     fn reading(&self) -> RwLockReadGuard<'_, Tables> {
         self.tables.read().unwrap_or_else(PoisonError::into_inner)
     }
@@ -163,6 +158,10 @@ impl Reader for MemoryReader<'_> {
 
     fn rows(&mut self, read_model: &'static str, each: &mut dyn FnMut(String, &str) -> Result<(), StoreError>) -> Result<(), StoreError> {
         rows_in(self.tables, read_model).try_for_each(|(row, text): (&Row, &String)| each(row.1.clone(), text))
+    }
+
+    fn refusals(&mut self, lifecycle: &'static str, stream: &StreamId) -> Result<Vec<String>, StoreError> {
+        Ok(refusals_in(self.tables.rejections.iter(), lifecycle, stream))
     }
 }
 
@@ -230,6 +229,14 @@ impl Reader for MemoryWriter<'_> {
         self.merged_rows(read_model)
             .into_iter()
             .try_for_each(|(key, text): (String, String)| each(key, &text))
+    }
+
+    fn refusals(&mut self, lifecycle: &'static str, stream: &StreamId) -> Result<Vec<String>, StoreError> {
+        Ok(refusals_in(
+            self.tables.rejections.iter().chain(self.pending.rejections.iter()),
+            lifecycle,
+            stream,
+        ))
     }
 }
 
@@ -335,8 +342,7 @@ fn trim<T>(queue: &mut VecDeque<T>, kept: usize) {
     queue.drain(..excess);
 }
 
-fn commit(tables: &mut Tables, pending: Pending, kept: Kept) -> Option<Position> {
-    let grew: bool = !pending.facts.is_empty();
+fn commit(tables: &mut Tables, pending: Pending, kept: Kept) {
     for read_model in &pending.cleared {
         tables.rows.retain(|row: &Row, _text: &mut String| row.0 != *read_model);
         tables.positions.remove(read_model);
@@ -358,7 +364,6 @@ fn commit(tables: &mut Tables, pending: Pending, kept: Kept) -> Option<Position>
     }
     trim(&mut tables.facts, kept.facts);
     trim(&mut tables.rejections, kept.refusals);
-    grew.then_some(Position(tables.appended))
 }
 
 impl Store for Memory {
@@ -370,17 +375,19 @@ impl Store for Memory {
         };
         let value: T = work(&mut writer)?;
         let pending: Pending = writer.pending;
-        let last: Option<Position> = commit(&mut tables, pending, self.kept);
-        drop(tables);
-        if let (Some(position), Some(listener)) = (last, &self.listener) {
-            listener(position);
-        }
+        commit(&mut tables, pending, self.kept);
         Ok(value)
     }
 
     fn snapshot<T>(&self, _key: Key, work: impl FnOnce(&mut dyn Reader) -> Result<T, StoreError>) -> Result<T, StoreError> {
         let tables: RwLockReadGuard<'_, Tables> = self.reading();
         work(&mut MemoryReader { tables: &tables })
+    }
+
+    fn committed(&self, _key: Key, last: Position) {
+        if let Some(listener) = &self.listener {
+            listener(last);
+        }
     }
 
     fn requests(&self, _key: Key, lifecycle: &'static str, limit: usize) -> Result<Vec<StoredRequest>, StoreError> {

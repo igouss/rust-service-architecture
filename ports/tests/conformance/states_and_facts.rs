@@ -47,9 +47,12 @@ fn a_refusal_is_recorded_under_its_lifecycle_and_stream() {
     let store: Subject = subject();
     add(&store, "c-1", 0);
     add(&store, "c-2", 5);
-    assert_eq!(store.rejections("suite_counter", &id("c-1")), Ok(vec!["\"NothingToAdd\"".to_string()]));
-    assert_eq!(store.rejections("suite_counter", &id("c-2")), Ok(Vec::new()));
-    assert_eq!(store.rejections("suite_courier", &id("c-1")), Ok(Vec::new()));
+    assert_eq!(
+        store.read(|view: &mut View<'_>| view.refusals::<Counter>(&id("c-1"))),
+        Ok(vec![CounterRefusal::NothingToAdd])
+    );
+    assert_eq!(store.read(|view: &mut View<'_>| view.refusals::<Counter>(&id("c-2"))), Ok(Vec::new()));
+    assert_eq!(store.read(|view: &mut View<'_>| view.refusals::<Courier>(&id("c-1"))), Ok(Vec::new()));
 }
 
 #[test]

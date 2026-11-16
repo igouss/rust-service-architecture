@@ -4,7 +4,7 @@ use std::sync::mpsc::{self, Receiver, RecvError, SendError, Sender, SyncSender};
 use std::sync::Arc;
 use std::thread;
 
-use ports::store::{Key, Reader, Store, StoredFact, StoredRequest, Writer};
+use ports::store::{Key, Listener, Reader, Store, StoredFact, StoredRequest, Writer};
 use ports::{Position, RequestId, StoreError, StreamId, Version};
 use postgres::error::DbError;
 use postgres::{Client, NoTls, Row};
@@ -14,7 +14,6 @@ mod statements;
 
 use statements::{Statements, SCHEMA};
 
-type Listener = Box<dyn Fn(Position) + Send + Sync>;
 type Job = Box<dyn FnOnce(&mut Client, &Statements) + Send>;
 type Pipe<T> = (SyncSender<T>, Receiver<T>);
 
@@ -240,15 +239,6 @@ impl Postgres {
         }
     }
 
-    pub fn rejections(&self, lifecycle: &str, stream: &StreamId) -> Result<Vec<String>, StoreError> {
-        let (lifecycle, stream): (String, String) = (lifecycle.to_string(), stream.0.clone());
-        self.checked()?
-            .call(move |client: &mut Client, statements: &Statements| client.query(&statements.rejections, &[&lifecycle, &stream]))?
-            .iter()
-            .map(|row: &Row| text(row, 0).map(str::to_string))
-            .collect()
-    }
-
     fn checked(&self) -> Result<Checked, StoreError> {
         self.pool
             .get()
@@ -272,22 +262,16 @@ impl Postgres {
 struct Session<'a> {
     worker: &'a Worker,
     open: bool,
-    last: Option<Position>,
 }
 
 impl<'a> Session<'a> {
     fn over(worker: &'a Worker) -> Session<'a> {
-        Session {
-            worker,
-            open: true,
-            last: None,
-        }
+        Session { worker, open: true }
     }
 
-    fn commit(mut self) -> Result<Option<Position>, StoreError> {
+    fn commit(mut self) -> Result<(), StoreError> {
         self.open = false;
-        self.worker.run("COMMIT")?;
-        Ok(self.last)
+        self.worker.run("COMMIT")
     }
 }
 
@@ -335,6 +319,15 @@ impl Reader for Session<'_> {
             .iter()
             .try_for_each(|row: &Row| each(text(row, 0)?.to_string(), text(row, 1)?))
     }
+
+    fn refusals(&mut self, lifecycle: &'static str, stream: &StreamId) -> Result<Vec<String>, StoreError> {
+        let stream: String = stream.0.clone();
+        self.worker
+            .call(move |client: &mut Client, statements: &Statements| client.query(&statements.rejections, &[&lifecycle, &stream]))?
+            .iter()
+            .map(|row: &Row| text(row, 0).map(str::to_string))
+            .collect()
+    }
 }
 
 impl Writer for Session<'_> {
@@ -343,9 +336,7 @@ impl Writer for Session<'_> {
         let row: Row = self
             .worker
             .call(move |client: &mut Client, statements: &Statements| client.query_one(&statements.append, &[&lifecycle, &stream, &version, &event]))?;
-        let position: Position = Position(number("facts", &row, 0)?);
-        self.last = Some(position);
-        Ok(position)
+        Ok(Position(number("facts", &row, 0)?))
     }
 
     fn save(&mut self, lifecycle: &'static str, stream: &StreamId, version: Version, state: &str) -> Result<(), StoreError> {
@@ -440,11 +431,7 @@ impl Store for Postgres {
             .call(move |client: &mut Client, statements: &Statements| client.execute(&statements.lock, &[&lock]))
             .map(|_locked: u64| ())?;
         let value: T = work(&mut session)?;
-        let last: Option<Position> = session.commit()?;
-        drop(connection);
-        if let (Some(position), Some(listener)) = (last, &self.listener) {
-            listener(position);
-        }
+        session.commit()?;
         Ok(value)
     }
 
@@ -452,6 +439,12 @@ impl Store for Postgres {
         let connection: Checked = self.begun("BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY")?;
         let mut session: Session<'_> = Session::over(&connection);
         work(&mut session)
+    }
+
+    fn committed(&self, _key: Key, last: Position) {
+        if let Some(listener) = &self.listener {
+            listener(last);
+        }
     }
 
     fn requests(&self, _key: Key, lifecycle: &'static str, limit: usize) -> Result<Vec<StoredRequest>, StoreError> {

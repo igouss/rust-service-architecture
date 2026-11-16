@@ -1,11 +1,11 @@
 use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 pub mod fulfilment;
 pub mod payment;
 pub mod task;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Never {}
 
 pub trait Lifecycle: Sized + Serialize + DeserializeOwned {

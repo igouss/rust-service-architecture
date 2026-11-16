@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
-use ports::store::{Key, Reader, Store, StoredFact, StoredRequest, Writer};
+use ports::store::{Key, Listener, Reader, Store, StoredFact, StoredRequest, Writer};
 use ports::{Position, RequestId, StoreError, StreamId, Version};
 use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
 
@@ -54,8 +54,6 @@ pub enum Durability {
     Full,
     Normal,
 }
-
-type Listener = Box<dyn Fn(Position) + Send + Sync>;
 
 pub struct Sqlite {
     connection: Mutex<Connection>,
@@ -112,17 +110,6 @@ impl Sqlite {
     fn connection(&self) -> Result<MutexGuard<'_, Connection>, StoreError> {
         Ok(self.connection.lock().unwrap_or_else(PoisonError::into_inner))
     }
-
-    pub fn rejections(&self, lifecycle: &str, stream: &StreamId) -> Result<Vec<String>, StoreError> {
-        let connection: MutexGuard<'_, Connection> = self.connection()?;
-        let mut statement = connection
-            .prepare_cached("SELECT refusal FROM rejections WHERE lifecycle = ?1 AND stream = ?2 ORDER BY id")
-            .map_err(unavailable)?;
-        let rows = statement
-            .query_map(params![lifecycle, stream.0], |row: &rusqlite::Row<'_>| row.get::<_, String>(0))
-            .map_err(unavailable)?;
-        rows.collect::<Result<Vec<String>, rusqlite::Error>>().map_err(unavailable)
-    }
 }
 
 fn text<'a>(table: &'static str, row: &'a rusqlite::Row<'_>, column: usize) -> Result<&'a str, StoreError> {
@@ -137,7 +124,6 @@ fn text<'a>(table: &'static str, row: &'a rusqlite::Row<'_>, column: usize) -> R
 
 struct Session<'a> {
     transaction: &'a Transaction<'a>,
-    last: Option<Position>,
 }
 
 impl Session<'_> {
@@ -198,6 +184,17 @@ impl Reader for Session<'_> {
         }
         Ok(())
     }
+
+    fn refusals(&mut self, lifecycle: &'static str, stream: &StreamId) -> Result<Vec<String>, StoreError> {
+        let mut statement = self
+            .transaction
+            .prepare_cached("SELECT refusal FROM rejections WHERE lifecycle = ?1 AND stream = ?2 ORDER BY id")
+            .map_err(unavailable)?;
+        let rows = statement
+            .query_map(params![lifecycle, stream.0], |row: &rusqlite::Row<'_>| row.get::<_, String>(0))
+            .map_err(unavailable)?;
+        rows.collect::<Result<Vec<String>, rusqlite::Error>>().map_err(unavailable)
+    }
 }
 
 impl Writer for Session<'_> {
@@ -206,9 +203,7 @@ impl Writer for Session<'_> {
             "INSERT INTO facts (lifecycle, stream, version, event) VALUES (?1, ?2, ?3, ?4)",
             params![lifecycle, stream.0, stored(version.0)?, event],
         )?;
-        let position: Position = Position(loaded("facts", self.transaction.last_insert_rowid())?);
-        self.last = Some(position);
-        Ok(position)
+        Ok(Position(loaded("facts", self.transaction.last_insert_rowid())?))
     }
 
     fn save(&mut self, lifecycle: &'static str, stream: &StreamId, version: Version, state: &str) -> Result<(), StoreError> {
@@ -298,27 +293,22 @@ impl Store for Sqlite {
     fn transact<T>(&self, _key: Key, work: impl FnOnce(&mut dyn Writer) -> Result<T, StoreError>) -> Result<T, StoreError> {
         let mut connection: MutexGuard<'_, Connection> = self.connection()?;
         let transaction: Transaction<'_> = connection.transaction_with_behavior(TransactionBehavior::Immediate).map_err(unavailable)?;
-        let mut writer: Session<'_> = Session {
-            transaction: &transaction,
-            last: None,
-        };
+        let mut writer: Session<'_> = Session { transaction: &transaction };
         let value: T = work(&mut writer)?;
-        let last: Option<Position> = writer.last;
         transaction.commit().map_err(unavailable)?;
-        drop(connection);
-        if let (Some(position), Some(listener)) = (last, &self.listener) {
-            listener(position);
-        }
         Ok(value)
     }
 
     fn snapshot<T>(&self, _key: Key, work: impl FnOnce(&mut dyn Reader) -> Result<T, StoreError>) -> Result<T, StoreError> {
         let mut connection: MutexGuard<'_, Connection> = self.connection()?;
         let transaction: Transaction<'_> = connection.transaction().map_err(unavailable)?;
-        work(&mut Session {
-            transaction: &transaction,
-            last: None,
-        })
+        work(&mut Session { transaction: &transaction })
+    }
+
+    fn committed(&self, _key: Key, last: Position) {
+        if let Some(listener) = &self.listener {
+            listener(last);
+        }
     }
 
     fn requests(&self, _key: Key, lifecycle: &'static str, limit: usize) -> Result<Vec<StoredRequest>, StoreError> {

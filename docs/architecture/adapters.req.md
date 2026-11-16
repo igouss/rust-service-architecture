@@ -50,10 +50,9 @@ last commits on power loss and was measured about a hundred times faster per com
 | none: every request is answered from its input and from other systems | none; see below |
 
 The shell and the driving adapters are written against `Journal` and `Outbox` and do not
-change with the store; `main()` names the adapter. A store adapter also offers two functions
-the port does not carry, with the same signatures in every adapter: `on_commit`, which the
-composition root uses to tell driving adapters that a unit appended a fact, and `rejections`,
-which reads the recorded refusals of a stream where there is no SQL to read them with.
+change with the store; `main()` names the adapter. A store adapter's `on_commit` takes the
+listener the composition root uses to tell driving adapters that a unit appended a fact;
+`Journal::write` calls it once, after the unit has committed.
 
 `ports/tests/conformance/suite.rs` is the contract of `ports::store`, written once, over
 lifecycles of its own. Each store adapter's `tests/conformance.rs` names the adapter as
@@ -71,7 +70,7 @@ the same gates.
 
 - `arch-e5eb.1` Every case of the suite passes against the SQLite and memory adapters (`just test`) and against the Postgres adapter (`just postgres`, which needs a server).
 - `arch-e5eb.2` The `raw-store` recipe fails when a crate that implements `Store` has no `tests/conformance.rs` that includes the suite (T2, `just check`; mutant G11).
-- `arch-e5eb.3` A fault planted in a store adapter fails a case of the suite: mutants T4 to T9, T16 and T26 in the SQLite adapter, mutants T27 to T38 in the memory adapter, mutants T40 to T42 in the Postgres adapter.
+- `arch-e5eb.3` A fault planted in a store adapter fails a case of the suite: mutants T4 to T9, T16, T26 and T51 in the SQLite adapter, mutants T27 to T38 in the memory adapter, mutants T40 to T42 and T52 in the Postgres adapter, mutants T17 and T53 in the port.
 
 ## `arch-7h52` The memory store shall hold a bounded history, and what a service may forget shall not be a lifecycle
 

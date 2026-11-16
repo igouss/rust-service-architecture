@@ -168,6 +168,7 @@ fn row_in<P: Projection>(found: Option<String>) -> Result<Option<P::Row>, StoreE
 
 pub struct Unit<'a> {
     store: &'a mut dyn Writer,
+    last: Option<Position>,
 }
 
 impl Unit<'_> {
@@ -187,6 +188,7 @@ impl Unit<'_> {
                 for event in events {
                     next = Version(next.0 + 1);
                     let position: Position = self.store.append(S::NAME, id, next, &encode("facts", &event)?)?;
+                    self.last = Some(position);
                     facts.push(Recorded {
                         position,
                         stream: id.clone(),
@@ -271,6 +273,17 @@ impl View<'_> {
         row_in::<P>(self.store.row(P::NAME, key)?)
     }
 
+    pub fn refusals<S: Lifecycle>(&mut self, id: &StreamId) -> Result<Vec<S::Refusal>, StoreError>
+    where
+        S::Refusal: DeserializeOwned,
+    {
+        self.store
+            .refusals(S::NAME, id)?
+            .iter()
+            .map(|refusal: &String| decode("rejections", refusal))
+            .collect()
+    }
+
     pub fn rows<P: Projection>(&mut self) -> Result<Vec<(String, P::Row)>, StoreError> {
         let mut rows: Vec<(String, P::Row)> = Vec::new();
         self.store.rows(P::NAME, &mut |key: String, row: &str| {
@@ -288,7 +301,15 @@ pub trait Journal {
 
 impl<K: Store> Journal for K {
     fn write<T>(&self, work: impl FnOnce(&mut Unit<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
-        self.transact(Key::new(), |store: &mut dyn Writer| work(&mut Unit { store }))
+        let (value, last): (T, Option<Position>) = self.transact(Key::new(), |store: &mut dyn Writer| {
+            let mut unit: Unit<'_> = Unit { store, last: None };
+            let value: T = work(&mut unit)?;
+            Ok((value, unit.last))
+        })?;
+        if let Some(position) = last {
+            self.committed(Key::new(), position);
+        }
+        Ok(value)
     }
 
     fn read<T>(&self, work: impl FnOnce(&mut View<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {

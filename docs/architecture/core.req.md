@@ -36,7 +36,7 @@ decision can be replayed in a test from its inputs alone.
 Four traits are the whole vocabulary of the core.
 
 ```rust
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Never {}
 
 pub trait Lifecycle: Sized + Serialize + DeserializeOwned {

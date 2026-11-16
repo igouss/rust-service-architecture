@@ -1,5 +1,5 @@
 use domain::{Command, Facts, Lifecycle, Never, Projection, Reaction, Step};
-use ports::{Applied, Claimed, Journal, Outbox, Position, Recorded, StoreError, StreamId, Version};
+use ports::{Applied, Claimed, Journal, Outbox, Position, Recorded, StoreError, StreamId, Version, View};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -14,7 +14,7 @@ enum Counted {
     Reset,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 enum CounterRefusal {
     NothingToAdd,
 }

@@ -2,8 +2,8 @@
 
 use adapter_memory::{Held, Kept, Memory};
 use domain::fulfilment::{Fulfilment, FulfilmentRequest, Progress};
-use domain::task::{AddTask, CompleteTask, Task, TaskEvent, Title};
-use ports::{Applied, Claimed, Journal, Outbox, Position, Recorded, StoreError, StreamId};
+use domain::task::{AddTask, CompleteTask, Task, TaskEvent, TaskRefusal, Title};
+use ports::{Applied, Claimed, Journal, Outbox, Position, Recorded, StoreError, StreamId, View};
 
 fn id(text: &str) -> StreamId {
     StreamId(text.to_string())
@@ -84,8 +84,11 @@ fn refusals_beyond_the_kept_number_drop_the_oldest() {
     refuse(&store, "t-1");
     refuse(&store, "t-2");
     assert_eq!(store.held().refusals, 1);
-    assert_eq!(store.rejections("task", &id("t-1")), Ok(Vec::new()));
-    assert_eq!(store.rejections("task", &id("t-2")).map(|refusals: Vec<String>| refusals.len()), Ok(1));
+    assert_eq!(store.read(|view: &mut View<'_>| view.refusals::<Task>(&id("t-1"))), Ok(Vec::new()));
+    assert_eq!(
+        store.read(|view: &mut View<'_>| view.refusals::<Task>(&id("t-2"))),
+        Ok(vec![TaskRefusal::Absent])
+    );
 }
 
 #[test]

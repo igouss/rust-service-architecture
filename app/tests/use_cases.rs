@@ -12,7 +12,7 @@ use app::{handle, rebuild, relay};
 use domain::fulfilment::{Fulfilment, FulfilmentRequest, Progress};
 use domain::payment::{Amount, Authorize, Capture, Payment, PaymentRefusal};
 use domain::task::{AddTask, CompleteTask, Tally, Task, TaskRefusal, TaskTally, Title};
-use ports::{Answer, Claimed, Gateway, GatewayError, Journal, Outbox, Position, RequestId, StoreError, StreamId, Version};
+use ports::{Answer, Claimed, Gateway, GatewayError, Journal, Outbox, Position, RequestId, StoreError, StreamId, Version, View};
 
 fn ready<F: Future>(future: F) -> F::Output {
     let mut future = pin!(future);
@@ -145,7 +145,10 @@ fn a_refused_command_is_answered_recorded_and_changes_nothing() {
     let store: Sqlite = store();
     add(&store, "t-1");
     assert_eq!(add(&store, "t-1"), Answer::Refused(TaskRefusal::AlreadyExists));
-    assert_eq!(store.rejections("task", &id("t-1")), Ok(vec![r#""AlreadyExists""#.to_string()]));
+    assert_eq!(
+        store.read(|view: &mut View<'_>| view.refusals::<Task>(&id("t-1"))),
+        Ok(vec![TaskRefusal::AlreadyExists])
+    );
     assert_eq!(state::<Task>(&store, "t-1"), (Version(1), Task::Open { title: title_of("t-1") }));
     assert_eq!(task_tally(&store), Ok(Some(Tally { open: 1, done: 0 })));
 }
@@ -154,7 +157,7 @@ fn a_refused_command_is_answered_recorded_and_changes_nothing() {
 fn an_accepted_command_records_no_rejection() {
     let store: Sqlite = store();
     add(&store, "t-1");
-    assert_eq!(store.rejections("task", &id("t-1")), Ok(Vec::new()));
+    assert_eq!(store.read(|view: &mut View<'_>| view.refusals::<Task>(&id("t-1"))), Ok(Vec::new()));
 }
 
 #[test]

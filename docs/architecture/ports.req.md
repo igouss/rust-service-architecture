@@ -166,6 +166,7 @@ the one place that numbers versions, serializes, and builds a `Recorded` fact:
 ```rust
 pub struct Unit<'a> {
     store: &'a mut dyn Writer,
+    last: Option<Position>,
 }
 
 impl Unit<'_> {
@@ -185,6 +186,7 @@ impl Unit<'_> {
                 for event in events {
                     next = Version(next.0 + 1);
                     let position: Position = self.store.append(S::NAME, id, next, &encode("facts", &event)?)?;
+                    self.last = Some(position);
                     facts.push(Recorded {
                         position,
                         stream: id.clone(),
@@ -216,7 +218,15 @@ pub trait Journal {
 
 impl<K: Store> Journal for K {
     fn write<T>(&self, work: impl FnOnce(&mut Unit<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
-        self.transact(Key::new(), |store: &mut dyn Writer| work(&mut Unit { store }))
+        let (value, last): (T, Option<Position>) = self.transact(Key::new(), |store: &mut dyn Writer| {
+            let mut unit: Unit<'_> = Unit { store, last: None };
+            let value: T = work(&mut unit)?;
+            Ok((value, unit.last))
+        })?;
+        if let Some(position) = last {
+            self.committed(Key::new(), position);
+        }
+        Ok(value)
     }
 
     fn read<T>(&self, work: impl FnOnce(&mut View<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
@@ -276,11 +286,14 @@ pub struct StoredRequest {
     pub request: String,
 }
 
+pub type Listener = Box<dyn Fn(Position) + Send + Sync>;
+
 pub trait Reader {
     fn state(&mut self, lifecycle: &'static str, stream: &StreamId) -> Result<Option<(Version, String)>, StoreError>;
     fn states(&mut self, lifecycle: &'static str, each: &mut dyn FnMut(StreamId, &str) -> Result<(), StoreError>) -> Result<(), StoreError>;
     fn row(&mut self, read_model: &'static str, key: &str) -> Result<Option<String>, StoreError>;
     fn rows(&mut self, read_model: &'static str, each: &mut dyn FnMut(String, &str) -> Result<(), StoreError>) -> Result<(), StoreError>;
+    fn refusals(&mut self, lifecycle: &'static str, stream: &StreamId) -> Result<Vec<String>, StoreError>;
 }
 
 pub trait Writer: Reader {
@@ -305,6 +318,7 @@ pub trait Writer: Reader {
 pub trait Store {
     fn transact<T>(&self, key: Key, work: impl FnOnce(&mut dyn Writer) -> Result<T, StoreError>) -> Result<T, StoreError>;
     fn snapshot<T>(&self, key: Key, work: impl FnOnce(&mut dyn Reader) -> Result<T, StoreError>) -> Result<T, StoreError>;
+    fn committed(&self, key: Key, last: Position);
     fn requests(&self, key: Key, lifecycle: &'static str, limit: usize) -> Result<Vec<StoredRequest>, StoreError>;
     fn mark_done(&self, key: Key, id: RequestId) -> Result<(), StoreError>;
     fn mark_failed(&self, key: Key, id: RequestId) -> Result<(), StoreError>;
