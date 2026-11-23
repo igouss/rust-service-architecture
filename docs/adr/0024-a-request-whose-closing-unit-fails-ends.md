@@ -41,7 +41,9 @@ No raw-store method changed; `strand` is `Writer::park` without `apply`.
 
 ## What it preserved
 
-Every existing test and mutant. A reply whose unit succeeds, an unavailable gateway and a
+Every existing test, and every mutant's fault. The anchors of T15 and T66 follow the relay's
+new lines (the commit after the move: the move itself left both anchors found nowhere); each
+was planted through the runner again and dies by the tests it died by. A reply whose unit succeeds, an unavailable gateway and a
 rejected request behave as before.
 
 ## What it gives up

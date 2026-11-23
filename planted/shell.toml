@@ -193,8 +193,8 @@ expect = "test"
 [[mutant]]
 name = "T15 the relay never finishes a request"
 path = "app/src/lib.rs"
-anchor = "store.write(|unit: &mut Unit<'_>| resume(unit, id, X::from(reply)))?;"
-replacement = "let _dropped: G::Reply = reply;"
+anchor = "store.write(|unit: &mut Unit<'_>| resume(unit, id, X::from(reply))).map(|()| 1)"
+replacement = "Ok::<G::Reply, StoreError>(reply).map(|_dropped: G::Reply| 1)"
 expect = "test"
 
 [[mutant]]
@@ -211,8 +211,8 @@ expect = "unused"
 [[mutant]]
 name = "T66 the relay offers a rejected request again"
 path = "app/src/lib.rs"
-anchor = "Err(GatewayError::Unavailable { .. }) if failures"
-replacement = "Err(GatewayError::Unavailable { .. } | GatewayError::Rejected { .. }) if failures"
+anchor = "Err(GatewayError::Unavailable { .. }) if again"
+replacement = "Err(GatewayError::Unavailable { .. } | GatewayError::Rejected { .. }) if again"
 expect = "test"
 
 [[mutant]]
