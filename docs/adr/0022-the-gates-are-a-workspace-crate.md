@@ -94,6 +94,11 @@ The same pass agreed on a variant with an attribute, a variant with a discrimina
 declared inside a function or a macro, quotes and slashes inside character literals, a
 lifetime named for a keyword, and `if let` and closure patterns.
 
+Since then: `planted/stores.toml` neared the 20 KB a file may hold, so its 21 mutants of the
+outbox moved to `planted/outbox.toml`, which the reader's list of files now names. The sorted
+output of `gates mutants --list` is the same before and after; only the order of the listing
+changed.
+
 ## What it gives up
 
 - Time. `just check` on a warm cache took 2.8 s before the move and takes 4.2 s after it

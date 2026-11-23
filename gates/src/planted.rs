@@ -4,7 +4,7 @@ use serde::Deserialize;
 
 use crate::Unread;
 
-const FILES: [&str; 4] = ["shell", "stores", "http", "gates"];
+const FILES: [&str; 5] = ["shell", "stores", "outbox", "http", "gates"];
 
 /// How a mutant must die: `test`, a compiler error code or `unused`; a gate that must fail and print a text; or tests that need a server.
 #[derive(Debug, PartialEq, Eq, Deserialize)]
