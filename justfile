@@ -25,14 +25,14 @@ roles:
 
 [doc("A driven adapter stores text: it depends on no domain crate and no serializer outside its tests.")]
 raw-store:
-    python3 raw-store.py
+    cargo run -q -p gates -- raw-store
 
 [doc("The Postgres adapter against a server: lints, concurrent writers, and every case of the conformance suite counted as passed. Not in `check`: it needs STORE_POSTGRES_URL.")]
 postgres:
     @test -n "${STORE_POSTGRES_URL:-}" || (echo 'postgres: set STORE_POSTGRES_URL to a database these tests may write to, or run `just postgres-local`' && false)
     cargo clippy -q -p adapter-postgres --all-targets --features server -- -D warnings
     cargo test -q -p adapter-postgres --features server
-    python3 raw-store.py --ran adapter-postgres server
+    cargo run -q -p gates -- raw-store --ran adapter-postgres server
 
 [doc("Start a throwaway Postgres under target/, run `just postgres` against it, stop it.")]
 postgres-local:

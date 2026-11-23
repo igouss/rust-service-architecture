@@ -68,6 +68,12 @@ impl Workspace {
         path.strip_prefix(&self.root).unwrap_or(path).display().to_string()
     }
 
+    pub fn rust_files_in(&self, folder: &Path) -> Result<Vec<PathBuf>, Unread> {
+        let mut found: Vec<PathBuf> = Vec::new();
+        walk(folder, &mut found)?;
+        Ok(found)
+    }
+
     pub fn rust_files(&self, package: &Package, under: &[&str]) -> Result<Vec<PathBuf>, Unread> {
         let top: PathBuf = under.iter().fold(package.folder().to_path_buf(), |path, part| path.join(part));
         let mut found: Vec<PathBuf> = Vec::new();

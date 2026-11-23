@@ -7,6 +7,7 @@ pub mod events;
 pub mod lifecycles;
 pub mod names;
 pub mod pins;
+pub mod raw_store;
 pub mod stored;
 pub mod tokens;
 pub mod traits;

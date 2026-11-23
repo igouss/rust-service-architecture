@@ -13,6 +13,7 @@ const GATES: &[(&str, Gate)] = &[
     ("pins", gates::pins::pins),
     ("names", gates::names::names),
     ("events", gates::events::events),
+    ("raw-store", gates::raw_store::raw_store),
 ];
 
 fn main() -> ExitCode {
