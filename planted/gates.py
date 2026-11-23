@@ -58,4 +58,6 @@ GATES = [
      ("gate", ["python3", "names.py"], 'two projections are named "task_tally_v1"')),
     ("G26 a store adapter's conformance suite is built under a feature nobody sets", "adapter-postgres/Cargo.toml", "[[test]]\nname = \"conformance\"\nrequired-features = [\"server\"]",
      "[[test]]\nname = \"conformance\"\nrequired-features = [\"server\", \"unbuilt\"]", ("gate", ["python3", "raw-store.py", "--ran", "adapter-postgres", "server"], "adapter-postgres ran 0 of the")),
+    ("G27 a gate tool is installed from a branch", ".github/workflows/ci.yml", "cargo install --locked --git https://github.com/igouss/req --rev 7ccd79b74ee037ca6aac6ac566fa0805fab262bb",
+     "cargo install --locked --git https://github.com/igouss/req", ("gate", ["just", "pins"], "igouss/req names no --rev")),
 ]

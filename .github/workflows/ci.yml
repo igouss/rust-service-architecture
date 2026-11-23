@@ -25,9 +25,9 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: just
-      - run: cargo install --locked --git https://github.com/igouss/hex-lint
-      - run: cargo install --locked --git https://github.com/igouss/effect-audit
-      - run: cargo install --locked --git https://github.com/igouss/req
+      - run: cargo install --locked --git https://github.com/igouss/hex-lint --rev c8a0000ad5f881378f99df86c60e461acb545c14
+      - run: cargo install --locked --git https://github.com/igouss/effect-audit --rev 5ac249be7cb9bf5d36fd6ecf45e6927840db67c1
+      - run: cargo install --locked --git https://github.com/igouss/req --rev 7ccd79b74ee037ca6aac6ac566fa0805fab262bb
       - run: curl -sSL https://raw.githubusercontent.com/babashka/babashka/master/install | sudo bash
       - run: just check
       - run: just guarded origin/${{ github.base_ref }}
@@ -79,8 +79,8 @@ jobs:
       - uses: taiki-e/install-action@v2
         with:
           tool: just,cargo-mutants
-      - run: cargo install --locked --git https://github.com/igouss/hex-lint
-      - run: cargo install --locked --git https://github.com/igouss/effect-audit
+      - run: cargo install --locked --git https://github.com/igouss/hex-lint --rev c8a0000ad5f881378f99df86c60e461acb545c14
+      - run: cargo install --locked --git https://github.com/igouss/effect-audit --rev 5ac249be7cb9bf5d36fd6ecf45e6927840db67c1
       - run: curl -sSL https://raw.githubusercontent.com/babashka/babashka/master/install | sudo bash
       - run: just mutants | tee mutants-architecture.txt
       - run: just mutants-core | tee mutants-core.txt

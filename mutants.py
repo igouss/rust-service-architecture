@@ -31,6 +31,7 @@ def run(path, old, new, expect):
         for file in FILES:
             shutil.copy(os.path.join(ROOT, file), scratch)
         shutil.copytree(os.path.join(ROOT, "planted"), os.path.join(scratch, "planted"), ignore=shutil.ignore_patterns("__pycache__"))
+        shutil.copytree(os.path.join(ROOT, ".github"), os.path.join(scratch, ".github"))
         target = os.path.join(scratch, path)
         source = open(target).read()
         if source.count(old) != 1:

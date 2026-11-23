@@ -30,6 +30,7 @@ names the rule it enforces.
 | `wildcards` | a lexed scan of `domain` and `app` | no element of a tuple pattern is `_`, `..` or a bare name |
 | `traits` | a lexed scan of every member | no `trait` is declared outside `domain/src/lib.rs`, `app/src/lib.rs` and `ports/src` |
 | `stored` | a lexed scan of each crate that declares a lifecycle | every state, event, refusal, request and row, and every enum they hold, has each variant sampled in `tests/stored_encoding.rs` |
+| `pins` | a scan of every workflow under `.github/workflows` | every `cargo install --git` names `--rev` and a 40-hex commit; red when a `cargo install` is not one to a line |
 | `docs` | `guide-sync.bb` | every Rust block in these documents is code in the workspace |
 | `ids` | `req check` | the requirement ids and their projection are current |
 | `views-current` | `views.py --check` | the committed crate graph and state machines are the code's; red when a lifecycle or an `evolve` arm cannot be drawn |
@@ -45,7 +46,21 @@ weekly; it never blocks a change ([`arch-h6j`](enforcement.req.md)).
 
 ### Acceptance
 
-- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G26 and G28 to G30.
+- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G30.
+
+## `arch-mov6` The gate tools shall be installed at a pinned revision
+
+`hex-lint`, `effect-audit` and `req` are gates this repository does not hold; continuous
+integration builds them with `cargo install --git`. With no revision, each run builds whatever
+their default branch holds that day, so a change to a tool can turn a commit red, or green, that
+nobody changed, and a green no longer says which gate passed it. Each such install names a full
+40-character commit with `--rev`. A pin moves only as its own change, with `just check` run
+against the new binaries first; [`0017`](../adr/0017-gate-tools-are-pinned.md) gives the
+procedure.
+
+### Acceptance
+
+- `arch-mov6.1` The `pins` recipe fails when a workflow under `.github/workflows` installs a tool with `cargo install --git` and no `--rev` of 40 hexadecimal digits, or holds a `cargo install` it cannot read (T3; mutant G27).
 
 ## `arch-4za` The workspace lints shall be set in the root manifest
 

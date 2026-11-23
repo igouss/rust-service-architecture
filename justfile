@@ -1,7 +1,7 @@
 default: check
 
 [doc("Everything that must be green before a commit. Seconds, not minutes.")]
-check: fmt clippy names test roles raw-store purity events comments allows wildcards traits stored docs ids views-current
+check: fmt clippy names test roles raw-store purity events comments allows wildcards traits stored pins docs ids views-current
 
 [doc("Serve the tasks and the payments. TASKS_DATABASE, TASKS_LISTEN, TASKS_DURABILITY (full|normal) and TASKS_RELAY_ATTEMPTS override the defaults.")]
 run:
@@ -76,6 +76,10 @@ traits:
 [doc("arch-btw1: every variant of every stored type has a pinned sample in the crate's tests/stored_encoding.rs.")]
 stored:
     @python3 lint.py stored
+
+[doc("arch-mov6: every tool a workflow builds with `cargo install --git` is pinned with `--rev` to a 40-hex commit.")]
+pins:
+    @python3 lint.py pins
 
 [doc("arch-tsu: a range that changes a gate also adds or amends a decision record under docs/adr/. Needs git, so not in `check`: `just guarded origin/main`.")]
 guarded base:
