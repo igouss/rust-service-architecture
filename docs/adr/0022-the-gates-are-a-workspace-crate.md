@@ -56,8 +56,8 @@ reads tokens with `proc-macro2` and structure with `syn`. Three rules hold for e
 
 Each line is one commit: the gate, and what was compared.
 
-- none yet: this commit adds the crate, its reader and seven tests of the reader, and changes
-  no recipe.
+- 1beed7c: the crate, its reader and seven tests of the reader; no recipe changed.
+- `comments`: the tree, mutants G5, G14 and G15, and six probes (four slashes, a block doc comment, `fc-allow` outside the core, slashes in a string, a block of two lines, a block that does not end) gave the same lines and exit codes from `lint.py` and from `gates`. Comments do not survive `proc-macro2`, so this gate reads them with `ra-ap-rustc_lexer`, pinned to `=0.186.0`: the crate is published from the compiler with no promise of a stable interface.
 
 ## What it preserved
 

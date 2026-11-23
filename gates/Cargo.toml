@@ -10,6 +10,7 @@ context = "example"
 
 [dependencies]
 proc-macro2 = { version = "1", features = ["span-locations"] }
+ra-ap-rustc_lexer = "=0.186.0"
 serde = { workspace = true }
 serde_json = { workspace = true }
 syn = { version = "2", features = ["full", "visit"] }

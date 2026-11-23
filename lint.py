@@ -8,18 +8,6 @@ TEST_ALLOWS = {"clippy::expect_used", "clippy::panic"}
 SHELL_FREE = CORE + ("usecase",)
 
 
-def comments():
-    found = []
-    for package in packages():
-        for path in rust_files(package):
-            for line, text in lex(path)[1]:
-                doc = re.match(r"//(/(?!/)|!)", text)
-                escape = role(package) in CORE and re.match(r"// fc-allow: \S", text)
-                if not doc and not escape:
-                    found.append("arch-0d2: %s:%d %s" % (relative(path), line, text.splitlines()[0]))
-    return found, ["Names and types carry the meaning; `// fc-allow: <reason>` is read in the core only.", "Fix: remove the comment, or make it a contract in a `///` doc comment on the item it binds."]
-
-
 def allows():
     found = []
     for package in packages():
@@ -174,7 +162,7 @@ def pins():
     return found, ["A tool built from a branch is whatever the branch holds the day CI runs, so a green no longer says which gate passed it.", "Fix: add `--rev <commit>`, the 40-hex id `git ls-remote <url> HEAD` prints, once `just check` passes with that build (docs/adr/0017-gate-tools-are-pinned.md)."]
 
 
-CHECKS = {"comments": comments, "allows": allows, "wildcards": wildcards, "traits": traits, "stored": stored, "pins": pins}
+CHECKS = {"allows": allows, "wildcards": wildcards, "traits": traits, "stored": stored, "pins": pins}
 
 
 def main():

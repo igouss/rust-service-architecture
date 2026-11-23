@@ -59,7 +59,7 @@ names:
 
 [doc("arch-0d2: no comments; names and types carry the meaning. Doc comments, and fc-allow in the core, only.")]
 comments:
-    @python3 lint.py comments
+    @cargo run -q -p gates -- comments
 
 [doc("arch-tsu: no allow or expect attribute, but the one that opens a file under tests/; fix what the lint names.")]
 allows:

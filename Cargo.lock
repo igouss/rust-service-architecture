@@ -360,6 +360,7 @@ name = "gates"
 version = "0.0.0"
 dependencies = [
  "proc-macro2",
+ "ra-ap-rustc_lexer",
  "serde",
  "serde_json",
  "syn 2.0.119",
@@ -804,6 +805,17 @@ dependencies = [
  "log",
  "parking_lot 0.12.5",
  "scheduled-thread-pool",
+]
+
+[[package]]
+name = "ra-ap-rustc_lexer"
+version = "0.186.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ce72655640ce0af6338422cb744cdb72454e21bb20275dcfd128024f848480a"
+dependencies = [
+ "memchr",
+ "unicode-ident",
+ "unicode-properties",
 ]
 
 [[package]]
