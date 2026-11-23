@@ -63,6 +63,7 @@ struct Pending {
     facts: Vec<Fact>,
     rejections: Vec<Rejection>,
     outbox: Vec<Request>,
+    finished: BTreeSet<u64>,
     rows: BTreeMap<Row, Option<String>>,
     positions: BTreeMap<&'static str, Position>,
     cleared: BTreeSet<&'static str>,
@@ -275,6 +276,14 @@ impl Writer for MemoryWriter<'_> {
         Ok(())
     }
 
+    fn finish(&mut self, lifecycle: &'static str, id: RequestId) -> Result<Option<StreamId>, StoreError> {
+        let open: Option<&Request> = self.tables.outbox.get(&id.get()).filter(|request: &&Request| request.lifecycle == lifecycle);
+        match open {
+            Some(request) if self.pending.finished.insert(id.get()) => Ok(Some(request.stream.clone())),
+            Some(_) | None => Ok(None),
+        }
+    }
+
     fn facts(
         &mut self,
         lifecycle: &'static str,
@@ -352,6 +361,9 @@ fn commit(tables: &mut Tables, pending: Pending, kept: Kept) {
     tables.appended += count(pending.facts.len());
     tables.facts.extend(pending.facts);
     tables.rejections.extend(pending.rejections);
+    for id in pending.finished {
+        tables.outbox.remove(&id);
+    }
     for request in pending.outbox {
         tables.issued += 1;
         tables.outbox.insert(tables.issued, request);
@@ -409,11 +421,6 @@ impl Store for Memory {
                 request: request.request.clone(),
             })
             .collect())
-    }
-
-    fn mark_done(&self, _key: Key, id: RequestId) -> Result<(), StoreError> {
-        self.writing().outbox.remove(&id.get());
-        Ok(())
     }
 
     fn mark_failed(&self, _key: Key, id: RequestId) -> Result<(), StoreError> {

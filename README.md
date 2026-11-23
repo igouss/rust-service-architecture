@@ -60,7 +60,7 @@ A feature is always a new instance of one of these, never a new kind of thing.
 - **Command**: an intent to change a record. Its `decide` returns events or a named refusal.
 - **Event**: a fact that happened. Appended to history, never edited.
 - **Reaction**: one step of a process manager, a lifecycle that reacts to other records' events and issues requests for outside work.
-- **Request**: outside work to do (call a service, send an email). Written to an outbox in the same transaction; a relay performs it afterward.
+- **Request**: outside work to do (call a service, send an email). Written to an outbox in the same transaction; a relay performs it afterward and hands the reply back to the process manager.
 - **Projection**: a derived view folded from events, for views no single state row holds.
 - **Policy**: per lifecycle, the one place that names who reads its events.
 - **Query**: reads state rows or a view; never runs a decision.

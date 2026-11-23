@@ -4,7 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use adapter_postgres::{Durability, Postgres};
 use app::{handle, relay};
-use domain::fulfilment::{FulfilmentRequest, Progress};
+use domain::fulfilment::{FulfilmentReply, FulfilmentRequest, Progress};
 use domain::payment::{Amount, Authorize, Capture};
 use domain::task::{AddTask, TaskRefusal, Title};
 use ports::{Answer, Gateway, GatewayError, Journal, RequestId, StoreError, StreamId, Version};
@@ -43,10 +43,12 @@ struct Recording {
 }
 
 impl Gateway<FulfilmentRequest> for Recording {
-    async fn perform(&self, _id: RequestId, _stream: &StreamId, request: &FulfilmentRequest) -> Result<(), GatewayError> {
+    type Reply = FulfilmentReply;
+
+    async fn perform(&self, _id: RequestId, _stream: &StreamId, request: &FulfilmentRequest) -> Result<FulfilmentReply, GatewayError> {
         tokio::task::yield_now().await;
         self.performed.lock().expect("lock").push(request.clone());
-        Ok(())
+        Ok(FulfilmentReply::StockUnavailable)
     }
 }
 

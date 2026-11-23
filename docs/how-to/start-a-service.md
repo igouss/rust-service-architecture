@@ -36,9 +36,10 @@ form you are copying.
 5. Choose the durability in `server`: `full` syncs to disk on every commit; `normal` survives a
    process crash, can lose the last commits on power loss, and commits about a hundred times
    faster. The default is `full`.
-6. If a process manager of yours issues requests, write a `Gateway` for each receiver and run
-   `app::relay` on a thread of its own ([`arch-w0v`](../architecture/shell.req.md)); route each
-   result back through `app::advance`.
+6. If a process manager of yours issues requests, write a `Gateway` for each receiver, with
+   the `Reply` it answers and `impl From<ThatReply>` for the process manager's `Reaction`, and
+   run `app::relay` on a thread of its own ([`arch-w0v`](../architecture/shell.req.md)). A
+   result that arrives later than the call comes back through `app::advance`.
 
 ## The mutants after the examples are gone
 

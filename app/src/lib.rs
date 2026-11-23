@@ -1,5 +1,5 @@
 use domain::{Command, Lifecycle, Projection, Reaction};
-use ports::{Answer, Applied, Claimed, Gateway, GatewayError, Journal, Outbox, Position, Recorded, StoreError, StreamId, Unit};
+use ports::{Answer, Applied, Claimed, Finished, Gateway, GatewayError, Journal, Outbox, Position, Recorded, RequestId, StoreError, StreamId, Unit};
 
 pub mod payments;
 pub mod tasks;
@@ -31,6 +31,16 @@ where
     X::Reads: Policy,
 {
     journal.write(|unit: &mut Unit<'_>| react(unit, id, progress))
+}
+
+pub fn resume<X: Reaction>(unit: &mut Unit<'_>, request: RequestId, progress: X) -> Result<(), StoreError>
+where
+    X::Reads: Policy,
+{
+    match unit.finish(request, |state: X::Reads| ports::react(progress, state))? {
+        Finished::Applied(applied) => settle(unit, applied).map(|_answer: Answer<<X::Reads as Lifecycle>::Refusal>| ()),
+        Finished::Already => Ok(()),
+    }
 }
 
 fn settle<S: Policy>(unit: &mut Unit<'_>, applied: Applied<S>) -> Result<Answer<S::Refusal>, StoreError> {
@@ -65,17 +75,23 @@ pub fn rebuild<J: Journal, P: Projection>(journal: &J, batch: usize) -> Result<u
     })
 }
 
-pub async fn relay<X: Reaction, O: Outbox, G: Gateway<X::Request>>(outbox: &O, gateway: &G, limit: usize) -> Result<usize, StoreError> {
-    let claimed: Vec<Claimed<X::Request>> = outbox.claim::<X>(limit)?;
+pub async fn relay<X, K, G>(store: &K, gateway: &G, limit: usize) -> Result<usize, StoreError>
+where
+    X: Reaction + From<G::Reply>,
+    X::Reads: Policy,
+    K: Journal + Outbox,
+    G: Gateway<X::Request>,
+{
+    let claimed: Vec<Claimed<X::Request>> = store.claim::<X>(limit)?;
     let mut performed: usize = 0;
     for request in &claimed {
-        let outcome: Result<(), GatewayError> = gateway.perform(request.id, &request.stream, &request.request).await;
+        let outcome: Result<G::Reply, GatewayError> = gateway.perform(request.id, &request.stream, &request.request).await;
         match outcome {
-            Ok(()) => {
-                outbox.done(request.id)?;
+            Ok(reply) => {
+                store.write(|unit: &mut Unit<'_>| resume(unit, request.id, X::from(reply)))?;
                 performed += 1;
             }
-            Err(GatewayError { .. }) => outbox.failed(request.id)?,
+            Err(GatewayError { .. }) => store.failed(request.id)?,
         }
     }
     Ok(performed)

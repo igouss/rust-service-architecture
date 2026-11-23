@@ -11,9 +11,9 @@ gateways to other systems.
 ## `arch-s6q` A unit of work shall have exactly one way to change a lifecycle, which takes the whole outcome
 
 `Unit::apply` loads the state, hands it to the decision and writes the outcome, inside the
-unit's transaction. There is no `save(state)`, no `append(event)`, no `Outbox::push` and no
-`Rejections::record`: with a second method, "call both" is a sentence, and a sentence is what
-agents violate. An invariant the API can make impossible to violate lives in the API's shape.
+unit's transaction. There is no `save(state)`, no `append(event)`, no `Outbox::push`, no
+`Outbox::done` and no `Rejections::record`: with a second method, "call both" is a sentence,
+and a sentence is what agents violate. An invariant the API can make impossible to violate lives in the API's shape.
 
 ```rust
 use std::future::Future;
@@ -166,6 +166,12 @@ pub struct Applied<S: Lifecycle> {
     pub facts: Vec<Recorded<S::Event>>,
 }
 
+#[must_use = "the facts of a finished request must reach their lifecycle's policy"]
+pub enum Finished<S: Lifecycle> {
+    Applied(Applied<S>),
+    Already,
+}
+
 pub enum Write<P: Projection> {
     Nothing,
     Upsert(String, P::Row),
@@ -200,7 +206,10 @@ pub fn project<P: Projection>(row: Option<P::Row>, fact: &Fact<P>) -> Change<P> 
 ```
 
 `Unit` and `View` are structs in `ports`, not traits an adapter implements. `Unit::apply` is
-the one place that numbers versions, serializes, and builds a `Recorded` fact:
+the one place that numbers versions, serializes, and builds a `Recorded` fact. `Unit::finish`
+is `apply` for the reply to a request: it closes the request and applies the reaction to the
+stream the stored request names, or does neither when the request is already finished
+([`arch-ruz9`](invariants.req.md)):
 
 ```rust
 pub struct Unit<'a> {
@@ -246,6 +255,13 @@ impl Unit<'_> {
             }
         }
     }
+
+    pub fn finish<S: Lifecycle, R: Serialize>(&mut self, request: RequestId, decide: impl FnOnce(S) -> Outcome<S, R>) -> Result<Finished<S>, StoreError> {
+        match self.store.finish(S::NAME, request)? {
+            Some(stream) => self.apply(&stream, decide).map(Finished::Applied),
+            None => Ok(Finished::Already),
+        }
+    }
 }
 ```
 
@@ -279,7 +295,8 @@ What the shape rules out, each seen red against a mutant ([`arch-30c`](invariant
 disagrees with its facts, since `Transition`'s fields are private (E0451) and its only
 constructor is the private fold through `evolve` (E0624); a fact that was never written,
 since `Recorded`'s fields are private too (E0451); an outcome or a change that is computed
-and dropped (`unused_must_use`); a read-model row the projection did not compute (E0451). A
+and dropped (`unused_must_use`); a request closed with no reaction, since closing it is
+`Unit::finish` and nothing else; a read-model row the projection did not compute (E0451). A
 decision made on stale state cannot be written, because the state it reads and the write share
 the transaction: there is no expected version to pass and no conflict to retry.
 
@@ -340,6 +357,7 @@ pub trait Writer: Reader {
     fn save(&mut self, lifecycle: &'static str, stream: &StreamId, version: Version, state: &str) -> Result<(), StoreError>;
     fn reject(&mut self, lifecycle: &'static str, stream: &StreamId, refusal: &str) -> Result<(), StoreError>;
     fn request(&mut self, lifecycle: &'static str, stream: &StreamId, request: &str) -> Result<(), StoreError>;
+    fn finish(&mut self, lifecycle: &'static str, id: RequestId) -> Result<Option<StreamId>, StoreError>;
     fn facts(
         &mut self,
         lifecycle: &'static str,
@@ -359,7 +377,6 @@ pub trait Store {
     fn snapshot<T>(&self, key: Key, work: impl FnOnce(&mut dyn Reader) -> Result<T, StoreError>) -> Result<T, StoreError>;
     fn committed(&self, key: Key, last: Position);
     fn requests(&self, key: Key, lifecycle: &'static str, limit: usize) -> Result<Vec<StoredRequest>, StoreError>;
-    fn mark_done(&self, key: Key, id: RequestId) -> Result<(), StoreError>;
     fn mark_failed(&self, key: Key, id: RequestId) -> Result<(), StoreError>;
 }
 ```
@@ -387,7 +404,9 @@ verification: exempt
 verification-reason: review only (T4); no gate is built
 
 The store is synchronous: SQLite blocks, and a unit of work is one blocking transaction that a
-driving adapter runs off the async executor. A gateway that calls another system is async.
+driving adapter runs off the async executor. A gateway that calls another system is async, and
+answers with its `Reply`: a type of the core that says what the other system did, which the
+relay turns into the reaction of the process manager that asked ([`arch-w0v`](shell.req.md)).
 Async on a port whose adapter never waits adds `Send` bounds and executors to every caller and
 test for nothing.
 
@@ -401,7 +420,6 @@ pub struct Claimed<R> {
 
 pub trait Outbox {
     fn claim<X: Reaction>(&self, limit: usize) -> Result<Vec<Claimed<X::Request>>, StoreError>;
-    fn done(&self, id: RequestId) -> Result<(), StoreError>;
     fn failed(&self, id: RequestId) -> Result<(), StoreError>;
 }
 
@@ -411,7 +429,8 @@ pub struct GatewayError {
 }
 
 pub trait Gateway<R> {
-    fn perform(&self, id: RequestId, stream: &StreamId, request: &R) -> impl Future<Output = Result<(), GatewayError>> + Send;
+    type Reply;
+    fn perform(&self, id: RequestId, stream: &StreamId, request: &R) -> impl Future<Output = Result<Self::Reply, GatewayError>> + Send;
 }
 ```
 

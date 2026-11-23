@@ -51,7 +51,8 @@ per area, as `app/src/tasks.rs` and `app/src/payments.rs` do.
    fact, so a fact must carry whatever its views need to fold it; decide that before the
    fact's encoding is first stored.
 3. To start or advance a process manager, call `react(unit, &its_id, TheProgress)` from the
-   policy arm of the fact that causes it.
+   policy arm of the fact that causes it. What its gateway answers to a request is a `Reply`
+   type in the lifecycle's file with `impl From<TheReply> for TheProgress`; the relay applies it.
 4. A query is a function over `journal.read(|view| …)`, reading state rows or a view's rows.
 5. Add use-case tests in `app/tests/use_cases.rs` through `handle` against
    `Sqlite::in_memory()`: the answer, the stored state, each view, the outbox, the rejections.

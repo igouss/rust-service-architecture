@@ -38,6 +38,7 @@ pub trait Writer: Reader {
     fn save(&mut self, lifecycle: &'static str, stream: &StreamId, version: Version, state: &str) -> Result<(), StoreError>;
     fn reject(&mut self, lifecycle: &'static str, stream: &StreamId, refusal: &str) -> Result<(), StoreError>;
     fn request(&mut self, lifecycle: &'static str, stream: &StreamId, request: &str) -> Result<(), StoreError>;
+    fn finish(&mut self, lifecycle: &'static str, id: RequestId) -> Result<Option<StreamId>, StoreError>;
     fn facts(
         &mut self,
         lifecycle: &'static str,
@@ -57,6 +58,5 @@ pub trait Store {
     fn snapshot<T>(&self, key: Key, work: impl FnOnce(&mut dyn Reader) -> Result<T, StoreError>) -> Result<T, StoreError>;
     fn committed(&self, key: Key, last: Position);
     fn requests(&self, key: Key, lifecycle: &'static str, limit: usize) -> Result<Vec<StoredRequest>, StoreError>;
-    fn mark_done(&self, key: Key, id: RequestId) -> Result<(), StoreError>;
     fn mark_failed(&self, key: Key, id: RequestId) -> Result<(), StoreError>;
 }

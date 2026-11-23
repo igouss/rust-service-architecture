@@ -1,5 +1,5 @@
 use domain::{Command, Facts, Lifecycle, Never, Projection, Reaction, Step};
-use ports::{Applied, Claimed, Journal, Outbox, Position, Recorded, StoreError, StreamId, Version, View};
+use ports::{Applied, Claimed, Finished, Journal, Outbox, Position, Recorded, RequestId, StoreError, StreamId, Version, View};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -161,6 +161,22 @@ impl Reaction for Send {
     }
 }
 
+struct Receive {
+    count: u64,
+}
+
+impl Reaction for Receive {
+    type Reads = Courier;
+    type Request = Parcel;
+
+    fn react(self, _reads: &Courier) -> Step<Dispatched, Parcel> {
+        Step {
+            events: vec![Dispatched::Parcels { count: self.count }],
+            requests: Vec::new(),
+        }
+    }
+}
+
 struct Remind {
     number: u64,
 }
@@ -260,6 +276,25 @@ fn send(store: &Subject, stream: &str, number: u64) {
     let _applied: Applied<Courier> = store
         .write(|unit| unit.apply(&id(stream), |state: Courier| ports::react(Send { number }, state)))
         .expect("applied");
+}
+
+fn facts_of<S: Lifecycle>(finished: Finished<S>) -> Option<usize> {
+    match finished {
+        Finished::Applied(applied) => Some(applied.facts.len()),
+        Finished::Already => None,
+    }
+}
+
+fn receive(store: &Subject, request: RequestId, count: u64) -> Option<usize> {
+    facts_of(
+        store
+            .write(|unit| unit.finish(request, |state: Courier| ports::react(Receive { count }, state)))
+            .expect("finished"),
+    )
+}
+
+fn courier(store: &Subject, stream: &str) -> (Version, Courier) {
+    store.read(|view| view.state::<Courier>(&id(stream))).expect("read")
 }
 
 fn parcels(store: &Subject, limit: usize) -> Vec<(StreamId, Parcel)> {

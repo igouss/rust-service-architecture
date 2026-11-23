@@ -3,7 +3,7 @@
 use adapter_memory::{Held, Kept, Memory};
 use domain::fulfilment::{Fulfilment, FulfilmentRequest, Progress};
 use domain::task::{AddTask, CompleteTask, Task, TaskEvent, TaskRefusal, Title};
-use ports::{Applied, Claimed, Journal, Outbox, Position, Recorded, StoreError, StreamId, View};
+use ports::{Applied, Claimed, Finished, Journal, Outbox, Position, Recorded, StoreError, StreamId, View};
 
 fn id(text: &str) -> StreamId {
     StreamId(text.to_string())
@@ -102,7 +102,9 @@ fn a_done_request_is_no_longer_held() {
     let store: Memory = store(2, 2);
     request(&store, "p-1");
     let claimed: Vec<Claimed<FulfilmentRequest>> = store.claim::<Progress>(10).expect("claimed");
-    store.done(claimed[0].id).expect("done");
+    let _finished: Finished<Fulfilment> = store
+        .write(|unit| unit.finish(claimed[0].id, |state: Fulfilment| ports::react(Progress::StockUnavailable, state)))
+        .expect("finished");
     assert_eq!(store.held().requests, 0);
 }
 

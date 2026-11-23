@@ -46,6 +46,16 @@ where
     journal.write(|unit: &mut Unit<'_>| react(unit, id, progress))
 }
 
+pub fn resume<X: Reaction>(unit: &mut Unit<'_>, request: RequestId, progress: X) -> Result<(), StoreError>
+where
+    X::Reads: Policy,
+{
+    match unit.finish(request, |state: X::Reads| ports::react(progress, state))? {
+        Finished::Applied(applied) => settle(unit, applied).map(|_answer: Answer<<X::Reads as Lifecycle>::Refusal>| ()),
+        Finished::Already => Ok(()),
+    }
+}
+
 fn settle<S: Policy>(unit: &mut Unit<'_>, applied: Applied<S>) -> Result<Answer<S::Refusal>, StoreError> {
     for fact in &applied.facts {
         S::after(unit, fact)?;
@@ -94,29 +104,41 @@ The example policies are in `app/src/tasks.rs` (`Task` folds a projection) and
 
 A process manager's requests are written by `Unit::apply` in the same transaction as its
 facts, and performed afterward by `app::relay` through a `Gateway`. A request performed inside
-the unit would be lost, or done twice, by a crash. The relay marks a request done only after
-the gateway succeeds, so a request is performed at least once and its receiver drops a second
-copy by the `RequestId` ([`arch-fif`](invariants.req.md)). A request whose gateway fails is
-counted and claimed after those that have failed less, so one dead receiver does not hold back
-the rest. The result of a request comes back as input to the process manager through
-`app::advance`, called by whatever receives it: a webhook route, or the gateway's caller.
+the unit would be lost, or done twice, by a crash.
+
+The gateway answers with a typed `Reply`. The relay turns it into the process manager's
+`Reaction` (`From<Reply>`, a pure function beside the lifecycle) and applies it through
+`app::resume`, in a unit of its own that also finishes the request. So a request is performed
+at least once, its receiver drops a second copy by the `RequestId`, and its reply re-enters
+the process manager once: a second relay, or one that crashed between the gateway and the
+unit, finds the request finished and applies nothing ([`arch-fif`](invariants.req.md),
+[`arch-ruz9`](invariants.req.md)). A
+request whose gateway fails is counted and claimed after those that have failed less, so one
+dead receiver does not hold back the rest. A result that arrives later than the call (a
+webhook) comes back through `app::advance`, called by the route that receives it.
 
 `relay` waits on the gateway and makes blocking store calls around it, so it runs on a thread
 of its own with its own runtime, never on the executor that serves requests
 ([`arch-v1q`](ports.req.md)).
 
 ```rust
-pub async fn relay<X: Reaction, O: Outbox, G: Gateway<X::Request>>(outbox: &O, gateway: &G, limit: usize) -> Result<usize, StoreError> {
-    let claimed: Vec<Claimed<X::Request>> = outbox.claim::<X>(limit)?;
+pub async fn relay<X, K, G>(store: &K, gateway: &G, limit: usize) -> Result<usize, StoreError>
+where
+    X: Reaction + From<G::Reply>,
+    X::Reads: Policy,
+    K: Journal + Outbox,
+    G: Gateway<X::Request>,
+{
+    let claimed: Vec<Claimed<X::Request>> = store.claim::<X>(limit)?;
     let mut performed: usize = 0;
     for request in &claimed {
-        let outcome: Result<(), GatewayError> = gateway.perform(request.id, &request.stream, &request.request).await;
+        let outcome: Result<G::Reply, GatewayError> = gateway.perform(request.id, &request.stream, &request.request).await;
         match outcome {
-            Ok(()) => {
-                outbox.done(request.id)?;
+            Ok(reply) => {
+                store.write(|unit: &mut Unit<'_>| resume(unit, request.id, X::from(reply)))?;
                 performed += 1;
             }
-            Err(GatewayError { .. }) => outbox.failed(request.id)?,
+            Err(GatewayError { .. }) => store.failed(request.id)?,
         }
     }
     Ok(performed)

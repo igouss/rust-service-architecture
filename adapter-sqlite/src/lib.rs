@@ -222,6 +222,16 @@ impl Writer for Session<'_> {
         )
     }
 
+    fn finish(&mut self, lifecycle: &'static str, id: RequestId) -> Result<Option<StreamId>, StoreError> {
+        self.transaction
+            .prepare_cached("UPDATE outbox SET done = 1 WHERE id = ?1 AND lifecycle = ?2 AND done = 0 RETURNING stream")
+            .map_err(unavailable)?
+            .query_row(params![id.stored(), lifecycle], |row: &rusqlite::Row<'_>| row.get::<_, String>(0))
+            .optional()
+            .map(|stream: Option<String>| stream.map(StreamId))
+            .map_err(unavailable)
+    }
+
     fn facts(
         &mut self,
         lifecycle: &'static str,
@@ -326,14 +336,6 @@ impl Store for Sqlite {
             });
         }
         Ok(requests)
-    }
-
-    fn mark_done(&self, _key: Key, id: RequestId) -> Result<(), StoreError> {
-        let connection: MutexGuard<'_, Connection> = self.connection()?;
-        connection
-            .execute("UPDATE outbox SET done = 1 WHERE id = ?1", params![id.stored()])
-            .map_err(unavailable)?;
-        Ok(())
     }
 
     fn mark_failed(&self, _key: Key, id: RequestId) -> Result<(), StoreError> {

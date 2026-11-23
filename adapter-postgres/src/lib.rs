@@ -316,13 +316,6 @@ impl Store for Postgres {
             .collect()
     }
 
-    fn mark_done(&self, _key: Key, id: RequestId) -> Result<(), StoreError> {
-        let id: i64 = id.stored();
-        self.checked()?
-            .call(move |client: &mut Client, statements: &Statements| client.execute(&statements.done, &[&id]))
-            .map(|_changed: u64| ())
-    }
-
     fn mark_failed(&self, _key: Key, id: RequestId) -> Result<(), StoreError> {
         let id: i64 = id.stored();
         self.checked()?

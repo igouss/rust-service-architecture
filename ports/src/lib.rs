@@ -148,6 +148,12 @@ pub struct Applied<S: Lifecycle> {
     pub facts: Vec<Recorded<S::Event>>,
 }
 
+#[must_use = "the facts of a finished request must reach their lifecycle's policy"]
+pub enum Finished<S: Lifecycle> {
+    Applied(Applied<S>),
+    Already,
+}
+
 pub enum Write<P: Projection> {
     Nothing,
     Upsert(String, P::Row),
@@ -246,6 +252,13 @@ impl Unit<'_> {
                     facts,
                 })
             }
+        }
+    }
+
+    pub fn finish<S: Lifecycle, R: Serialize>(&mut self, request: RequestId, decide: impl FnOnce(S) -> Outcome<S, R>) -> Result<Finished<S>, StoreError> {
+        match self.store.finish(S::NAME, request)? {
+            Some(stream) => self.apply(&stream, decide).map(Finished::Applied),
+            None => Ok(Finished::Already),
         }
     }
 
@@ -365,7 +378,6 @@ pub struct Claimed<R> {
 
 pub trait Outbox {
     fn claim<X: Reaction>(&self, limit: usize) -> Result<Vec<Claimed<X::Request>>, StoreError>;
-    fn done(&self, id: RequestId) -> Result<(), StoreError>;
     fn failed(&self, id: RequestId) -> Result<(), StoreError>;
 }
 
@@ -375,7 +387,8 @@ pub struct GatewayError {
 }
 
 pub trait Gateway<R> {
-    fn perform(&self, id: RequestId, stream: &StreamId, request: &R) -> impl Future<Output = Result<(), GatewayError>> + Send;
+    type Reply;
+    fn perform(&self, id: RequestId, stream: &StreamId, request: &R) -> impl Future<Output = Result<Self::Reply, GatewayError>> + Send;
 }
 
 impl<K: Store> Outbox for K {
@@ -390,10 +403,6 @@ impl<K: Store> Outbox for K {
                 })
             })
             .collect()
-    }
-
-    fn done(&self, id: RequestId) -> Result<(), StoreError> {
-        self.mark_done(Key::new(), id)
     }
 
     fn failed(&self, id: RequestId) -> Result<(), StoreError> {

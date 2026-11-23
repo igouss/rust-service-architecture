@@ -45,8 +45,79 @@ fn a_done_request_is_not_claimed_again() {
     send(&store, "p-1", 1);
     send(&store, "p-2", 2);
     let claimed: Vec<Claimed<Parcel>> = store.claim::<Send>(10).expect("claimed");
-    store.done(claimed[0].id).expect("done");
+    assert_eq!(receive(&store, claimed[0].id, 5), Some(1));
     assert_eq!(parcels(&store, 10), vec![(id("p-2"), Parcel { number: 2 })]);
+}
+
+#[test]
+fn a_finished_request_applies_its_reaction_to_the_stream_that_issued_it() {
+    let store: Subject = subject();
+    send(&store, "p-1", 1);
+    send(&store, "p-2", 2);
+    let claimed: Vec<Claimed<Parcel>> = store.claim::<Send>(10).expect("claimed");
+    assert_eq!(receive(&store, claimed[1].id, 5), Some(1));
+    assert_eq!(courier(&store, "p-1"), (Version::from(1), Courier::Sent { parcels: 1 }));
+    assert_eq!(courier(&store, "p-2"), (Version::from(2), Courier::Sent { parcels: 6 }));
+}
+
+#[test]
+fn a_request_finished_twice_applies_its_reaction_once() {
+    let store: Subject = subject();
+    send(&store, "p-1", 1);
+    let claimed: Vec<Claimed<Parcel>> = store.claim::<Send>(10).expect("claimed");
+    assert_eq!(receive(&store, claimed[0].id, 5), Some(1));
+    assert_eq!(receive(&store, claimed[0].id, 5), None);
+    assert_eq!(courier(&store, "p-1"), (Version::from(2), Courier::Sent { parcels: 6 }));
+}
+
+#[test]
+fn a_request_finished_twice_in_one_unit_applies_its_reaction_once() {
+    let store: Subject = subject();
+    send(&store, "p-1", 1);
+    let claimed: Vec<Claimed<Parcel>> = store.claim::<Send>(10).expect("claimed");
+    let twice: (Option<usize>, Option<usize>) = store
+        .write(|unit| {
+            let first: Finished<Courier> = unit.finish(claimed[0].id, |state: Courier| ports::react(Receive { count: 5 }, state))?;
+            let second: Finished<Courier> = unit.finish(claimed[0].id, |state: Courier| ports::react(Receive { count: 5 }, state))?;
+            Ok((facts_of(first), facts_of(second)))
+        })
+        .expect("finished");
+    assert_eq!(twice, (Some(1), None));
+    assert_eq!(courier(&store, "p-1"), (Version::from(2), Courier::Sent { parcels: 6 }));
+}
+
+#[test]
+fn a_request_that_was_never_issued_finishes_nothing() {
+    let store: Subject = subject();
+    assert_eq!(receive(&store, RequestId::from(1), 5), None);
+    assert_eq!(courier(&store, "p-1"), (Version::ZERO, Courier::Idle));
+}
+
+#[test]
+fn a_request_is_finished_only_by_the_lifecycle_that_issued_it() {
+    let store: Subject = subject();
+    send(&store, "p-1", 1);
+    let claimed: Vec<Claimed<Parcel>> = store.claim::<Send>(10).expect("claimed");
+    let other: Finished<Porter> = store
+        .write(|unit| unit.finish(claimed[0].id, |state: Porter| ports::react(Carry { tag: 9 }, state)))
+        .expect("finished");
+    assert_eq!(facts_of(other), None);
+    assert_eq!(store.claim::<Carry>(10).map(|claimed: Vec<Claimed<Bag>>| claimed.len()), Ok(0));
+    assert_eq!(parcels(&store, 10), vec![(id("p-1"), Parcel { number: 1 })]);
+}
+
+#[test]
+fn a_unit_that_fails_after_finishing_a_request_leaves_it_claimable() {
+    let store: Subject = subject();
+    send(&store, "p-1", 1);
+    let claimed: Vec<Claimed<Parcel>> = store.claim::<Send>(10).expect("claimed");
+    let failed: Result<(), StoreError> = store.write(|unit| {
+        let _finished: Finished<Courier> = unit.finish(claimed[0].id, |state: Courier| ports::react(Receive { count: 5 }, state))?;
+        Err(StoreError::Unavailable { cause: "injected".to_string() })
+    });
+    assert_eq!(failed, Err(StoreError::Unavailable { cause: "injected".to_string() }));
+    assert_eq!(courier(&store, "p-1"), (Version::from(1), Courier::Sent { parcels: 1 }));
+    assert_eq!(parcels(&store, 10), vec![(id("p-1"), Parcel { number: 1 })]);
 }
 
 #[test]

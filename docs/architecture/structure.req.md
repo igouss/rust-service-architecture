@@ -92,7 +92,7 @@ every crate from day one: adoption is all or nothing.
 | Query | a function over `Journal::read` | `app` | answer from state rows or a read model |
 | Port and adapter | a trait in `ports`, an `impl` in an adapter crate | `ports`, `adapter-*` | I/O |
 
-`app::handle`, `app::react`, `app::project`, `app::rebuild` and `app::relay` are the fixed
+`app::handle`, `app::react`, `app::resume`, `app::project`, `app::rebuild` and `app::relay` are the fixed
 machinery that runs the primitives; a service does not add to them. New behaviour is a new
 instance of a primitive. Code that is none of them (a service object that holds state, a helper
 that writes, a scheduler that does the work) is wrong and is reshaped into one, never

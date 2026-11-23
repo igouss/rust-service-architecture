@@ -1,5 +1,5 @@
 use ports::store::{Reader, StoredFact, Writer};
-use ports::{Position, StoreError, StreamId, Version};
+use ports::{Position, RequestId, StoreError, StreamId, Version};
 use postgres::{Client, Row};
 
 use crate::statements::Statements;
@@ -80,6 +80,17 @@ impl Writer for Session<'_> {
         self.worker
             .call(move |client: &mut Client, statements: &Statements| client.execute(&statements.request, &[&lifecycle, &stream, &request]))
             .map(|_changed: u64| ())
+    }
+
+    fn finish(&mut self, lifecycle: &'static str, id: RequestId) -> Result<Option<StreamId>, StoreError> {
+        let id: i64 = id.stored();
+        match self
+            .worker
+            .call(move |client: &mut Client, statements: &Statements| client.query_opt(&statements.finish, &[&id, &lifecycle]))?
+        {
+            None => Ok(None),
+            Some(row) => Ok(Some(StreamId(text("outbox", &row, 0)?.to_string()))),
+        }
     }
 
     fn facts(

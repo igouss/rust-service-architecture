@@ -67,7 +67,7 @@ Participants: `Journal::write`, `Unit::apply`, `Policy::after`, the store adapte
 When a fact is recorded, the system shall pass it to its lifecycle's policy inside the same
 unit of work.
 
-Participants: `ports::Applied`, `app::handle`, `app::react`, `Policy::after`.
+Participants: `ports::Applied`, `ports::Finished`, `app::handle`, `app::react`, `app::resume`, `Policy::after`.
 
 ### Acceptance
 
@@ -77,8 +77,9 @@ Participants: `ports::Applied`, `app::handle`, `app::react`, `Policy::after`.
 
 ## `arch-fif` The system shall perform every request at least once
 
-When a request is in the outbox, the system shall perform it at least once, shall mark it done
-only after its gateway succeeds, and its receiver shall drop a second copy by its `RequestId`.
+When a request is in the outbox, the system shall perform it at least once, shall finish it
+only in the unit of work that applies its gateway's reply, and its receiver shall drop a second
+copy by its `RequestId`.
 
 Participants: `Outbox`, `app::relay`, every `Gateway`.
 
@@ -87,6 +88,23 @@ Participants: `Outbox`, `app::relay`, every `Gateway`.
 - `arch-fif.1` A performed request is marked done and not performed again: `the_relay_performs_a_claimed_request_once_and_marks_it_done` (mutants T15, T16).
 - `arch-fif.2` A request whose gateway fails stays claimable: `a_request_the_gateway_fails_stays_claimable` (mutant T14), and does not hold back the next one: `a_request_that_keeps_failing_does_not_hold_back_the_next_one` (mutant T26).
 - `arch-fif.3` Each real gateway's duplicate-delivery test performs one request twice and observes one effect (CI).
+
+## `arch-ruz9` A gateway's reply shall re-enter the lifecycle that issued the request, once
+
+When a gateway has performed a request, the system shall turn its reply into a reaction,
+apply that reaction to the lifecycle and stream that issued the request, and finish the
+request, in one unit of work. If the request is already finished, then the system shall apply
+nothing.
+
+Participants: `Gateway::Reply`, `app::relay`, `app::resume`, `Unit::finish`, `Writer::finish`.
+
+### Acceptance
+
+- `arch-ruz9.1` A reply advances the process manager with no call from outside the relay: `a_performed_reservation_advances_the_fulfilment_to_shipping_and_requests_the_shipment` (mutants T15 and T65).
+- `arch-ruz9.2` A request finished twice applies its reaction once, in two units or in one: `a_request_finished_twice_applies_its_reaction_once`, `a_request_finished_twice_in_one_unit_applies_its_reaction_once` (mutants T59, T60 and T61).
+- `arch-ruz9.3` The reaction is applied to the stream that issued the request, and only as its lifecycle: `a_finished_request_applies_its_reaction_to_the_stream_that_issued_it`, `a_request_is_finished_only_by_the_lifecycle_that_issued_it` (mutants T62, T63 and T64).
+- `arch-ruz9.4` A unit that fails after finishing a request leaves it claimable: `a_unit_that_fails_after_finishing_a_request_leaves_it_claimable`.
+- `arch-ruz9.5` The facts of a finished request that never reach a policy are a compile error: `Finished` is `must_use` (mutant C14).
 
 ## `arch-oif` A read model shall hold exactly the fold of its lifecycle's facts up to its position
 

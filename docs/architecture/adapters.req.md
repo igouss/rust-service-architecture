@@ -74,7 +74,7 @@ the same gates.
 
 - `arch-e5eb.1` Every case of the suite passes against the SQLite and memory adapters (`just test`) and against the Postgres adapter (`just postgres`, which needs a server and fails unless it counts every case as passed; mutant G26).
 - `arch-e5eb.2` The `raw-store` recipe fails when a crate that implements `Store` has no `tests/conformance.rs` that includes the suite (T2, `just check`; mutant G11).
-- `arch-e5eb.3` A fault planted in a store adapter fails a case of the suite: mutants T4 to T9, T16, T26 and T51 in the SQLite adapter, mutants T27 to T38 in the memory adapter, mutants T40 to T42 and T52 in the Postgres adapter, mutants T17 and T53 in the port.
+- `arch-e5eb.3` A fault planted in a store adapter fails a case of the suite: mutants T4 to T9, T14, T16, T26, T51, T59 and T62 in the SQLite adapter, mutants T27 to T38, T60 and T63 in the memory adapter, mutants T40 to T42, T52, T61 and T64 in the Postgres adapter, mutants T17, T53 and T65 in the port.
 
 ## `arch-7h52` The memory store shall hold a bounded history, and what a service may forget shall not be a lifecycle
 

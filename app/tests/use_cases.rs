@@ -9,7 +9,7 @@ use std::task::{Context, Poll, Waker};
 use adapter_sqlite::Sqlite;
 use app::tasks::{open_tasks, task_board, task_tally, TaskBoard};
 use app::{handle, rebuild, relay};
-use domain::fulfilment::{Fulfilment, FulfilmentRequest, Progress};
+use domain::fulfilment::{Fulfilment, FulfilmentReply, FulfilmentRequest, Progress};
 use domain::payment::{Amount, Authorize, Capture, Payment, PaymentRefusal};
 use domain::task::{AddTask, CompleteTask, Tally, Task, TaskRefusal, TaskTally, Title};
 use ports::{Answer, Claimed, Gateway, GatewayError, Journal, Outbox, Position, RequestId, StoreError, StreamId, Version, View};
@@ -58,16 +58,20 @@ struct Recording {
 }
 
 impl Gateway<FulfilmentRequest> for Recording {
-    async fn perform(&self, id: RequestId, _stream: &StreamId, request: &FulfilmentRequest) -> Result<(), GatewayError> {
+    type Reply = FulfilmentReply;
+
+    async fn perform(&self, id: RequestId, _stream: &StreamId, request: &FulfilmentRequest) -> Result<FulfilmentReply, GatewayError> {
         self.performed.lock().expect("lock").push((id, request.clone()));
-        Ok(())
+        Ok(FulfilmentReply::StockUnavailable)
     }
 }
 
 struct Down;
 
 impl Gateway<FulfilmentRequest> for Down {
-    async fn perform(&self, _id: RequestId, _stream: &StreamId, _request: &FulfilmentRequest) -> Result<(), GatewayError> {
+    type Reply = FulfilmentReply;
+
+    async fn perform(&self, _id: RequestId, _stream: &StreamId, _request: &FulfilmentRequest) -> Result<FulfilmentReply, GatewayError> {
         Err(GatewayError { cause: "down".to_string() })
     }
 }
@@ -272,10 +276,12 @@ fn a_unit_that_fails_after_applying_stores_nothing() {
 struct FailsTheFirst;
 
 impl Gateway<FulfilmentRequest> for FailsTheFirst {
-    async fn perform(&self, id: RequestId, _stream: &StreamId, _request: &FulfilmentRequest) -> Result<(), GatewayError> {
+    type Reply = FulfilmentReply;
+
+    async fn perform(&self, id: RequestId, _stream: &StreamId, _request: &FulfilmentRequest) -> Result<FulfilmentReply, GatewayError> {
         match id.get() {
             1 => Err(GatewayError { cause: "down".to_string() }),
-            _later => Ok(()),
+            _later => Ok(FulfilmentReply::StockUnavailable),
         }
     }
 }
@@ -287,6 +293,53 @@ fn a_request_that_keeps_failing_does_not_hold_back_the_next_one() {
     handle(&store, &id("p-2"), Capture { amount: cents(500) }).expect("captured");
     assert_eq!(ready(relay::<Progress, Sqlite, FailsTheFirst>(&store, &FailsTheFirst, 1)), Ok(0));
     assert_eq!(ready(relay::<Progress, Sqlite, FailsTheFirst>(&store, &FailsTheFirst, 1)), Ok(1));
+}
+
+struct InStock;
+
+impl Gateway<FulfilmentRequest> for InStock {
+    type Reply = FulfilmentReply;
+
+    async fn perform(&self, _id: RequestId, _stream: &StreamId, request: &FulfilmentRequest) -> Result<FulfilmentReply, GatewayError> {
+        match request {
+            FulfilmentRequest::ReserveStock => Ok(FulfilmentReply::StockReserved),
+            FulfilmentRequest::Ship => Ok(FulfilmentReply::Shipped),
+        }
+    }
+}
+
+#[test]
+fn a_performed_reservation_advances_the_fulfilment_to_shipping_and_requests_the_shipment() {
+    let store: Sqlite = captured_payment();
+    assert_eq!(ready(relay::<Progress, Sqlite, InStock>(&store, &InStock, 10)), Ok(1));
+    assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version::from(2), Fulfilment::Shipping));
+    assert_eq!(
+        store.claim::<Progress>(10),
+        Ok(vec![Claimed {
+            id: RequestId::from(2),
+            stream: id("p-1"),
+            request: FulfilmentRequest::Ship
+        }])
+    );
+}
+
+#[test]
+fn relayed_until_no_request_is_left_the_fulfilment_is_done() {
+    let store: Sqlite = captured_payment();
+    assert_eq!(ready(relay::<Progress, Sqlite, InStock>(&store, &InStock, 10)), Ok(1));
+    assert_eq!(ready(relay::<Progress, Sqlite, InStock>(&store, &InStock, 10)), Ok(1));
+    assert_eq!(ready(relay::<Progress, Sqlite, InStock>(&store, &InStock, 10)), Ok(0));
+    assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version::from(3), Fulfilment::Done));
+}
+
+#[test]
+fn a_reply_that_stock_is_unavailable_abandons_the_fulfilment() {
+    let store: Sqlite = captured_payment();
+    let gateway: Recording = Recording {
+        performed: Mutex::new(Vec::new()),
+    };
+    assert_eq!(ready(relay::<Progress, Sqlite, Recording>(&store, &gateway, 10)), Ok(1));
+    assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version::from(2), Fulfilment::Abandoned));
 }
 
 #[test]

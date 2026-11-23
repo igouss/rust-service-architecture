@@ -33,6 +33,24 @@ pub enum Progress {
     Shipped,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FulfilmentReply {
+    StockReserved,
+    StockUnavailable,
+    Shipped,
+}
+
+impl From<FulfilmentReply> for Progress {
+    /// When a gateway replies to a request, `from` shall return the progress that reply names.
+    fn from(reply: FulfilmentReply) -> Progress {
+        match reply {
+            FulfilmentReply::StockReserved => Progress::StockReserved,
+            FulfilmentReply::StockUnavailable => Progress::StockUnavailable,
+            FulfilmentReply::Shipped => Progress::Shipped,
+        }
+    }
+}
+
 impl Lifecycle for Fulfilment {
     const NAME: &'static str = "fulfilment";
     type Event = FulfilmentEvent;
@@ -150,6 +168,21 @@ mod tests {
     #[test]
     fn progress_that_does_not_apply_does_nothing() {
         assert_eq!(Progress::PaymentCaptured.react(&Fulfilment::Reserving), Step::nothing());
+    }
+
+    #[test]
+    fn a_reply_that_stock_is_reserved_is_that_progress() {
+        assert_eq!(Progress::from(FulfilmentReply::StockReserved), Progress::StockReserved);
+    }
+
+    #[test]
+    fn a_reply_that_stock_is_unavailable_is_that_progress() {
+        assert_eq!(Progress::from(FulfilmentReply::StockUnavailable), Progress::StockUnavailable);
+    }
+
+    #[test]
+    fn a_reply_that_the_order_shipped_is_that_progress() {
+        assert_eq!(Progress::from(FulfilmentReply::Shipped), Progress::Shipped);
     }
 
     #[test]

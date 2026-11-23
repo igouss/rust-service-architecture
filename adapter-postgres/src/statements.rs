@@ -62,7 +62,7 @@ pub struct Statements {
     pub clear_rows: Statement,
     pub clear_position: Statement,
     pub requests: Statement,
-    pub done: Statement,
+    pub finish: Statement,
     pub failed: Statement,
     pub rejections: Statement,
 }
@@ -99,7 +99,7 @@ impl Statements {
             clear_rows: client.prepare("DELETE FROM read_models WHERE name = $1")?,
             clear_position: client.prepare("DELETE FROM read_model_positions WHERE name = $1")?,
             requests: client.prepare("SELECT id, stream, request FROM outbox WHERE lifecycle = $1 AND NOT done ORDER BY attempts, id LIMIT $2")?,
-            done: client.prepare("UPDATE outbox SET done = true WHERE id = $1")?,
+            finish: client.prepare("UPDATE outbox SET done = true WHERE id = $1 AND lifecycle = $2 AND NOT done RETURNING stream")?,
             failed: client.prepare("UPDATE outbox SET attempts = attempts + 1 WHERE id = $1")?,
             rejections: client.prepare("SELECT refusal FROM rejections WHERE lifecycle = $1 AND stream = $2 ORDER BY id")?,
         })
