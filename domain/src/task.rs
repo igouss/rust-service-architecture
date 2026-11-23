@@ -25,6 +25,7 @@ impl fmt::Display for TitleError {
 
 impl Title {
     pub const LIMIT: usize = 200;
+    const STORED_LIMIT: usize = 200;
 
     /// If the text is empty or only whitespace, then `new` shall refuse with `Blank`.
     /// If the text is longer than `LIMIT` characters, then `new` shall refuse with `TooLong`.
@@ -44,12 +45,20 @@ impl Title {
     }
 }
 
+const _: () = assert!(Title::LIMIT <= Title::STORED_LIMIT);
+
 impl TryFrom<String> for Title {
     type Error = TitleError;
 
-    /// When a stored title is loaded, `try_from` shall refuse what `new` refuses.
+    /// When a stored title is loaded, `try_from` shall return it if it is not blank and at most `STORED_LIMIT` characters, whatever `new` accepts today.
+    /// If a stored title is blank, then `try_from` shall refuse with `Blank`.
+    /// If a stored title is longer than `STORED_LIMIT` characters, then `try_from` shall refuse with `TooLong`.
     fn try_from(text: String) -> Result<Title, TitleError> {
-        Title::new(&text)
+        match (text.trim().is_empty(), text.chars().count() > Title::STORED_LIMIT) {
+            (true, true | false) => Err(TitleError::Blank),
+            (false, true) => Err(TitleError::TooLong),
+            (false, false) => Ok(Title(text)),
+        }
     }
 }
 
@@ -222,6 +231,24 @@ mod tests {
     #[test]
     fn a_title_of_201_characters_is_too_long() {
         assert_eq!(Title::new(&"é".repeat(201)), Err(TitleError::TooLong));
+    }
+
+    #[test]
+    fn a_stored_title_at_the_stored_limit_is_returned_unchanged() {
+        assert_eq!(
+            Title::try_from("é".repeat(Title::STORED_LIMIT)).map(|title: Title| title.as_str().chars().count()),
+            Ok(Title::STORED_LIMIT)
+        );
+    }
+
+    #[test]
+    fn a_stored_blank_title_is_refused_as_blank() {
+        assert_eq!(Title::try_from(" \t".to_string()), Err(TitleError::Blank));
+    }
+
+    #[test]
+    fn a_stored_title_over_the_stored_limit_is_refused_as_too_long() {
+        assert_eq!(Title::try_from("é".repeat(Title::STORED_LIMIT + 1)), Err(TitleError::TooLong));
     }
 
     #[test]

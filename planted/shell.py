@@ -77,4 +77,10 @@ SHELL = [
     ("T22 a blank title is accepted", "domain/src/task.rs", "if text.trim().is_empty() {", "if text.is_empty() && !text.is_empty() {", "test"),
     ("T23 a title over the limit is accepted", "domain/src/task.rs", "if text.chars().count() > Title::LIMIT {", "if text.chars().count() > Title::LIMIT + 1 {", "test"),
     ("T24 a stored title skips the constructor on load", "domain/src/task.rs", "#[serde(try_from = \"String\")]", "#[serde(transparent)]", "test"),
+    ("C15 the rule for new titles is looser than the rule stored titles load under", "domain/src/task.rs",
+     "pub const LIMIT: usize = 200;", "pub const LIMIT: usize = 201;", "E0080"),
+    ("C16 the rule stored titles load under is tightened", "domain/src/task.rs",
+     "const STORED_LIMIT: usize = 200;", "const STORED_LIMIT: usize = 199;", "E0080"),
+    ("T80 a stored blank title loads", "domain/src/task.rs",
+     "(true, true | false) => Err(TitleError::Blank),", "(true, true | false) => Ok(Title(text)),", "test"),
 ]

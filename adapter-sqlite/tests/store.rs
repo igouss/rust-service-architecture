@@ -115,3 +115,25 @@ fn a_finished_request_is_not_listed_as_parked() {
     drop(store);
     assert_eq!(parked(&path), Vec::new());
 }
+
+#[test]
+fn a_title_stored_under_the_rule_of_its_day_loads_whatever_the_rule_for_new_titles_is_now() {
+    let path: PathBuf = file();
+    drop(Sqlite::open(&path, Durability::Normal).expect("opens"));
+    let text: String = "é".repeat(200);
+    let raw: rusqlite::Connection = rusqlite::Connection::open(&path).expect("raw");
+    raw.execute(
+        "INSERT INTO states (lifecycle, stream, version, state) VALUES ('task', 't-1', 1, ?1)",
+        [format!(r#"{{"Open":{{"title":"{text}"}}}}"#)],
+    )
+    .expect("stored");
+    drop(raw);
+    let reopened: Sqlite = Sqlite::open(&path, Durability::Normal).expect("reopens");
+    let loaded: Result<Option<String>, StoreError> = reopened
+        .read(|view| view.state::<Task>(&id("t-1")))
+        .map(|(_version, task): (Version, Task)| match task {
+            Task::Open { title } => Some(title.as_str().to_string()),
+            Task::Absent | Task::Done { .. } => None,
+        });
+    assert_eq!(loaded, Ok(Some(text)));
+}

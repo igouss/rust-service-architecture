@@ -166,12 +166,32 @@ verification-reason: review only (T4); no gate is built
 
 Sum-type state, each variant carrying only the data valid in it; parse, don't validate, at the
 edge; refined types at construction (`Amount::new` returns `None` for zero; `Title::new` refuses
-a blank or over-long title, at construction and again when a stored one is loaded). Fields stay
-private where a constructor enforces an invariant.
+a blank or over-long title). A stored value is loaded under the type's stored rule, not by its
+constructor ([`arch-v9j1`](core.req.md)). Fields stay private where a constructor enforces an
+invariant.
 
 ### Acceptance
 
 - `arch-fdo.1` Review (T4).
+
+## `arch-v9j1` A refined type shall load every value it once stored, whatever its rule for new input is now
+
+A refined type has two rules. Its constructor holds the rule for new input and is called at
+the edge; that rule may be tightened at any time. Its `Deserialize` holds the stored rule: the
+loosest rule under which any stored value was accepted. The stored rule is never tightened,
+because facts are never rewritten ([`arch-btw1`](core.req.md)) and a value that was valid on
+its day must load for as long as it is stored; it is loosened together with the rule for new
+input. Loading never calls the constructor. A refinement the representation carries (`Amount`
+over a non-zero integer) is its own stored rule.
+
+`Title` shows the form: `Title::new` checks `LIMIT`, `TryFrom<String>` checks `STORED_LIMIT`,
+and a constant assertion keeps the first from exceeding the second.
+
+### Acceptance
+
+- `arch-v9j1.1` A title stored at the stored limit loads through the store: `a_title_stored_under_the_rule_of_its_day_loads_whatever_the_rule_for_new_titles_is_now`; with `Title::LIMIT` lowered the same test fails as `StoreError::Corrupt` when loading calls the constructor (decision record 0011).
+- `arch-v9j1.2` The rule for new input cannot be looser than the stored rule, and the stored rule cannot be tightened below it: a constant assertion (E0080; mutants C15 and C16).
+- `arch-v9j1.3` The stored rule still refuses what was never valid: `a_stored_blank_title_is_refused_on_load`, `a_stored_over_long_title_is_refused_on_load` (mutants T24 and T80).
 
 ## `arch-f5d` State that survives a crash or is observable shall be an explicit lifecycle
 
