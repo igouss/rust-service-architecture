@@ -108,7 +108,8 @@ changed.
   cache off (2.2 s with it), every dependency already downloaded; continuous integration was
   not timed.
 - Dependencies, in `gates` only: `syn` 3 and `proc-macro2`, `quote`, `regex`, `toml`,
-  `ra-ap-rustc_lexer` (pinned exactly), with `serde` and `serde_json` from the workspace.
+  `ra-ap-rustc_lexer` (pinned exactly; removed by record
+  [0030](0030-the-comments-gate-reads-between-tokens.md)), with `serde` and `serde_json` from the workspace.
   The gates were first written against `syn` 2; the operator asked for 3 ("let's use latest
   rust (nightly, syn 3)", 2026-11-23). The reader changed in two places: where an impl names its trait, and at an
   arm's guard, which `syn` 3 holds inside the pattern; a test that the guard is no part of the

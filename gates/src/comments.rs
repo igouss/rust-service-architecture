@@ -1,6 +1,7 @@
-use ra_ap_rustc_lexer::{tokenize, FrontmatterAllowed, TokenKind};
+use std::ops::Range;
 
-use crate::tokens::Source;
+use proc_macro2::{LexError, TokenStream, TokenTree};
+
 use crate::workspace::Workspace;
 use crate::{Unread, Verdict};
 
@@ -12,24 +13,104 @@ pub struct Comment {
     pub text: String,
 }
 
-pub fn comments_in(shown: &str, text: &str) -> Result<Vec<Comment>, Unread> {
-    let mut found: Vec<Comment> = Vec::new();
-    let mut at: usize = 0;
-    let mut line: usize = 1;
-    for token in tokenize(text, FrontmatterAllowed::No) {
-        let end: usize = at + token.len as usize;
-        let piece: &str = text.get(at..end).unwrap_or("");
-        if matches!(token.kind, TokenKind::BlockComment { terminated: false, .. }) {
-            return Err(Unread(format!("{shown}:{line}: a block comment does not end; the scan cannot read this file")));
+fn covered(stream: &TokenStream, text: &str, into: &mut Vec<Range<usize>>) {
+    for tree in stream.clone() {
+        let whole: Range<usize> = tree.span().byte_range();
+        let written: &str = text.get(whole.clone()).unwrap_or("");
+        if written.starts_with("//") || written.starts_with("/*") {
+            continue;
         }
-        if matches!(token.kind, TokenKind::LineComment { .. } | TokenKind::BlockComment { .. }) {
-            found.push(Comment { line, text: piece.to_string() });
+        match tree {
+            TokenTree::Group(group) => {
+                into.push(group.span_open().byte_range());
+                covered(&group.stream(), text, into);
+                into.push(group.span_close().byte_range());
+            }
+            TokenTree::Ident(_) | TokenTree::Punct(_) | TokenTree::Literal(_) => into.push(whole),
         }
-        line += piece.matches('\n').count();
-        at = end;
     }
-    Source::of(shown.to_string(), text.to_string())?;
-    Ok(found)
+}
+
+fn block(rest: &str) -> Option<usize> {
+    let mut depth: usize = 0;
+    let mut at: usize = 0;
+    while at < rest.len() {
+        let ahead: &str = rest.get(at..).unwrap_or("");
+        if ahead.starts_with("/*") {
+            depth += 1;
+            at += 2;
+        } else if ahead.starts_with("*/") {
+            depth -= 1;
+            at += 2;
+            if depth == 0 {
+                return Some(at);
+            }
+        } else {
+            at += ahead.chars().next().map_or(1, char::len_utf8);
+        }
+    }
+    None
+}
+
+fn between(shown: &str, text: &str, gap: Range<usize>, found: &mut Vec<(usize, String)>) -> Result<(), Unread> {
+    let mut at: usize = gap.start;
+    while at < gap.end {
+        let rest: &str = text.get(at..gap.end).unwrap_or("");
+        let ends: Option<usize> = if rest.starts_with("//") {
+            Some(rest.find('\n').unwrap_or(rest.len()))
+        } else if rest.starts_with("/*") {
+            block(rest)
+        } else {
+            None
+        };
+        match (ends, rest.chars().next()) {
+            (Some(length), _) => {
+                found.push((at, rest.get(..length).unwrap_or("").to_string()));
+                at += length;
+            }
+            (None, Some(blank)) if blank.is_whitespace() => at += blank.len_utf8(),
+            (None, _) => {
+                let line: usize = 1 + text.get(..at).unwrap_or("").matches('\n').count();
+                return Err(Unread(format!(
+                    "{shown}:{line}: text between tokens that is neither blank nor a comment; the scan cannot read this file"
+                )));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn unlexed(shown: &str, text: &str, error: &LexError) -> Unread {
+    let at: usize = error.span().byte_range().start;
+    if text.get(at..).unwrap_or("").starts_with("/*") {
+        let line: usize = 1 + text.get(..at).unwrap_or("").matches('\n').count();
+        return Unread(format!("{shown}:{line}: a block comment does not end; the scan cannot read this file"));
+    }
+    Unread(format!("{shown}: {error}; the scan cannot read this file"))
+}
+
+/// Every comment in the text, doc comments included: whatever lies between two tokens and is not blank.
+pub fn comments_in(shown: &str, text: &str) -> Result<Vec<Comment>, Unread> {
+    let tokens: TokenStream = text.parse().map_err(|error: LexError| unlexed(shown, text, &error))?;
+    let mut held: Vec<Range<usize>> = Vec::new();
+    covered(&tokens, text, &mut held);
+    held.sort_by_key(|range| (range.start, range.end));
+    let mut found: Vec<(usize, String)> = Vec::new();
+    let mut at: usize = 0;
+    for range in held {
+        if range.start > at {
+            between(shown, text, at..range.start, &mut found)?;
+        }
+        at = at.max(range.end);
+    }
+    between(shown, text, at..text.len(), &mut found)?;
+    Ok(found
+        .into_iter()
+        .map(|(offset, comment)| Comment {
+            line: 1 + text.get(..offset).unwrap_or("").matches('\n').count(),
+            text: comment,
+        })
+        .collect())
 }
 
 fn kept(text: &str, core: bool) -> bool {
