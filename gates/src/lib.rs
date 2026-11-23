@@ -3,6 +3,7 @@
 pub mod allows;
 pub mod comments;
 pub mod declared;
+pub mod docs;
 pub mod events;
 pub mod guarded;
 pub mod lifecycles;

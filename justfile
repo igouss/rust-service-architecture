@@ -87,7 +87,7 @@ guarded base:
 
 [doc("Every Rust block in docs/architecture is code that compiles in this workspace.")]
 docs:
-    bb guide-sync.bb
+    cargo run -q -p gates -- docs
 
 [doc("arch-0id: the requirement ids and their projection are current.")]
 ids:

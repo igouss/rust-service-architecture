@@ -205,8 +205,8 @@ replacement = "pub struct $name(u32);"
 
 [mutant.expect]
 gate = [
-    "bb",
-    "guide-sync.bb",
+    "just",
+    "docs",
 ]
 names = "arch-ajd"
 

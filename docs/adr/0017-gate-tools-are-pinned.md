@@ -70,11 +70,11 @@ Raises (date, tool, old, new):
 ## What it preserved
 
 The same three tools, installed the same way and run by the same recipes. The pinned revisions
-are what an unpinned build would have produced on 2026-11-23. Not covered: babashka is still
-installed by piping the `install` script from its `master` branch to bash with no version
-argument, the actions are pinned by tag, `just` and `cargo-mutants` come from
+are what an unpinned build would have produced on 2026-11-23. Not covered: the actions are pinned by tag, `just` and `cargo-mutants` come from
 `taiki-e/install-action` with no version, and the Postgres service is the `postgres:18` tag.
-Pinning them is a choice of version, not made here.
+Pinning them is a choice of version, not made here. Babashka, which this list named as installed
+by a script piped from its `master` branch, is no longer installed: decision record
+[0022](0022-the-gates-are-a-workspace-crate.md) ported the one gate that needed it.
 
 ## What would reverse it
 

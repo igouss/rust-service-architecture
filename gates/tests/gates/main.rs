@@ -4,6 +4,7 @@ use gates::tokens::Source;
 
 mod allows;
 mod comments;
+mod docs;
 mod events;
 mod guarded;
 mod mutants;

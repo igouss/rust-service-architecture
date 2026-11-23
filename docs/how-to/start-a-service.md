@@ -11,7 +11,7 @@ form you are copying.
 | `ports/src/`, `ports/tests/conformance/` | keep, byte for byte |
 | `adapter-sqlite/`, `adapter-memory/`, `adapter-postgres/` | keep the one store adapter your service uses, byte for byte, with its tests; delete the others together with their workspace member lines and their mutants ([adapters](../architecture/adapters.req.md)). Without `adapter-postgres`, delete the `postgres` recipes and the `postgres` job too |
 | `app/src/lib.rs`, `domain/src/lib.rs` | keep; only their `pub mod` lines change |
-| `clippy.toml`, `rustfmt.toml`, the root `Cargo.toml`, `gates/`, `guide-sync.bb`, `CLAUDE.md`, `.req/`, `requirements.toon`, `LICENSE-*`, `.gitignore` | keep |
+| `clippy.toml`, `rustfmt.toml`, the root `Cargo.toml`, `gates/`, `CLAUDE.md`, `.req/`, `requirements.toon`, `LICENSE-*`, `.gitignore` | keep |
 | `domain/src/task.rs`, `payment.rs`, `fulfilment.rs`; `app/src/tasks.rs`, `payments.rs`, `board.rs` | replace with your lifecycles, policies and queries |
 | `app/tests/use_cases.rs`, `adapter-sqlite/tests/store.rs`, `domain/tests/stored_encoding.rs` | port: keep every assertion's intent, swap the example types for yours |
 | `adapter-http/src/`, `adapter-http/tests/routes/` | keep `blocking`, `Changes`, the frame encoding and the request span (rename its `task` and `payment` fields); replace the routes, the page and the renderers |

@@ -31,7 +31,7 @@ override the defaults.
 
 Needs Rust 1.95 (pinned in `rust-toolchain.toml`), [`just`](https://github.com/casey/just),
 [`hex-lint`](https://github.com/igouss/hex-lint), [`effect-audit`](https://github.com/igouss/effect-audit),
-[`req`](https://github.com/igouss/req), and [babashka](https://babashka.org) for the docs check.
+and [`req`](https://github.com/igouss/req). The other gates are the `gates` crate of this workspace.
 
 ## The layers
 
