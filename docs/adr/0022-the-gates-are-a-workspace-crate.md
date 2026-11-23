@@ -73,8 +73,26 @@ Each line is one commit: the gate, and what was compared.
 
 ## What it preserved
 
-Every recipe's name, exit codes and printed text. The fail-closed counts. The mutants.
-`just check` needs no server and no network once built.
+Every recipe's name. The fail-closed counts. The mutants, their faults and their expected text.
+`just check` needs no server and no network once built. Exit codes and printed lines are the
+same wherever the old and the new were compared, which is the tree, the mutants and the
+probes listed above, and no further: a form nobody probed may read differently.
+
+A last pass ran the scripts from a worktree of the commit before this work against the
+finished crate, on forms the per-gate probes had left out. It found two differences.
+
+- A stored type with generics or a `where` clause (`enum TaskEvent<T> {`) was "declared 0
+  times", exit 2, to the scripts, whose pattern wanted `{`, `(` or `;` straight after the name;
+  the port read it and passed. That was a gate reading a form it had refused, so the port was
+  changed to refuse it again, with two tests; `stored`, `events` and `views` now agree with
+  the scripts on five such probes.
+- An identifier written `r#match` made `wildcards` exit 2 in the script, which counted the
+  word as a match; the port reads the identifier and judges the arms. Left as the parser reads
+  it.
+
+The same pass agreed on a variant with an attribute, a variant with a discriminant, an enum
+declared inside a function or a macro, quotes and slashes inside character literals, a
+lifetime named for a keyword, and `if let` and closure patterns.
 
 ## What it gives up
 
@@ -88,8 +106,8 @@ Every recipe's name, exit codes and printed text. The fail-closed counts. The mu
   `ra-ap-rustc_lexer` (pinned exactly), with `serde` and `serde_json` from the workspace;
   twenty-seven crates in all. `syn` 3 exists and `serde_derive` already builds it; the
   gates were written against 2, which is an assumption to revisit, not a decision.
-- Two readings changed, both named under `wildcards` above: one is stricter, one turns a
-  named finding into exit 2.
+- Three readings changed, all in `wildcards`: a wildcard behind `&mut` is now named, a match
+  inside `vec![…; n]` is exit 2 where it was named, and `r#match` is read as an identifier.
 - Not built: a check that no script comes back. `guarded` still counts a `.py` or `.bb`
   file at the top of the repository as a gate, so one that returns needs a record; nothing
   fails on the file alone.

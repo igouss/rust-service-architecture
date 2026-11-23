@@ -121,3 +121,24 @@ fn a_sample_is_pinned_by_a_path_that_opens_with_it() {
         samples(&["Task::Absent", "Tall"])
     );
 }
+#[test]
+fn a_stored_type_with_generics_is_unread() {
+    assert_eq!(
+        wanted(&member(&LIFECYCLE.replace("pub enum TaskEvent {", "pub enum TaskEvent<T = ()> {"))),
+        Err(Unread(String::from(
+            "TaskEvent is declared 0 times as an enum or a struct in the crate's src; the scan needs exactly one"
+        )))
+    );
+}
+
+#[test]
+fn a_generic_type_held_by_a_stored_one_is_unread() {
+    assert_eq!(
+        wanted(&member(
+            &format!("{LIFECYCLE}\npub struct Wrapped<T>(T);").replace("Added { kind: Kind }", "Added { kind: Wrapped<Kind> }")
+        )),
+        Err(Unread(String::from(
+            "Wrapped is declared 0 times as an enum or a struct in the crate's src; the scan needs exactly one"
+        )))
+    );
+}

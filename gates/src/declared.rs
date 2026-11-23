@@ -1,5 +1,5 @@
 use syn::visit::{self, Visit};
-use syn::{Ident, ImplItem, ItemEnum, ItemImpl, ItemStruct, Type};
+use syn::{Generics, Ident, ImplItem, ItemEnum, ItemImpl, ItemStruct, Type};
 
 use crate::tokens::Source;
 use crate::workspace::{Package, Workspace};
@@ -18,19 +18,26 @@ pub enum Head<'a> {
 
 struct Heads<'ast, 'name> {
     name: &'name str,
+    plain_only: bool,
     found: Vec<Head<'ast>>,
+}
+
+impl Heads<'_, '_> {
+    fn reads(&self, ident: &Ident, generics: &Generics) -> bool {
+        *ident == self.name && !(self.plain_only && (!generics.params.is_empty() || generics.where_clause.is_some()))
+    }
 }
 
 impl<'ast> Visit<'ast> for Heads<'ast, '_> {
     fn visit_item_enum(&mut self, node: &'ast ItemEnum) {
-        if node.ident == self.name {
+        if self.reads(&node.ident, &node.generics) {
             self.found.push(Head::Enum(node));
         }
         visit::visit_item_enum(self, node);
     }
 
     fn visit_item_struct(&mut self, node: &'ast ItemStruct) {
-        if node.ident == self.name {
+        if self.reads(&node.ident, &node.generics) {
             self.found.push(Head::Struct(node));
         }
         visit::visit_item_struct(self, node);
@@ -78,18 +85,23 @@ impl Member {
         Ok(Member { name: name.to_string(), files })
     }
 
-    fn heads(&self, name: &str) -> Vec<Head<'_>> {
-        let mut heads: Heads = Heads { name, found: Vec::new() };
+    fn heads(&self, name: &str, plain_only: bool) -> Vec<Head<'_>> {
+        let mut heads: Heads = Heads {
+            name,
+            plain_only,
+            found: Vec::new(),
+        };
         self.files.iter().for_each(|file| heads.visit_file(&file.1));
         heads.found
     }
 
     pub fn declares(&self, name: &str) -> bool {
-        !self.heads(name).is_empty()
+        !self.heads(name, false).is_empty()
     }
 
+    /// The one declaration of a type with no generics; a generic one is not read, so its user ends unread.
     pub fn declared(&self, name: &str) -> Result<Head<'_>, Unread> {
-        let mut heads: Vec<Head> = self.heads(name);
+        let mut heads: Vec<Head> = self.heads(name, true);
         match (heads.pop(), heads.len()) {
             (Some(head), 0) => Ok(head),
             (Some(_), more) => Err(Unread(format!(

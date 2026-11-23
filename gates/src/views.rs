@@ -5,9 +5,9 @@ use quote::ToTokens;
 use syn::spanned::Spanned;
 use syn::{Expr, ExprMatch, ImplItem, ImplItemFn, ItemImpl, Pat, ReturnType, Stmt};
 
-use crate::declared::plain;
+use crate::declared::{plain, Member};
 use crate::lifecycles::{Found, Lifecycles};
-use crate::tokens::{fat_arrows, opening, paths, squeezed};
+use crate::tokens::{fat_arrows, opening, paths, squeezed, Source};
 use crate::workspace::{Dependency, Workspace};
 use crate::{Unread, Verdict};
 
@@ -100,7 +100,7 @@ fn given(halves: &[&Pat]) -> Option<String> {
 pub fn edges(lifecycles: &Lifecycles, found: &Found) -> Result<Vec<(String, String, String)>, Unread> {
     let (state, event): (&str, &str) = (&found.state, &found.event);
     let unread = || Unread(format!("{state}: `evolve` is not one `match (self, event)`"));
-    let source = lifecycles.source(found).ok_or_else(unread)?;
+    let source: &Source = lifecycles.source(found).ok_or_else(unread)?;
     let function: &ImplItemFn = function(&found.item, "evolve").ok_or_else(unread)?;
     let matched: &ExprMatch = evolve(function).ok_or_else(unread)?;
     let mut drawn: Vec<(String, String, String)> = Vec::new();
@@ -137,7 +137,7 @@ pub fn edges(lifecycles: &Lifecycles, found: &Found) -> Result<Vec<(String, Stri
             }
         }
     }
-    let member = lifecycles.member(found)?;
+    let member: &Member = lifecycles.member(found)?;
     let (states, events): (Vec<String>, Vec<String>) = (member.variants(state)?, member.variants(event)?);
     let every: BTreeSet<(String, String)> = states.iter().flat_map(|from| events.iter().map(move |by| (from.clone(), by.clone()))).collect();
     if pairs != every || matched.arms.len() != fat_arrows(&function.block.to_token_stream()) {
@@ -216,13 +216,12 @@ pub fn views(asked: &[String]) -> Result<Verdict, Unread> {
         ))
     })?;
     if asked.iter().map(String::as_str).eq(["--check"]) {
-        let stale = wanted
+        let stale: Vec<String> = wanted
             .iter()
-            .filter(|view| std::fs::read_to_string(folder.join(view.0)).ok().as_ref() != Some(&view.1));
-        return Ok(Verdict {
-            found: stale.map(|view| format!("docs/views/{} is stale: run `just views`", view.0)).collect(),
-            fix: Vec::new(),
-        });
+            .filter(|view| std::fs::read_to_string(folder.join(view.0)).ok().as_ref() != Some(&view.1))
+            .map(|view| format!("docs/views/{} is stale: run `just views`", view.0))
+            .collect();
+        return Ok(Verdict { found: stale, fix: Vec::new() });
     }
     std::fs::create_dir_all(&folder).map_err(|error| Unread(format!("{}: {error}", folder.display())))?;
     for (name, text) in &wanted {
