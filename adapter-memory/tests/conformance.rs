@@ -5,7 +5,11 @@ use adapter_memory::{Kept, Memory};
 type Subject = Memory;
 
 fn subject() -> Subject {
-    Memory::new(Kept { facts: 1000, refusals: 100 })
+    Memory::new(Kept {
+        facts: 1000,
+        refusals: 100,
+        parked: 100,
+    })
 }
 
 include!("../../ports/tests/conformance/suite.rs");

@@ -48,7 +48,8 @@ struct Tables {
     appended: u64,
     rejections: VecDeque<Rejection>,
     outbox: BTreeMap<u64, Request>,
-    parked: Vec<Parked>,
+    parked: VecDeque<Parked>,
+    forgotten: u64,
     issued: u64,
     rows: BTreeMap<Row, String>,
     positions: BTreeMap<&'static str, Position>,
@@ -58,6 +59,7 @@ struct Tables {
 pub struct Kept {
     pub facts: usize,
     pub refusals: usize,
+    pub parked: usize,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -67,6 +69,7 @@ pub struct Held {
     pub refusals: usize,
     pub requests: usize,
     pub parked: usize,
+    pub forgotten: u64,
     pub rows: usize,
 }
 
@@ -134,12 +137,13 @@ impl Memory {
             refusals: tables.rejections.len(),
             requests: tables.outbox.len(),
             parked: tables.parked.len(),
+            forgotten: tables.forgotten,
             rows: tables.rows.len(),
         }
     }
 
     pub fn parked(&self) -> Vec<Parked> {
-        self.reading().parked.clone()
+        self.reading().parked.iter().cloned().collect()
     }
 
     pub fn on_commit(self, listener: impl Fn(Position) + Send + Sync + 'static) -> Memory {
@@ -377,9 +381,10 @@ impl Writer for MemoryWriter<'_> {
     }
 }
 
-fn trim<T>(queue: &mut VecDeque<T>, kept: usize) {
+fn trim<T>(queue: &mut VecDeque<T>, kept: usize) -> u64 {
     let excess: usize = queue.len().saturating_sub(kept);
     queue.drain(..excess);
+    count(excess)
 }
 
 fn commit(tables: &mut Tables, pending: Pending, kept: Kept) {
@@ -394,7 +399,7 @@ fn commit(tables: &mut Tables, pending: Pending, kept: Kept) {
     for (id, cause) in pending.closed {
         let closed: Option<Request> = tables.outbox.remove(&id);
         if let (Some(request), Some(cause)) = (closed, cause) {
-            tables.parked.push(Parked {
+            tables.parked.push_back(Parked {
                 id: RequestId::ZERO.after(id),
                 lifecycle: request.lifecycle,
                 stream: request.stream,
@@ -415,8 +420,9 @@ fn commit(tables: &mut Tables, pending: Pending, kept: Kept) {
             None => tables.rows.remove(&row),
         };
     }
-    trim(&mut tables.facts, kept.facts);
-    trim(&mut tables.rejections, kept.refusals);
+    let _trimmed: u64 = trim(&mut tables.facts, kept.facts);
+    let _dropped: u64 = trim(&mut tables.rejections, kept.refusals);
+    tables.forgotten += trim(&mut tables.parked, kept.parked);
 }
 
 impl Store for Memory {

@@ -374,3 +374,10 @@ server = [
     "server",
 ]
 needs = "STORE_POSTGRES_URL"
+
+[[mutant]]
+name = "T101 the memory store keeps every parked request"
+path = "adapter-memory/src/lib.rs"
+anchor = 'trim(&mut tables.parked, kept.parked);'
+replacement = 'trim(&mut tables.parked, usize::MAX);'
+expect = "test"

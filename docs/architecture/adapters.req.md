@@ -100,7 +100,7 @@ the same gates.
 | state rows, read-model rows | all | all |
 | facts | all | the last `Kept::facts` |
 | recorded refusals | all | the last `Kept::refusals` |
-| requests | all, marked done; a parked one also in `parked`, with its cause | until done, then none; every parked one, in `Memory::parked` |
+| requests | all, marked done; a parked one also in `parked`, with its cause | until done, then none; the last `Kept::parked` parked ones, in `Memory::parked` |
 
 On disk, history is what a read model is rebuilt from and what explains a state, so it is
 kept whole and archiving it is an operation, not a code path. In memory a rebuild serves
@@ -118,8 +118,11 @@ limiter's window, a cache entry), is not a lifecycle (`arch-f5d`): it lives insi
 adapter that owns it, with that adapter's own expiry, and no decision reads it without it
 first entering as a command (`arch-jbno`).
 
-A parked request is not trimmed by any store, in memory either: it is a request nobody will
-perform, kept until someone has looked at it.
+A parked request is a request nobody will perform, kept until someone has looked at it. On
+disk it is never trimmed. In memory nobody can be counted on to look before the process has
+run for weeks, so the store keeps the last `Kept::parked` and counts the ones it dropped in
+`Held::forgotten`: a number above zero says requests were parked and are no longer there to
+read.
 
 Recorded refusals on disk grow with refused requests. Limiting how many a client may send is
 the driving adapter's bound (`arch-kpb`), not the store's.
@@ -130,6 +133,7 @@ the driving adapter's bound (`arch-kpb`), not the store's.
 - `arch-7h52.2` A read that reaches into trimmed facts is refused: `a_read_of_facts_that_were_trimmed_is_refused` (mutant T48).
 - `arch-7h52.3` The memory store drops the oldest refusals beyond the kept number: `refusals_beyond_the_kept_number_drop_the_oldest` (mutant T49).
 - `arch-7h52.4` A request marked done is no longer held and is not claimed again: `a_done_request_is_no_longer_held` (mutant T32).
+- `arch-7h52.6` The memory store drops the oldest parked requests beyond the kept number and counts them: `with_as_many_parked_requests_as_are_kept_none_is_dropped`, `parked_requests_beyond_the_kept_number_drop_the_oldest_and_are_counted` (mutant T101).
 - `arch-7h52.5` Review checks that state with unbounded keys that may be forgotten is not modelled as a lifecycle (T4, gap ledger).
 
 ## `arch-m7du` The Postgres adapter shall run one unit of work at a time for its schema, and a read shall see one snapshot

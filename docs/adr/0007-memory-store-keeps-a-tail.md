@@ -33,3 +33,16 @@ The suite: all 38 cases pass unchanged, because none reads further back than the
 A service on the memory store whose lifecycles do end in large numbers and are counted by the
 business while they live. Then ending a lifecycle becomes a thing every store does, with the
 version question answered for all of them at once.
+
+## Amended 2026-11-23: parked requests are a tail too
+
+"Okay, don't go easy on those problems. Let's fix them all." (operator, 2026-11-23), in answer
+to a review whose seventh item was this. Record [0010](0010-outbox-failures-end.md) gave the
+memory store a list of parked requests and no bound on it, which is the growth this record
+removed for facts, refusals and done requests: a receiver that rejects everything grows the
+list for the life of the process. `Kept` gains `parked`; the store keeps the last that many
+and counts what it dropped in `Held::forgotten`, so a trimmed list is not read as a short
+one. Seen red: the two tests did not compile (E0560, E0609), there being no bound to set.
+Changed because the type did: both `Memory::new` calls in the tests name the new field.
+Mutant T101. Flagged (`cm-vph`): what is dropped is gone, where on disk a parked request is
+kept for good; a service that must not lose one uses a store on disk.

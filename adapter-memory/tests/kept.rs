@@ -10,7 +10,7 @@ fn id<S>(text: &str) -> StreamId<S> {
 }
 
 fn store(facts: usize, refusals: usize) -> Memory {
-    Memory::new(Kept { facts, refusals })
+    Memory::new(Kept { facts, refusals, parked: 2 })
 }
 
 fn add(store: &Memory, task: &str) {
@@ -166,4 +166,35 @@ fn a_stranded_request_is_held_as_parked_with_its_cause() {
             .collect::<Vec<(RequestId, String)>>(),
         vec![(RequestId::from(1), "cannot be told".to_string())]
     );
+}
+
+fn park(store: &Memory, stream: &str, number: u32) {
+    request(store, stream);
+    assert_eq!(
+        store.write(|unit| unit.strand::<Fulfilment>(RequestId::from(number), "cannot be told")),
+        Ok(true)
+    );
+}
+
+fn parked_ids(store: &Memory) -> Vec<RequestId> {
+    store.parked().into_iter().map(|parked: Parked| parked.id).collect()
+}
+
+#[test]
+fn with_as_many_parked_requests_as_are_kept_none_is_dropped() {
+    let store: Memory = store(2, 2);
+    park(&store, "p-1", 1);
+    park(&store, "p-2", 2);
+    assert_eq!(parked_ids(&store), vec![RequestId::from(1), RequestId::from(2)]);
+    assert_eq!((store.held().parked, store.held().forgotten), (2, 0));
+}
+
+#[test]
+fn parked_requests_beyond_the_kept_number_drop_the_oldest_and_are_counted() {
+    let store: Memory = store(2, 2);
+    park(&store, "p-1", 1);
+    park(&store, "p-2", 2);
+    park(&store, "p-3", 3);
+    assert_eq!(parked_ids(&store), vec![RequestId::from(2), RequestId::from(3)]);
+    assert_eq!((store.held().parked, store.held().forgotten), (2, 1));
 }
