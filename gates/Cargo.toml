@@ -16,6 +16,7 @@ regex = "1"
 serde = { workspace = true }
 serde_json = { workspace = true }
 syn = { version = "2", features = ["full", "visit"] }
+toml = "1"
 
 [lints]
 workspace = true

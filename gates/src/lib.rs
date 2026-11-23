@@ -4,6 +4,7 @@ pub mod allows;
 pub mod comments;
 pub mod declared;
 pub mod events;
+pub mod guarded;
 pub mod lifecycles;
 pub mod names;
 pub mod pins;

@@ -5,6 +5,7 @@ use gates::tokens::Source;
 mod allows;
 mod comments;
 mod events;
+mod guarded;
 mod names;
 mod pins;
 mod raw_store;

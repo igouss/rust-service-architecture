@@ -91,7 +91,7 @@ so `just mutants` reports `ANCHOR FOUND n TIMES` when an edit moved or duplicate
 ### Acceptance
 
 - `arch-tsu.1` The `hex-lint` run fails on a stale exception (T2).
-- `arch-tsu.2` The `guarded` recipe fails a pull request whose range changes `justfile`, a gate script, `planted/`, `clippy.toml`, `rustfmt.toml`, a workflow, or a manifest's lints or `hex-arch` table, and adds or amends no file under `docs/adr/` (T3, CI). Review checks that the record justifies the change and that no test is weakened (T4).
+- `arch-tsu.2` The `guarded` recipe fails a pull request whose range changes `justfile`, a file of the `gates` crate, a script at the top of the repository, `planted/`, `clippy.toml`, `rustfmt.toml`, a workflow, or a manifest's lints or `hex-arch` table, and adds or amends no file under `docs/adr/` (T3, CI). Review checks that the record justifies the change and that no test is weakened (T4).
 
 ## `arch-ukt` Noisy measurements shall be ratchets, never hard gates
 

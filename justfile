@@ -83,7 +83,7 @@ pins:
 
 [doc("arch-tsu: a range that changes a gate also adds or amends a decision record under docs/adr/. Needs git, so not in `check`: `just guarded origin/main`.")]
 guarded base:
-    @python3 guarded.py {{base}}
+    @cargo run -q -p gates -- guarded {{base}}
 
 [doc("Every Rust block in docs/architecture is code that compiles in this workspace.")]
 docs:
