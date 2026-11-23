@@ -104,3 +104,11 @@ fn an_arrow_the_parser_did_not_read_as_an_arm_is_unread() {
         Err(Unread(String::from("fixture.rs: 3 `=>` and 2 match arms read")))
     );
 }
+
+#[test]
+fn a_guard_on_an_arm_of_alternatives_hides_none_of_them() {
+    assert_eq!(
+        loose("fn f(x: (bool, u8)) -> u8 { match x { (true, 0) | (false, n) if x.1 > 1 => 1, (true | false, 0..=255) => 2 } }"),
+        vec![String::from("(false, n)")]
+    );
+}

@@ -15,7 +15,7 @@ ra-ap-rustc_lexer = "=0.186.0"
 regex = "1"
 serde = { workspace = true }
 serde_json = { workspace = true }
-syn = { version = "2", features = ["full", "visit"] }
+syn = { version = "3", features = ["full", "visit"] }
 toml = "1"
 
 [lints]

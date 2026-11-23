@@ -8,6 +8,7 @@ use syn::{Expr, ExprMatch, ImplItem, ImplItemFn, ItemImpl, Pat, ReturnType, Stmt
 use crate::declared::{plain, Member};
 use crate::lifecycles::{Found, Lifecycles};
 use crate::tokens::{fat_arrows, opening, paths, squeezed, Source};
+use crate::wildcards::unguarded;
 use crate::workspace::{Dependency, Workspace};
 use crate::{Unread, Verdict};
 
@@ -108,10 +109,10 @@ pub fn edges(lifecycles: &Lifecycles, found: &Found) -> Result<Vec<(String, Stri
     for arm in &matched.arms {
         let then: &str = source.slice(arm.body.span()).trim();
         let target: Option<String> = opening(&arm.body.to_token_stream(), state);
-        let alternatives: Vec<&Pat> = if let Pat::Or(either) = &arm.pat {
-            either.cases.iter().collect()
+        let alternatives: Vec<&Pat> = if let Pat::Or(either) = unguarded(&arm.pat) {
+            either.cases.iter().map(unguarded).collect()
         } else {
-            vec![&arm.pat]
+            vec![unguarded(&arm.pat)]
         };
         for alternative in alternatives {
             let halves: Vec<&Pat> = halves(alternative);

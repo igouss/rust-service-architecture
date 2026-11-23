@@ -145,10 +145,10 @@ impl<'ast> Visit<'ast> for Impls<'ast, '_> {
         let kind: Option<String> = node
             .trait_
             .as_ref()
-            .and_then(|named| named.1.get_ident())
+            .and_then(|named| named.0.get_ident())
             .map(ToString::to_string)
             .filter(|kind| self.kinds.contains(&kind.as_str()));
-        if let (Some(kind), Some(holder), true) = (kind, plain(&node.self_ty), node.generics.params.is_empty()) {
+        if let (Some(kind), Some(holder), true) = (kind, plain(&node.self_ty), node.generics.params.is_empty() && node.modifiers.polarity.is_none()) {
             self.found.push(Impl { kind, holder, item: node });
         }
         visit::visit_item_impl(self, node);

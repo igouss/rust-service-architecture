@@ -142,3 +142,13 @@ fn a_generic_type_held_by_a_stored_one_is_unread() {
         )))
     );
 }
+
+#[test]
+fn a_negative_impl_is_unread() {
+    assert_eq!(
+        wanted(&member("pub struct Task;\nimpl !Lifecycle for Task {}")),
+        Err(Unread(String::from(
+            "fixture: an impl of Lifecycle, Reaction, Projection the scan could not read"
+        )))
+    );
+}

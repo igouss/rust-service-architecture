@@ -102,10 +102,15 @@ lifetime named for a keyword, and `if let` and closure patterns.
   fresh. Building the crate into an empty target directory took 6.7 s there with the compilation
   cache off (2.2 s with it), every dependency already downloaded; continuous integration was
   not timed.
-- Dependencies, in `gates` only: `syn` 2 and `proc-macro2`, `quote`, `regex`, `toml`,
-  `ra-ap-rustc_lexer` (pinned exactly), with `serde` and `serde_json` from the workspace;
-  twenty-seven crates in all. `syn` 3 exists and `serde_derive` already builds it; the
-  gates were written against 2, which is an assumption to revisit, not a decision.
+- Dependencies, in `gates` only: `syn` 3 and `proc-macro2`, `quote`, `regex`, `toml`,
+  `ra-ap-rustc_lexer` (pinned exactly), with `serde` and `serde_json` from the workspace.
+  The gates were first written against `syn` 2; the operator asked for 3 ("let's use latest
+  rust (nightly, syn 3)", 2026-11-23). The reader changed in two places: where an impl names its trait, and at an
+  arm's guard, which `syn` 3 holds inside the pattern; a test that the guard is no part of the
+  pattern went red and caught the second. `syn` 2 left the lock file. The build on 2 and the
+  build on 3 were then run side by side, every gate on the tree and on 49 planted forms: the
+  same lines and exit codes but for the negative impl below, exit 2 from both. `syn` 3 moves `impl !Trait` out of that field, so
+  the reader now says outright that a negative impl is not read, with a test.
 - Three readings changed, all in `wildcards`: a wildcard behind `&mut` is now named, a match
   inside `vec![…; n]` is exit 2 where it was named, and `r#match` is read as an identifier.
 - Not built: a check that no script comes back. `guarded` still counts a `.py` or `.bb`

@@ -23,7 +23,18 @@ fn bare(pattern: &Pat) -> bool {
     named.subpat.is_none() && named.ident.to_string().starts_with(|first: char| first.is_ascii_lowercase() || first == '_')
 }
 
+/// The pattern without the `if` that guards it.
+pub fn unguarded(pattern: &Pat) -> &Pat {
+    if let Pat::Guard(guarded) = pattern {
+        return unguarded(&guarded.pat);
+    }
+    pattern
+}
+
 fn loose(pattern: &Pat, element: bool) -> bool {
+    if let Pat::Guard(guarded) = pattern {
+        return loose(&guarded.pat, element);
+    }
     if let Pat::Or(either) = pattern {
         return either.cases.iter().any(|case| loose(case, element));
     }
@@ -43,10 +54,10 @@ fn loose(pattern: &Pat, element: bool) -> bool {
 }
 
 fn alternatives(pattern: &Pat) -> Vec<&Pat> {
-    if let Pat::Or(either) = pattern {
-        return either.cases.iter().collect();
+    if let Pat::Or(either) = unguarded(pattern) {
+        return either.cases.iter().map(unguarded).collect();
     }
-    vec![pattern]
+    vec![unguarded(pattern)]
 }
 
 impl<'ast> Visit<'ast> for Arms {

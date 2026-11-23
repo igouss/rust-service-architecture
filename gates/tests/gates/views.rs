@@ -124,3 +124,11 @@ fn an_initial_that_does_not_open_with_a_state_is_unread() {
         Err(String::from("Task: `initial` does not return a variant of Task"))
     );
 }
+
+#[test]
+fn a_guard_on_an_arm_does_not_change_what_is_drawn() {
+    assert_eq!(
+        drawn(&TASK.replace("TaskEvent::Completed) => Task::Done,", "TaskEvent::Completed) if true => Task::Done,")),
+        drawn(TASK)
+    );
+}
