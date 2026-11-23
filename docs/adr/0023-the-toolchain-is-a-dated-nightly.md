@@ -2,6 +2,8 @@
 
 Date: 2026-11-23
 
+Status: reversed by [0031](0031-the-toolchain-is-the-newest-stable.md)
+
 ## Operator decision
 
 "let's use latest rust (nightly, syn 3)" (operator, 2026-11-23). It approves moving
