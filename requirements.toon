@@ -1,5 +1,5 @@
 format: 1
-requirements[69]{id,verification}:
+requirements[70]{id,verification}:
   arch-06ys,test
   arch-0bd,test
   arch-0bz,test
@@ -7,6 +7,7 @@ requirements[69]{id,verification}:
   arch-0ev,test
   arch-0id,test
   arch-0yc,test
+  arch-1bmf,test
   arch-1q6,test
   arch-22kr,test
   arch-30c,test
@@ -69,7 +70,7 @@ requirements[69]{id,verification}:
   arch-yod,exempt
   arch-yr1,test
   arch-zhm,test
-criteria[120]{id,requirement}:
+criteria[121]{id,requirement}:
   arch-06ys.1,arch-06ys
   arch-06ys.2,arch-06ys
   arch-0bd.1,arch-0bd
@@ -82,6 +83,7 @@ criteria[120]{id,requirement}:
   arch-0yc.1,arch-0yc
   arch-0yc.2,arch-0yc
   arch-0yc.3,arch-0yc
+  arch-1bmf.1,arch-1bmf
   arch-1q6.1,arch-1q6
   arch-22kr.1,arch-22kr
   arch-22kr.2,arch-22kr

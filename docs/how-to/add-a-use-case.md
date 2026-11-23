@@ -33,7 +33,7 @@ exhaustive `match` on it, in `app` (the policy) and in the driving adapter (the 
 and status). Fix those in the same commit, so the commit builds.
 
 A new lifecycle is the same in a new file: state `enum`, event `enum`, refusal `enum` (or
-`Never`), `impl Lifecycle` with a `NAME` no other lifecycle uses, then `pub mod` it in
+`Never`), `impl Lifecycle` with a `NAME` no other lifecycle uses (`just check` names a duplicate), then `pub mod` it in
 `domain/src/lib.rs`.
 
 Time, ids and random values are fields of the command; the adapter supplies them

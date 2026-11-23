@@ -1,7 +1,7 @@
 default: check
 
 [doc("Everything that must be green before a commit. Seconds, not minutes.")]
-check: fmt clippy test roles raw-store purity events comments allows wildcards traits stored docs ids views-current
+check: fmt clippy names test roles raw-store purity events comments allows wildcards traits stored docs ids views-current
 
 [doc("Serve the tasks and the payments. TASKS_DATABASE, TASKS_LISTEN, TASKS_DURABILITY (full|normal) and TASKS_RELAY_ATTEMPTS override the defaults.")]
 run:
@@ -52,6 +52,10 @@ purity:
 [doc("An event names what happened: no lifecycle's event is called Updated, Changed or their kin.")]
 events:
     python3 events.py
+
+[doc("arch-1bmf: no two lifecycles and no two projections share a NAME; they would share rows. Runs before the tests.")]
+names:
+    @python3 names.py
 
 [doc("arch-0d2: no comments; names and types carry the meaning. Doc comments, and fc-allow in the core, only.")]
 comments:

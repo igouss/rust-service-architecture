@@ -11,7 +11,7 @@ form you are copying.
 | `ports/src/`, `ports/tests/conformance/` | keep, byte for byte |
 | `adapter-sqlite/`, `adapter-memory/`, `adapter-postgres/` | keep the one store adapter your service uses, byte for byte, with its tests; delete the others together with their workspace member lines and their mutants ([adapters](../architecture/adapters.req.md)). Without `adapter-postgres`, delete the `postgres` recipes and the `postgres` job too |
 | `app/src/lib.rs`, `domain/src/lib.rs` | keep; only their `pub mod` lines change |
-| `clippy.toml`, `rustfmt.toml`, the root `Cargo.toml`, `workspace.py`, `lint.py`, `guarded.py`, `views.py`, `guide-sync.bb`, `CLAUDE.md`, `.req/`, `requirements.toon`, `LICENSE-*`, `.gitignore` | keep |
+| `clippy.toml`, `rustfmt.toml`, the root `Cargo.toml`, `workspace.py`, `lint.py`, `names.py`, `guarded.py`, `views.py`, `guide-sync.bb`, `CLAUDE.md`, `.req/`, `requirements.toon`, `LICENSE-*`, `.gitignore` | keep |
 | `domain/src/task.rs`, `payment.rs`, `fulfilment.rs`; `app/src/tasks.rs`, `payments.rs`, `board.rs` | replace with your lifecycles, policies and queries |
 | `app/tests/use_cases.rs`, `adapter-sqlite/tests/store.rs`, `domain/tests/stored_encoding.rs` | port: keep every assertion's intent, swap the example types for yours |
 | `adapter-http/src/`, `adapter-http/tests/routes/` | keep `blocking`, `Changes`, the frame encoding and the request span (rename its `task` and `payment` fields); replace the routes, the page and the renderers |
@@ -61,7 +61,7 @@ A follow-up task, started from the mutation job's report, not part of starting t
   (C9), a fact built outside `ports` (C10), a policy skipping its projection or its process
   manager (T10, T11), a stored type
   changing its encoding or gaining an unpinned variant (T20, G24, G25), a refined type accepting what it must refuse or losing what it stored (T22 to T24, T80, C15, C16), a
-  wildcard arm or tuple element (G6, G19), a trait declared by a feature (G20), an event named for a change and a lifecycle the scans cannot read (G12, G13, G21 to G23), and the driving adapter's faults (H1 to H9). Changing a mutant's anchor
+  wildcard arm or tuple element (G6, G19), a trait declared by a feature (G20), an event named for a change and a lifecycle the scans cannot read (G12, G13, G21 to G23), a name used twice (G28 to G30), and the driving adapter's faults (H1 to H9). Changing a mutant's anchor
   and replacement to plant the same fault in new code is a legitimate edit
   ([`arch-tsu`](../architecture/enforcement.req.md)); dropping the fault is not. If your
   service has nothing the fault applies to (no process manager, so no T11), remove that mutant

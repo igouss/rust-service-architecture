@@ -93,12 +93,26 @@ pub trait Projection {
 - A `Reaction` is one step of a process manager: it returns facts and requests, and cannot refuse. Its lifecycle's `Refusal` is `Never`.
 - `Undelivered<R>` is a request that will not be performed. A process manager's reaction is built from it (`From<Undelivered<Request>>`), as it is from its gateway's reply, so every request it issues has a way to end ([`arch-w0v`](shell.req.md)).
 - Something that already happened outside (a webhook, a clock tick) is a `Command` on the lifecycle that records it; when nothing can refuse it, that lifecycle's `Refusal` is `Never`.
-- `Lifecycle::NAME` and `Projection::NAME` name the stored rows. A projection's name carries its version.
+- `Lifecycle::NAME` and `Projection::NAME` name the stored rows. A projection's name carries its version. No two lifecycles share a name, and no two projections ([`arch-1bmf`](core.req.md)).
 - A test calls `decide` or `react` directly and compares the result; it needs no store and no runtime.
 
 ### Acceptance
 
 - `arch-5mh.1` A command that returns anything but its lifecycle's facts is a compile error (E0308; mutant C9).
+
+## `arch-1bmf` No two lifecycles and no two projections shall share a name
+
+State rows, facts, refusals and requests are stored under `Lifecycle::NAME`, read-model rows
+under `Projection::NAME`. Two types with one name read and overwrite each other's rows, and a
+stream of one loads as corrupt in the other. The usual cause is a copied file whose `NAME` was
+not changed. A lifecycle and a projection may share a name: they are stored in different
+tables.
+
+A `NAME` is written as one string literal in the `impl`, so the check can read it.
+
+### Acceptance
+
+- `arch-1bmf.1` The `names` recipe fails when two lifecycles or two projections in the workspace's `src` have the same `NAME`, and when it cannot read one; it runs before the tests (T3, `just check`; mutants G28 to G30). The compile rung was not reached; decision record 0013 says what was tried.
 
 ## `arch-783` Every refusal shall be a recorded domain value
 
