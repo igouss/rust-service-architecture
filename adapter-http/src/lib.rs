@@ -5,7 +5,7 @@ use app::board::Board;
 use app::tasks::TaskBoard;
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Path, State};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, StatusCode};
 use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
@@ -24,6 +24,8 @@ use uuid::Uuid;
 mod payments;
 
 pub const BODY_LIMIT: usize = 4096;
+
+pub const IDEMPOTENCY_KEY: &str = "idempotency-key";
 
 const PATCH_ELEMENTS: &str = "datastar-patch-elements";
 
@@ -145,6 +147,7 @@ enum BadInput {
     BlankTitle,
     TitleTooLong,
     MalformedId,
+    MalformedKey,
     BadAmount,
 }
 
@@ -154,6 +157,7 @@ fn rejected(span: &Span, bad: BadInput) -> Response {
         BadInput::BlankTitle => "BlankTitle",
         BadInput::TitleTooLong => "TitleTooLong",
         BadInput::MalformedId => "MalformedId",
+        BadInput::MalformedKey => "MalformedKey",
         BadInput::BadAmount => "BadAmount",
     };
     span.record("outcome", "rejected");
@@ -214,18 +218,32 @@ fn stream_id<S>(text: &str) -> Result<StreamId<S>, BadInput> {
         .map_err(|_malformed: uuid::Error| BadInput::MalformedId)
 }
 
+/// When a creating request carries no idempotency key, `created` shall mint a new stream id.
+/// When it carries a key that is a UUID, `created` shall return that key as the stream id.
+/// If it carries a key that is not a UUID, then `created` shall refuse with `MalformedKey`.
+fn created<S>(headers: &HeaderMap) -> Result<StreamId<S>, BadInput> {
+    match headers.get(IDEMPOTENCY_KEY) {
+        None => Ok(StreamId::new(Uuid::now_v7().to_string())),
+        Some(key) => key
+            .to_str()
+            .ok()
+            .and_then(|text: &str| Uuid::parse_str(text).ok())
+            .map(|key: Uuid| StreamId::new(key.to_string()))
+            .ok_or(BadInput::MalformedKey),
+    }
+}
+
 async fn page() -> Html<&'static str> {
     request("GET /").record("outcome", "served");
     Html(PAGE)
 }
 
-async fn add_task<J: Journal + Send + Sync + 'static>(State(service): State<Service<J>>, body: Bytes) -> Response {
+async fn add_task<J: Journal + Send + Sync + 'static>(State(service): State<Service<J>>, headers: HeaderMap, body: Bytes) -> Response {
     let span: Span = request("POST /tasks");
     span.record("command", "AddTask");
-    match new_task(&body) {
+    match new_task(&body).and_then(|command: AddTask| created::<Task>(&headers).map(|id: StreamId<Task>| (id, command))) {
         Err(bad) => rejected(&span, bad),
-        Ok(command) => {
-            let id: StreamId<Task> = StreamId::new(Uuid::now_v7().to_string());
+        Ok((id, command)) => {
             span.record("task", id.as_str());
             answered(
                 &span,

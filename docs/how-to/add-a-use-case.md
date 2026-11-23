@@ -66,6 +66,8 @@ Nothing in `ports` or `adapter-sqlite` changes for a new use case.
 1. Add the route in `router`. Its handler parses the path and body into the command, refusing
    malformed input with 400 before a command exists, then calls `app::handle` through
    `blocking`, which runs it off the async executor.
+   A route that starts a new stream takes its id from `created`, which reads the caller's
+   `Idempotency-Key`, so a repeated request cannot create a second one.
 2. Map the `Answer` exhaustively: accepted is 204, a refusal is 409 with its name. Record the
    route, the command and the outcome on the request span; never log user text.
 3. The page is not rendered by the route. `GET /events` sends the whole board (`app::board`, one read) as a

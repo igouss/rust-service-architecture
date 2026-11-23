@@ -105,6 +105,16 @@ pub async fn complete(service: &Service, id: &str) -> Response {
     send(&service.router, post(&format!("/tasks/{id}/complete"), String::new())).await
 }
 
+pub fn keyed(path: &str, key: &str, body: &str) -> Request<Body> {
+    Request::builder()
+        .method("POST")
+        .uri(path)
+        .header("content-type", "application/x-www-form-urlencoded")
+        .header("idempotency-key", key)
+        .body(Body::from(body.to_string()))
+        .expect("request")
+}
+
 pub async fn authorize(service: &Service, amount: &str) -> Response {
     send(&service.router, post("/payments", format!("amount={amount}"))).await
 }

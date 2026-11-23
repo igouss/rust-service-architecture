@@ -1,15 +1,15 @@
 use app::payments::PaymentStatus;
 use axum::body::Bytes;
 use axum::extract::{Path, State};
+use axum::http::HeaderMap;
 use axum::response::Response;
 use domain::fulfilment::Fulfilment;
 use domain::payment::{Amount, Authorize, Capture, DeclineReason, Payment, PaymentRefusal};
 use ports::{Journal, StreamId};
 use serde::Deserialize;
 use tracing::Span;
-use uuid::Uuid;
 
-use crate::{answered, blocking, path_segment, rejected, request, stream_id, BadInput, Service};
+use crate::{answered, blocking, created, path_segment, rejected, request, stream_id, BadInput, Service};
 
 #[derive(Deserialize)]
 struct Sum {
@@ -28,13 +28,12 @@ fn payment_refusal(refusal: PaymentRefusal) -> &'static str {
     }
 }
 
-pub async fn authorize<J: Journal + Send + Sync + 'static>(State(service): State<Service<J>>, body: Bytes) -> Response {
+pub async fn authorize<J: Journal + Send + Sync + 'static>(State(service): State<Service<J>>, headers: HeaderMap, body: Bytes) -> Response {
     let span: Span = request("POST /payments");
     span.record("command", "Authorize");
-    match amount(&body) {
+    match amount(&body).and_then(|amount: Amount| created::<Payment>(&headers).map(|id: StreamId<Payment>| (id, amount))) {
         Err(bad) => rejected(&span, bad),
-        Ok(amount) => {
-            let id: StreamId<Payment> = StreamId::new(Uuid::now_v7().to_string());
+        Ok((id, amount)) => {
             span.record("payment", id.as_str());
             answered(
                 &span,

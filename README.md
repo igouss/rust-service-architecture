@@ -83,6 +83,7 @@ The worked example is [`domain/src/task.rs`](domain/src/task.rs); the recipe is
 - **A command's whole effect is atomic.** One write call takes the whole outcome, inside one transaction, together with every view and process-manager step it causes.
 - **Refusals are recorded**, so you can see with SQL why something was rejected.
 - **A request for outside work ends.** Its reply goes back to the process manager once; a request that is rejected, or fails more often than the bound, is parked where SQL can see it and the process manager is told.
+- **A creating request can be repeated safely.** Sent with an `Idempotency-Key`, it uses the key as the new record's id; a repeat is refused by name and creates nothing. The page does not send one yet.
 - **Time, ids and outside data enter as input**, never read inside the core, so any decision can be replayed in a test.
 - **Stored data keeps its encoding.** A test pins the JSON of every stored type.
 

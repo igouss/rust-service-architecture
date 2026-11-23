@@ -20,6 +20,23 @@ with no wildcard arm. An `if` about business state in a handler is a ring violat
 
 - `arch-68v.1` Review (T4).
 
+## `arch-59ap` A request that creates a lifecycle shall be safe to repeat under a key the caller chooses
+
+A request that starts a new stream carries, in the `Idempotency-Key` header, the id the caller
+chose for it; the driving adapter uses that key as the stream id. A repeat of the request
+meets the stream its first arrival created, and the lifecycle refuses it by name
+(`AlreadyExists`, `AlreadyAuthorized`): the caller is answered 409 and nothing is created
+twice. This is [`arch-dohm`](core.req.md) applied to the request itself: the value that must
+be unique is the stream. The adapter stores no key and compares none
+([`arch-7h52`](adapters.req.md)). A request without a key gets a minted id and is not safe to
+repeat. Commands on an existing stream need no key: the state they change refuses the second
+one.
+
+### Acceptance
+
+- `arch-59ap.1` A creation repeated under its key creates nothing and is answered with the refusal: `a_task_posted_again_under_its_key_adds_no_second_task`, `a_payment_authorized_again_under_its_key_authorizes_no_second_payment` (mutant H10).
+- `arch-59ap.2` A key that is not a UUID is answered 400 before a command exists: `a_task_posted_under_a_key_that_is_not_a_uuid_answers_400_and_adds_nothing` (mutant H11).
+
 ## `arch-m3z` Request and response types shall live only in adapters
 verification: exempt
 verification-reason: review only (T4); no gate is built

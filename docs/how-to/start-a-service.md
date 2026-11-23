@@ -61,7 +61,7 @@ A follow-up task, started from the mutation job's report, not part of starting t
   (C9), a fact built outside `ports` (C10), a policy skipping its projection or its process
   manager (T10, T11), a stored type
   changing its encoding or gaining an unpinned variant (T20, G24, G25), a refined type accepting what it must refuse or losing what it stored (T22 to T24, T80, C15, C16), a
-  wildcard arm or tuple element (G6, G19), a trait declared by a feature (G20), an event named for a change and a lifecycle the scans cannot read (G12, G13, G21 to G23), a name used twice (G28 to G30), and the driving adapter's faults (H1 to H9). Changing a mutant's anchor
+  wildcard arm or tuple element (G6, G19), a trait declared by a feature (G20), an event named for a change and a lifecycle the scans cannot read (G12, G13, G21 to G23), a name used twice (G28 to G30), and the driving adapter's faults (H1 to H11). Changing a mutant's anchor
   and replacement to plant the same fault in new code is a legitimate edit
   ([`arch-tsu`](../architecture/enforcement.req.md)); dropping the fault is not. If your
   service has nothing the fault applies to (no process manager, so no T11), remove that mutant
