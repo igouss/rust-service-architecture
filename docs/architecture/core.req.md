@@ -249,7 +249,8 @@ No `Box<dyn Error>` and no `anyhow` in `domain`, `ports` or `app`. `StoreError` 
 cause, one variant for each thing a caller can do about it: `Unavailable` (try again),
 `Misconfigured` (fix the setting), `Corrupt` with the table (repair what is stored),
 `Unencodable` with the table (fix the type), `OutOfOrder` with the read model, `Trimmed` with
-the oldest position still held (read from there). `GatewayError` does the same for the relay:
+the oldest position still held (read from there). `Runaway` with the lifecycle (fix the policies: they trigger each other without end).
+`GatewayError` does the same for the relay:
 `Unavailable` (try again, up to the bound), `Rejected` (do not).
 
 ### Acceptance

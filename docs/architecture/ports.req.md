@@ -16,6 +16,7 @@ unit's transaction. There is no `save(state)`, no `append(event)`, no `Outbox::p
 and a sentence is what agents violate. An invariant the API can make impossible to violate lives in the API's shape.
 
 ```rust
+use std::fmt;
 use std::future::Future;
 use std::hash::{Hash, Hasher};
 use std::marker::PhantomData;
@@ -133,6 +134,10 @@ pub enum StoreError {
     Trimmed {
         after: Position,
         oldest: Position,
+    },
+    Runaway {
+        lifecycle: &'static str,
+        outcomes: u32,
     },
 }
 
@@ -258,10 +263,20 @@ performed, and records why:
 pub struct Unit<'a> {
     store: &'a mut dyn Writer,
     last: Option<Position>,
+    applied: u32,
 }
 
 impl Unit<'_> {
+    pub const OUTCOMES: u32 = 32;
+
     pub fn apply<S: Lifecycle, R: Serialize>(&mut self, id: &StreamId<S>, decide: impl FnOnce(S) -> Outcome<S, R>) -> Result<Applied<S>, StoreError> {
+        if self.applied == Unit::OUTCOMES {
+            return Err(StoreError::Runaway {
+                lifecycle: S::NAME,
+                outcomes: self.applied,
+            });
+        }
+        self.applied += 1;
         let (version, state): (Version, S) = state_in(self.store.state(S::NAME, id.as_str())?)?;
         match decide(state) {
             Outcome::Refused(refusal) => {
@@ -332,7 +347,7 @@ pub trait Journal {
 impl<K: Store> Journal for K {
     fn write<T>(&self, work: impl FnOnce(&mut Unit<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
         let (value, last): (T, Option<Position>) = self.transact(Key::new(), |store: &mut dyn Writer| {
-            let mut unit: Unit<'_> = Unit { store, last: None };
+            let mut unit: Unit<'_> = Unit { store, last: None, applied: 0 };
             let value: T = work(&mut unit)?;
             Ok((value, unit.last))
         })?;

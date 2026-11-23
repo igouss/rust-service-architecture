@@ -13,6 +13,7 @@ domain = { path = "../domain" }
 ports = { path = "../ports" }
 
 [dev-dependencies]
+serde = { workspace = true }
 adapter-sqlite = { path = "../adapter-sqlite" }
 
 [lints]

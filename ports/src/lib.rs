@@ -117,6 +117,10 @@ pub enum StoreError {
         after: Position,
         oldest: Position,
     },
+    Runaway {
+        lifecycle: &'static str,
+        outcomes: u32,
+    },
 }
 
 pub struct Transition<S: Lifecycle, R> {
@@ -257,10 +261,20 @@ fn row_in<P: Projection>(found: Option<String>) -> Result<Option<P::Row>, StoreE
 pub struct Unit<'a> {
     store: &'a mut dyn Writer,
     last: Option<Position>,
+    applied: u32,
 }
 
 impl Unit<'_> {
+    pub const OUTCOMES: u32 = 32;
+
     pub fn apply<S: Lifecycle, R: Serialize>(&mut self, id: &StreamId<S>, decide: impl FnOnce(S) -> Outcome<S, R>) -> Result<Applied<S>, StoreError> {
+        if self.applied == Unit::OUTCOMES {
+            return Err(StoreError::Runaway {
+                lifecycle: S::NAME,
+                outcomes: self.applied,
+            });
+        }
+        self.applied += 1;
         let (version, state): (Version, S) = state_in(self.store.state(S::NAME, id.as_str())?)?;
         match decide(state) {
             Outcome::Refused(refusal) => {
@@ -412,7 +426,7 @@ pub trait Journal {
 impl<K: Store> Journal for K {
     fn write<T>(&self, work: impl FnOnce(&mut Unit<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
         let (value, last): (T, Option<Position>) = self.transact(Key::new(), |store: &mut dyn Writer| {
-            let mut unit: Unit<'_> = Unit { store, last: None };
+            let mut unit: Unit<'_> = Unit { store, last: None, applied: 0 };
             let value: T = work(&mut unit)?;
             Ok((value, unit.last))
         })?;

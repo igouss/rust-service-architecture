@@ -100,6 +100,11 @@ policy does not compile into a handler. A process manager is a lifecycle whose i
 `Reaction`; `app::react` applies the step and runs the process manager's own policy, all inside
 the unit that recorded the fact. Nothing is delivered later, so nothing is delivered twice.
 
+A policy may call `react`, whose facts go to a policy, which may call `react` again. Two
+policies that trigger each other without a state that ends it would never return, so a unit of
+work applies at most `Unit::OUTCOMES` outcomes and fails with `StoreError::Runaway` on the
+next, storing nothing ([`arch-goru`](invariants.req.md)).
+
 Cross-aggregate flows are process managers, never one command calling another and never a
 decider nested in a decider. A position in an `async fn` is not persisted state: a future
 holding two durable writes is an implicit state machine; replace it with a process manager.

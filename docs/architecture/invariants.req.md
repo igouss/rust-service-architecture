@@ -62,6 +62,20 @@ Participants: `Journal::write`, `Unit::apply`, `Policy::after`, the store adapte
 - `arch-0yc.2` A unit that fails after applying stores nothing: `a_unit_that_fails_after_applying_stores_nothing` (mutant T9).
 - `arch-0yc.3` A process-manager step and its request are stored with the fact that triggered them: `a_capture_starts_the_fulfilment_and_requests_stock_in_the_same_unit` (mutants T11, T19).
 
+## `arch-goru` A unit of work shall apply a bounded number of outcomes
+
+While a unit of work has applied fewer than `Unit::OUTCOMES` outcomes, the system shall apply
+the next. If a unit of work has applied `Unit::OUTCOMES` outcomes, then the system shall
+refuse the next with `StoreError::Runaway`, naming the lifecycle it was for, and the unit
+shall store nothing.
+
+Participants: `Unit::apply`, `Policy::after`, `app::react`.
+
+### Acceptance
+
+- `arch-goru.1` Two policies that trigger each other end as a named error with nothing stored: `two_policies_that_trigger_each_other_end_the_unit_as_a_runaway_and_store_nothing`.
+- `arch-goru.2` A cascade of exactly the bound is stored and one outcome more is refused: `a_cascade_of_as_many_outcomes_as_a_unit_allows_is_stored`, `a_cascade_one_outcome_longer_is_a_runaway_and_stores_nothing` (mutants T81 and T82).
+
 ## `arch-9k6q` The system shall hand every fact to its lifecycle's policy before the unit ends
 
 When a fact is recorded, the system shall pass it to its lifecycle's policy inside the same
