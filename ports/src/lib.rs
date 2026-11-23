@@ -455,7 +455,7 @@ pub struct Claimed<R> {
 }
 
 pub trait Outbox {
-    fn claim<X: Reaction>(&self, limit: usize, now: Moment) -> Result<Vec<Claimed<X::Request>>, StoreError>;
+    fn claim<X: Reaction>(&self, limit: usize, now: Moment, until: Moment) -> Result<Vec<Claimed<X::Request>>, StoreError>;
     fn failed(&self, id: RequestId, again: Moment) -> Result<(), StoreError>;
 }
 
@@ -471,8 +471,8 @@ pub trait Gateway<R> {
 }
 
 impl<K: Store> Outbox for K {
-    fn claim<X: Reaction>(&self, limit: usize, now: Moment) -> Result<Vec<Claimed<X::Request>>, StoreError> {
-        self.requests(Key::new(), <X::Reads as Lifecycle>::NAME, limit, now)?
+    fn claim<X: Reaction>(&self, limit: usize, now: Moment, until: Moment) -> Result<Vec<Claimed<X::Request>>, StoreError> {
+        self.requests(Key::new(), <X::Reads as Lifecycle>::NAME, limit, now, until)?
             .into_iter()
             .map(|stored: StoredRequest| {
                 Ok(Claimed {

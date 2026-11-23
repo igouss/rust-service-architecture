@@ -179,7 +179,7 @@ pub fn commands(directory: &Path, durability: Durability) -> Result<(), Fault> {
     same("tally after the added tasks", task_tally(&adding)?, Some(Tally { open: calls, done: 0 }))?;
     same(
         "outbox requests after the captures",
-        capturing.claim::<Progress>(CALLS + 1, Moment::ZERO)?.len(),
+        capturing.claim::<Progress>(CALLS + 1, Moment::ZERO, Moment::ZERO)?.len(),
         CALLS,
     )
 }

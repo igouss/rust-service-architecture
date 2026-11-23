@@ -443,25 +443,28 @@ impl Store for Memory {
         }
     }
 
-    fn requests(&self, _key: Key, lifecycle: &'static str, limit: usize, now: Moment) -> Result<Vec<StoredRequest>, StoreError> {
-        let tables: RwLockReadGuard<'_, Tables> = self.reading();
-        let mut open: Vec<(u64, u64, &Request)> = tables
+    fn requests(&self, _key: Key, lifecycle: &'static str, limit: usize, now: Moment, until: Moment) -> Result<Vec<StoredRequest>, StoreError> {
+        let mut tables: RwLockWriteGuard<'_, Tables> = self.writing();
+        let mut open: Vec<(u64, u64)> = tables
             .outbox
             .iter()
             .filter(|(_id, request): &(&u64, &Request)| request.lifecycle == lifecycle && request.not_before <= now)
-            .map(|(id, request): (&u64, &Request)| (request.attempts, *id, request))
+            .map(|(id, request): (&u64, &Request)| (request.attempts, *id))
             .collect();
-        open.sort_by_key(|(attempts, id, _request): &(u64, u64, &Request)| (*attempts, *id));
-        Ok(open
-            .into_iter()
-            .take(limit)
-            .map(|(attempts, id, request): (u64, u64, &Request)| StoredRequest {
-                id: RequestId::ZERO.after(id),
-                stream: request.stream.clone(),
-                request: request.request.clone(),
-                attempts,
-            })
-            .collect())
+        open.sort_by_key(|(attempts, id): &(u64, u64)| (*attempts, *id));
+        let mut claimed: Vec<StoredRequest> = Vec::new();
+        for (attempts, id) in open.into_iter().take(limit) {
+            if let Some(request) = tables.outbox.get_mut(&id) {
+                request.not_before = request.not_before.max(until);
+                claimed.push(StoredRequest {
+                    id: RequestId::ZERO.after(id),
+                    stream: request.stream.clone(),
+                    request: request.request.clone(),
+                    attempts,
+                });
+            }
+        }
+        Ok(claimed)
     }
 
     fn mark_failed(&self, _key: Key, id: RequestId, again: Moment) -> Result<(), StoreError> {

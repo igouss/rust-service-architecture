@@ -402,3 +402,10 @@ path = "app/src/lib.rs"
 anchor = 'self.first.saturating_mul(factor).min(self.longest)'
 replacement = 'self.first.saturating_mul(factor.min(1)).min(self.longest)'
 expect = "test"
+
+[[mutant]]
+name = "T96 the relay claims under a lease that ends at once"
+path = "app/src/lib.rs"
+anchor = 'now.after(u64::try_from(self.lease.as_millis()).unwrap_or(u64::MAX))'
+replacement = 'now.after(u64::try_from(self.lease.as_millis()).unwrap_or(u64::MAX).min(0))'
+expect = "test"

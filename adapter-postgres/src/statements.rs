@@ -109,8 +109,17 @@ impl Statements {
             clear_rows: client.prepare("DELETE FROM read_models WHERE name = $1")?,
             clear_position: client.prepare("DELETE FROM read_model_positions WHERE name = $1")?,
             requests: client.prepare(
-                "SELECT outbox.id, stream, request, attempts FROM outbox LEFT JOIN deferred ON deferred.id = outbox.id
-                 WHERE lifecycle = $1 AND NOT done AND coalesce(not_before, 0) <= $3 ORDER BY attempts, outbox.id LIMIT $2",
+                "WITH open AS (
+                     SELECT outbox.id, row_number() OVER (ORDER BY attempts, outbox.id) AS place
+                     FROM outbox LEFT JOIN deferred ON deferred.id = outbox.id
+                     WHERE lifecycle = $1 AND NOT done AND coalesce(not_before, 0) <= $3
+                 ), due AS (
+                     SELECT id, place FROM open WHERE place <= $2
+                 ), held AS (
+                     INSERT INTO deferred (id, not_before) SELECT id, $4 FROM due
+                     ON CONFLICT (id) DO UPDATE SET not_before = greatest(deferred.not_before, excluded.not_before)
+                 )
+                 SELECT outbox.id, stream, request, attempts FROM outbox JOIN due ON due.id = outbox.id ORDER BY place",
             )?,
             close: client.prepare("UPDATE outbox SET done = true, attempts = attempts + $3 WHERE id = $1 AND lifecycle = $2 AND NOT done RETURNING stream")?,
             park: client.prepare("INSERT INTO parked (id, cause) VALUES ($1, $2)")?,

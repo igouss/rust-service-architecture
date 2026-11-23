@@ -97,6 +97,7 @@ pub struct Retry {
     pub attempts: NonZeroU32,
     pub first: Duration,
     pub longest: Duration,
+    pub lease: Duration,
 }
 
 impl Retry {
@@ -116,6 +117,10 @@ impl Retry {
     fn again(&self, now: Moment, failures: u64) -> Moment {
         now.after(u64::try_from(self.wait(failures).as_millis()).unwrap_or(u64::MAX))
     }
+
+    fn held(&self, now: Moment) -> Moment {
+        now.after(u64::try_from(self.lease.as_millis()).unwrap_or(u64::MAX))
+    }
 }
 
 fn stranded<S: Lifecycle, K: Journal>(store: &K, request: RequestId, unsettled: &StoreError) -> Result<(), StoreError> {
@@ -129,7 +134,7 @@ where
     K: Journal + Outbox,
     G: Gateway<X::Request>,
 {
-    let claimed: Vec<Claimed<X::Request>> = store.claim::<X>(limit, now)?;
+    let claimed: Vec<Claimed<X::Request>> = store.claim::<X>(limit, now, retry.held(now))?;
     let mut performed: usize = 0;
     for Claimed {
         id,

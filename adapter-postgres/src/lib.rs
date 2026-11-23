@@ -238,6 +238,14 @@ impl Postgres {
             .map_err(|error: r2d2::Error| StoreError::Unavailable { cause: error.to_string() })
     }
 
+    fn alone(&self, connection: &Checked) -> Result<(), StoreError> {
+        let lock: i64 = self.lock;
+        connection
+            .call(move |client: &mut Client, statements: &Statements| client.execute(&statements.lock, &[&lock]))
+            .map(|_locked: u64| ())?;
+        Ok(())
+    }
+
     fn begun(&self, sql: &'static str) -> Result<Checked, StoreError> {
         let mut refusal: StoreError = stopped();
         for _attempt in 0..=self.pool.max_size() {
@@ -279,11 +287,8 @@ impl Drop for Session<'_> {
 impl Store for Postgres {
     fn transact<T>(&self, _key: Key, work: impl FnOnce(&mut dyn Writer) -> Result<T, StoreError>) -> Result<T, StoreError> {
         let connection: Checked = self.begun("BEGIN")?;
-        let lock: i64 = self.lock;
         let mut session: Session<'_> = Session::over(&connection);
-        connection
-            .call(move |client: &mut Client, statements: &Statements| client.execute(&statements.lock, &[&lock]))
-            .map(|_locked: u64| ())?;
+        self.alone(&connection)?;
         let value: T = work(&mut session)?;
         session.commit()?;
         Ok(value)
@@ -301,12 +306,16 @@ impl Store for Postgres {
         }
     }
 
-    fn requests(&self, _key: Key, lifecycle: &'static str, limit: usize, now: Moment) -> Result<Vec<StoredRequest>, StoreError> {
+    fn requests(&self, _key: Key, lifecycle: &'static str, limit: usize, now: Moment, until: Moment) -> Result<Vec<StoredRequest>, StoreError> {
         let limit: i64 = i64::try_from(limit).unwrap_or(i64::MAX);
-        let now: i64 = now.stored();
-        self.checked()?
-            .call(move |client: &mut Client, statements: &Statements| client.query(&statements.requests, &[&lifecycle, &limit, &now]))?
-            .iter()
+        let (now, until): (i64, i64) = (now.stored(), until.stored());
+        let connection: Checked = self.begun("BEGIN")?;
+        let session: Session<'_> = Session::over(&connection);
+        self.alone(&connection)?;
+        let held: Vec<Row> =
+            connection.call(move |client: &mut Client, statements: &Statements| client.query(&statements.requests, &[&lifecycle, &limit, &now, &until]))?;
+        session.commit()?;
+        held.iter()
             .map(|row: &Row| {
                 Ok(StoredRequest {
                     id: number("outbox", row, 0, RequestId::loaded)?,

@@ -426,7 +426,7 @@ pub struct Claimed<R> {
 }
 
 pub trait Outbox {
-    fn claim<X: Reaction>(&self, limit: usize, now: Moment) -> Result<Vec<Claimed<X::Request>>, StoreError>;
+    fn claim<X: Reaction>(&self, limit: usize, now: Moment, until: Moment) -> Result<Vec<Claimed<X::Request>>, StoreError>;
     fn failed(&self, id: RequestId, again: Moment) -> Result<(), StoreError>;
 }
 

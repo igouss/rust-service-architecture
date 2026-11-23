@@ -80,7 +80,8 @@ fn the_relay_runs_on_a_runtime_of_its_own_with_the_store_as_its_outbox() {
             &app::Retry {
                 attempts: std::num::NonZeroU32::MIN,
                 first: std::time::Duration::ZERO,
-                longest: std::time::Duration::ZERO
+                longest: std::time::Duration::ZERO,
+                lease: std::time::Duration::ZERO,
             },
             Moment::ZERO
         )),

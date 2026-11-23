@@ -172,11 +172,11 @@ expect = "test"
 name = "T77 a memory claim forgets how often its request failed"
 path = "adapter-memory/src/lib.rs"
 anchor = """
-                request: request.request.clone(),
-                attempts,"""
+                    request: request.request.clone(),
+                    attempts,"""
 replacement = """
-                request: request.request.clone(),
-                attempts: attempts - attempts,"""
+                    request: request.request.clone(),
+                    attempts: attempts - attempts,"""
 expect = "test"
 
 [[mutant]]
@@ -201,8 +201,8 @@ needs = "STORE_POSTGRES_URL"
 [[mutant]]
 name = "T41 a failed Postgres request is claimed first again"
 path = "adapter-postgres/src/statements.rs"
-anchor = 'ORDER BY attempts, outbox.id LIMIT $2'
-replacement = 'ORDER BY outbox.id LIMIT $2'
+anchor = 'OVER (ORDER BY attempts, outbox.id)'
+replacement = 'OVER (ORDER BY outbox.id)'
 
 [mutant.expect]
 server = [
@@ -253,8 +253,8 @@ expect = "test"
 [[mutant]]
 name = "T89 a Postgres request is claimed before the moment it was put off to"
 path = "adapter-postgres/src/statements.rs"
-anchor = 'AND coalesce(not_before, 0) <= $3 ORDER'
-replacement = 'AND $3 = $3 ORDER'
+anchor = 'AND coalesce(not_before, 0) <= $3'
+replacement = 'AND least(coalesce(not_before, 0), 0) <= $3'
 
 [mutant.expect]
 server = [
@@ -274,4 +274,44 @@ name = "T92 a SQLite request that failed is put off to no moment"
 path = "adapter-sqlite/src/lib.rs"
 anchor = 'params![id.stored(), again.stored()],'
 replacement = 'params![id.stored(), again.stored().min(0)],'
+expect = "test"
+
+[[mutant]]
+name = "T93 a SQLite claim holds its requests until no moment"
+path = "adapter-sqlite/src/lib.rs"
+anchor = '.execute(params![request.id.stored(), until.stored()])'
+replacement = '.execute(params![request.id.stored(), until.stored().min(0)])'
+expect = "test"
+
+[[mutant]]
+name = "T94 a memory claim holds its requests until no moment"
+path = "adapter-memory/src/lib.rs"
+anchor = 'request.not_before = request.not_before.max(until);'
+replacement = 'request.not_before = request.not_before.max(Moment::ZERO.min(until));'
+expect = "test"
+
+[[mutant]]
+name = "T95 a Postgres claim holds its requests until no moment"
+path = "adapter-postgres/src/statements.rs"
+anchor = 'SELECT id, $4 FROM due'
+replacement = 'SELECT id, least($4, 0::bigint) FROM due'
+
+[mutant.expect]
+server = [
+    "cargo",
+    "test",
+    "-q",
+    "--no-fail-fast",
+    "-p",
+    "adapter-postgres",
+    "--features",
+    "server",
+]
+needs = "STORE_POSTGRES_URL"
+
+[[mutant]]
+name = "T97 a SQLite claim with no lease brings forward a request put off"
+path = "adapter-sqlite/src/lib.rs"
+anchor = 'SET not_before = max(not_before, excluded.not_before)'
+replacement = 'SET not_before = excluded.not_before'
 expect = "test"

@@ -303,7 +303,7 @@ fn shelve(store: &Subject, request: RequestId, count: u64) -> Option<usize> {
 
 fn attempts(store: &Subject) -> Vec<u64> {
     store
-        .claim::<Send>(10, Moment::ZERO)
+        .claim::<Send>(10, Moment::ZERO, Moment::ZERO)
         .expect("claimed")
         .into_iter()
         .map(|claimed: Claimed<Parcel>| claimed.attempts)
@@ -316,7 +316,7 @@ fn courier(store: &Subject, stream: &str) -> (Version, Courier) {
 
 fn parcels(store: &Subject, limit: usize) -> Vec<(StreamId<Courier>, Parcel)> {
     store
-        .claim::<Send>(limit, Moment::ZERO)
+        .claim::<Send>(limit, Moment::ZERO, Moment::ZERO)
         .expect("claimed")
         .into_iter()
         .map(|claimed: Claimed<Parcel>| (StreamId::new(claimed.stream), claimed.request))

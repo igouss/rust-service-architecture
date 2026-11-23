@@ -101,7 +101,7 @@ fn refusals_beyond_the_kept_number_drop_the_oldest() {
 fn a_done_request_is_no_longer_held() {
     let store: Memory = store(2, 2);
     request(&store, "p-1");
-    let claimed: Vec<Claimed<FulfilmentRequest>> = store.claim::<Progress>(10, Moment::ZERO).expect("claimed");
+    let claimed: Vec<Claimed<FulfilmentRequest>> = store.claim::<Progress>(10, Moment::ZERO, Moment::ZERO).expect("claimed");
     let _finished: Finished<Fulfilment> = store
         .write(|unit| unit.finish(claimed[0].id, |state: Fulfilment| ports::react(Progress::StockUnavailable, state)))
         .expect("finished");
@@ -112,7 +112,7 @@ fn a_done_request_is_no_longer_held() {
 fn a_failed_request_is_still_held() {
     let store: Memory = store(2, 2);
     request(&store, "p-1");
-    let claimed: Vec<Claimed<FulfilmentRequest>> = store.claim::<Progress>(10, Moment::ZERO).expect("claimed");
+    let claimed: Vec<Claimed<FulfilmentRequest>> = store.claim::<Progress>(10, Moment::ZERO, Moment::ZERO).expect("claimed");
     store.failed(claimed[0].id, Moment::ZERO).expect("failed");
     assert_eq!(store.held().requests, 1);
 }

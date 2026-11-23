@@ -3,8 +3,10 @@
 use std::thread::{self, JoinHandle};
 
 use adapter_postgres::{Durability, Postgres};
+use domain::fulfilment::{FulfilmentRequest, Progress};
+use domain::payment::{Amount, Authorize, Capture};
 use domain::task::{AddTask, Tally, Task, TaskRefusal, TaskTally, Title};
-use ports::{Answer, Applied, Journal, Position, Recorded, StoreError, StreamId, Unit};
+use ports::{Answer, Applied, Claimed, Journal, Moment, Outbox, Position, Recorded, RequestId, StoreError, StreamId, Unit};
 
 const WRITERS: u64 = 4;
 const COMMANDS: u64 = 25;
@@ -114,5 +116,35 @@ fn writers_claiming_one_stream_leave_exactly_one_accepted() {
             Ok(Answer::Refused(TaskRefusal::AlreadyExists)),
             Ok(Answer::Refused(TaskRefusal::AlreadyExists))
         ]
+    );
+}
+
+fn relay_claim(schema: &'static str) -> JoinHandle<Result<Vec<RequestId>, StoreError>> {
+    thread::spawn(move || {
+        let store: Postgres = Postgres::connect(&url(), schema, 2, Durability::Full)?;
+        let claimed: Vec<Claimed<FulfilmentRequest>> = store.claim::<Progress>(1000, Moment::ZERO, Moment::ZERO.after(60_000))?;
+        Ok(claimed.into_iter().map(|claimed: Claimed<FulfilmentRequest>| claimed.id).collect())
+    })
+}
+
+#[test]
+fn relays_claiming_at_once_under_a_lease_are_each_handed_different_requests() {
+    let schema: &'static str = "writers_lease";
+    fresh(schema);
+    let store: Postgres = Postgres::connect(&url(), schema, 4, Durability::Full).expect("opens");
+    let amount: Amount = Amount::new(500).expect("positive");
+    (0..COMMANDS).for_each(|payment: u64| {
+        app::handle(&store, &StreamId::new(format!("p-{payment}")), Authorize { amount }).expect("authorized");
+        app::handle(&store, &StreamId::new(format!("p-{payment}")), Capture { amount }).expect("captured");
+    });
+    let relays: Vec<JoinHandle<Result<Vec<RequestId>, StoreError>>> = (0..WRITERS).map(|_relay: u64| relay_claim(schema)).collect();
+    let mut claimed: Vec<RequestId> = relays
+        .into_iter()
+        .flat_map(|relay: JoinHandle<Result<Vec<RequestId>, StoreError>>| relay.join().expect("joined").expect("claimed"))
+        .collect();
+    claimed.sort();
+    assert_eq!(
+        claimed,
+        (1..=COMMANDS).map(|request: u64| RequestId::ZERO.after(request)).collect::<Vec<RequestId>>()
     );
 }

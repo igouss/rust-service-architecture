@@ -169,6 +169,7 @@ fn tries(bound: u32) -> Retry {
         attempts: NonZeroU32::new(bound).expect("at least one attempt"),
         first: Duration::ZERO,
         longest: Duration::ZERO,
+        lease: Duration::ZERO,
     }
 }
 
@@ -182,7 +183,7 @@ fn dialled(streams: &[&str]) -> Sqlite {
 
 fn open(store: &Sqlite) -> Vec<(String, u64)> {
     store
-        .claim::<Line>(10, Moment::ZERO)
+        .claim::<Line>(10, Moment::ZERO, Moment::ZERO)
         .expect("claimed")
         .into_iter()
         .map(|claimed: Claimed<Call>| (claimed.stream, claimed.attempts))

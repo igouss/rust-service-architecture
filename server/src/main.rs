@@ -40,6 +40,7 @@ const RELAY_BATCH: usize = 16;
 const RELAY_EVERY: Duration = Duration::from_millis(500);
 const RELAY_FIRST_WAIT: Duration = Duration::from_secs(1);
 const RELAY_LONGEST_WAIT: Duration = Duration::from_secs(300);
+const RELAY_LEASE: Duration = Duration::from_secs(60);
 
 enum Failure {
     UnknownDurability(String),
@@ -112,6 +113,7 @@ fn retry(attempts: NonZeroU32) -> Retry {
         attempts,
         first: RELAY_FIRST_WAIT,
         longest: RELAY_LONGEST_WAIT,
+        lease: RELAY_LEASE,
     }
 }
 

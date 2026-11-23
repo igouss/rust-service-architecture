@@ -103,6 +103,22 @@ Participants: `Outbox`, `app::relay`, every `Gateway`.
 - `arch-fif.2` A request whose gateway fails stays claimable: `a_request_the_gateway_fails_stays_claimable` (mutant T14), and does not hold back the next one: `a_request_that_keeps_failing_does_not_hold_back_the_next_one` (mutant T26).
 - `arch-fif.3` Each real gateway's duplicate-delivery test performs one request twice and observes one effect (CI).
 
+## `arch-8xq0` A claimed request shall be handed to no other claim until its lease ends
+
+When a request is claimed, the system shall put it off until the moment the claim names, in
+the transaction that hands it out. While that moment has not come and the request has not
+failed, the system shall hand it to no other claim. When the moment comes and the request is
+still open, the system shall hand it out again.
+
+Participants: `Outbox::claim`, `Store::requests`, `app::Retry`, `app::relay`.
+
+### Acceptance
+
+- `arch-8xq0.1` A request under a lease is not claimed again before the lease ends and is claimed again when it does, one request or many: `a_request_claimed_under_a_lease_is_not_claimed_again_before_the_lease_ends`, `a_request_claimed_under_a_lease_is_claimed_again_when_the_lease_ends`, `many_requests_claimed_under_one_lease_are_all_held`, `a_lease_holds_only_the_requests_it_claimed` (mutants T93 to T95).
+- `arch-8xq0.2` A failure inside the lease decides when the request is due, and a claim with no lease moves nothing: `a_leased_request_that_fails_is_claimed_from_the_moment_it_was_put_off_to`, `a_claim_with_no_lease_leaves_a_request_put_off_where_it_was` (mutant T97).
+- `arch-8xq0.3` While the relay performs a request no other claim is handed it, and a relay that died leaves it until the lease ends: `while_a_relay_performs_a_request_under_its_lease_no_other_claim_is_handed_it`, `a_request_claimed_by_a_relay_that_died_is_not_performed_before_the_lease_ends`, `a_request_claimed_by_a_relay_that_died_is_performed_when_the_lease_ends` (mutant T96).
+- `arch-8xq0.4` Postgres relays claiming at once are each handed different requests: `relays_claiming_at_once_under_a_lease_are_each_handed_different_requests` (`just postgres`).
+
 ## `arch-ruz9` A gateway's reply shall re-enter the lifecycle that issued the request, once
 
 When a gateway has performed a request, the system shall turn its reply into a reaction,

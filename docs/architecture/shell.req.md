@@ -141,7 +141,14 @@ twice the wait before after each further one, up to a longest wait, and the requ
 claimed before that moment. The bound on attempts is therefore a bound on time; counted in
 passes alone, five attempts half a second apart gave up on a receiver that was away for three
 seconds. The relay reads no clock: the composition root reads it once a pass and hands the
-moment in, as `now` ([`arch-jbno`](shell.req.md)). `Rejected` is not. A rejected request, and one that has been unavailable as often as
+moment in, as `now` ([`arch-jbno`](shell.req.md)).
+
+A claim is a lease. `Outbox::claim` hands a request out and, in the same transaction, puts it
+off until the lease ends, so a second relay on the same store is handed other requests, and a
+relay that dies leaves its requests to be claimed again when the lease has run out. A lease is
+not a lock: a gateway slower than the lease lets a second relay perform the request too, which
+`arch-fif` already allows for. A failure inside the lease puts the request off to the
+moment its wait gives, sooner or later than the lease. `Rejected` is not. A rejected request, and one that has been unavailable as often as
 the relay's bound allows, is parked: `app::abandon` closes it, records the cause, and applies
 the reaction built from `Undelivered`, in one unit, so the process manager gives up instead of
 waiting ([`arch-22kr`](invariants.req.md)). The bound is the composition root's setting.
@@ -169,7 +176,7 @@ where
     K: Journal + Outbox,
     G: Gateway<X::Request>,
 {
-    let claimed: Vec<Claimed<X::Request>> = store.claim::<X>(limit, now)?;
+    let claimed: Vec<Claimed<X::Request>> = store.claim::<X>(limit, now, retry.held(now))?;
     let mut performed: usize = 0;
     for Claimed {
         id,

@@ -11,7 +11,7 @@ use adapter_sqlite::Sqlite;
 use app::{handle, relay, Retry};
 use domain::fulfilment::{Fulfilment, FulfilmentReply, FulfilmentRequest, Progress};
 use domain::payment::{Amount, Authorize, Capture};
-use ports::{Gateway, GatewayError, Journal, Moment, RequestId, StoreError, StreamId, View};
+use ports::{Claimed, Gateway, GatewayError, Journal, Moment, Outbox, RequestId, StoreError, StreamId, View};
 
 struct Down(AtomicUsize);
 
@@ -37,6 +37,7 @@ fn retry(attempts: u32) -> Retry {
         attempts: NonZeroU32::new(attempts).expect("at least one attempt"),
         first: Duration::from_secs(1),
         longest: Duration::from_secs(300),
+        lease: Duration::from_secs(60),
     }
 }
 
@@ -124,4 +125,54 @@ fn a_request_that_fails_after_every_wait_is_parked_at_the_bound() {
     let store: Sqlite = captured();
     assert_eq!(passed(&store, &Down(AtomicUsize::new(0)), 3, &[0, 1000, 3000, 7000]), 3);
     assert_eq!(fulfilment(&store), Fulfilment::Abandoned);
+}
+
+struct Peeks<'a> {
+    store: &'a Sqlite,
+    open: AtomicUsize,
+}
+
+impl Gateway<FulfilmentRequest> for Peeks<'_> {
+    type Reply = FulfilmentReply;
+
+    async fn perform(&self, _id: RequestId, _stream: &str, _request: &FulfilmentRequest) -> Result<FulfilmentReply, GatewayError> {
+        let open: Vec<Claimed<FulfilmentRequest>> = self.store.claim::<Progress>(10, Moment::ZERO, Moment::ZERO).expect("claimed");
+        self.open.fetch_add(open.len(), Ordering::SeqCst);
+        Ok(FulfilmentReply::StockUnavailable)
+    }
+}
+
+fn peeked(lease: Duration) -> usize {
+    let store: Sqlite = captured();
+    let gateway: Peeks<'_> = Peeks {
+        store: &store,
+        open: AtomicUsize::new(0),
+    };
+    let held: Retry = Retry { lease, ..retry(5) };
+    assert_eq!(ready(relay::<Progress, Sqlite, Peeks<'_>>(&store, &gateway, 10, &held, Moment::ZERO)), Ok(1));
+    gateway.open.load(Ordering::SeqCst)
+}
+
+#[test]
+fn while_a_relay_performs_a_request_under_its_lease_no_other_claim_is_handed_it() {
+    assert_eq!(peeked(Duration::from_secs(60)), 0);
+}
+
+#[test]
+fn with_no_lease_a_second_claim_is_handed_the_request_being_performed() {
+    assert_eq!(peeked(Duration::ZERO), 1);
+}
+
+#[test]
+fn a_request_claimed_by_a_relay_that_died_is_not_performed_before_the_lease_ends() {
+    let store: Sqlite = captured();
+    let died: usize = store.claim::<Progress>(10, Moment::ZERO, Moment::ZERO.after(60_000)).expect("claimed").len();
+    assert_eq!((died, passed(&store, &Down(AtomicUsize::new(0)), 5, &[59_999])), (1, 0));
+}
+
+#[test]
+fn a_request_claimed_by_a_relay_that_died_is_performed_when_the_lease_ends() {
+    let store: Sqlite = captured();
+    let died: usize = store.claim::<Progress>(10, Moment::ZERO, Moment::ZERO.after(60_000)).expect("claimed").len();
+    assert_eq!((died, passed(&store, &Down(AtomicUsize::new(0)), 5, &[60_000])), (1, 1));
 }

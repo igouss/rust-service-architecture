@@ -313,6 +313,32 @@ impl Writer for Session<'_> {
     }
 }
 
+fn due(transaction: &Transaction<'_>, lifecycle: &'static str, limit: usize, now: Moment) -> Result<Vec<StoredRequest>, StoreError> {
+    let limit: i64 = i64::try_from(limit).unwrap_or(i64::MAX);
+    let mut statement = transaction
+        .prepare_cached(
+            "SELECT outbox.id, stream, request, attempts FROM outbox LEFT JOIN deferred ON deferred.id = outbox.id
+             WHERE lifecycle = ?1 AND done = 0 AND coalesce(not_before, 0) <= ?3 ORDER BY attempts, outbox.id LIMIT ?2",
+        )
+        .map_err(unavailable)?;
+    let rows = statement
+        .query_map(params![lifecycle, limit, now.stored()], |row: &rusqlite::Row<'_>| {
+            Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, i64>(3)?))
+        })
+        .map_err(unavailable)?;
+    let mut requests: Vec<StoredRequest> = Vec::new();
+    for row in rows {
+        let (id, stream, request, attempts) = row.map_err(unavailable)?;
+        requests.push(StoredRequest {
+            id: loaded("outbox", id, RequestId::loaded)?,
+            stream,
+            request,
+            attempts: loaded("outbox", attempts, |count: i64| u64::try_from(count).ok())?,
+        });
+    }
+    Ok(requests)
+}
+
 impl Store for Sqlite {
     fn transact<T>(&self, _key: Key, work: impl FnOnce(&mut dyn Writer) -> Result<T, StoreError>) -> Result<T, StoreError> {
         let mut connection: MutexGuard<'_, Connection> = self.connection()?;
@@ -335,30 +361,21 @@ impl Store for Sqlite {
         }
     }
 
-    fn requests(&self, _key: Key, lifecycle: &'static str, limit: usize, now: Moment) -> Result<Vec<StoredRequest>, StoreError> {
-        let connection: MutexGuard<'_, Connection> = self.connection()?;
-        let limit: i64 = i64::try_from(limit).unwrap_or(i64::MAX);
-        let mut statement = connection
-            .prepare_cached(
-                "SELECT outbox.id, stream, request, attempts FROM outbox LEFT JOIN deferred ON deferred.id = outbox.id
-                 WHERE lifecycle = ?1 AND done = 0 AND coalesce(not_before, 0) <= ?3 ORDER BY attempts, outbox.id LIMIT ?2",
-            )
-            .map_err(unavailable)?;
-        let rows = statement
-            .query_map(params![lifecycle, limit, now.stored()], |row: &rusqlite::Row<'_>| {
-                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, i64>(3)?))
-            })
-            .map_err(unavailable)?;
-        let mut requests: Vec<StoredRequest> = Vec::new();
-        for row in rows {
-            let (id, stream, request, attempts) = row.map_err(unavailable)?;
-            requests.push(StoredRequest {
-                id: loaded("outbox", id, RequestId::loaded)?,
-                stream,
-                request,
-                attempts: loaded("outbox", attempts, |count: i64| u64::try_from(count).ok())?,
-            });
+    fn requests(&self, _key: Key, lifecycle: &'static str, limit: usize, now: Moment, until: Moment) -> Result<Vec<StoredRequest>, StoreError> {
+        let mut connection: MutexGuard<'_, Connection> = self.connection()?;
+        let transaction: Transaction<'_> = connection.transaction_with_behavior(TransactionBehavior::Immediate).map_err(unavailable)?;
+        let requests: Vec<StoredRequest> = due(&transaction, lifecycle, limit, now)?;
+        for request in &requests {
+            transaction
+                .prepare_cached(
+                    "INSERT INTO deferred (id, not_before) VALUES (?1, ?2)
+                     ON CONFLICT (id) DO UPDATE SET not_before = max(not_before, excluded.not_before)",
+                )
+                .map_err(unavailable)?
+                .execute(params![request.id.stored(), until.stored()])
+                .map_err(unavailable)?;
         }
+        transaction.commit().map_err(unavailable)?;
         Ok(requests)
     }
 
