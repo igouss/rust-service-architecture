@@ -128,6 +128,8 @@ Not built:
 
 - **A gateway to a real system.** The warehouse in `server` answers from nothing; it shows
   where a gateway plugs in, not how to call one.
+- **Compensation.** A fulfilment that is abandoned leaves its payment captured and tells
+  nobody; decision record 0027 proposes two ways to close that and takes neither.
 - **Schema migrations.** State rows are meant to change shape by migration; there is no
   migration mechanism yet, and the tables are created only if absent.
 - **A scheduler adapter, a published wire format for other services, authentication.**

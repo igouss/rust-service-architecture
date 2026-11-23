@@ -43,8 +43,10 @@ file (`arch-m7du`), now taken in one place, `Postgres::alone`. `app::Retry` gain
 Every existing assertion: tests that claim twice pass `Moment::ZERO` as the lease, which is
 no lease. Order of claiming. Changed because the signatures did: each `claim` call gains an
 argument and each `Retry` a field. The anchors of T30 and T77 follow the memory store's
-rewritten claim, and T39 anchors on the one place the lock is now taken; faults unchanged.
-New mutants T93 to T97.
+rewritten claim, T41 and T89 the rewritten Postgres query, and T39 anchors on the one place
+the lock is now taken; faults unchanged. T41 survived the first form of that query, which
+stated the order of claiming twice; the query states it once and T41 dies. New mutants T93 to
+T97.
 
 ## Flagged assumptions
 
