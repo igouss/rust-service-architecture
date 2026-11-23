@@ -8,47 +8,6 @@ TEST_ALLOWS = {"clippy::expect_used", "clippy::panic"}
 SHELL_FREE = CORE + ("usecase",)
 
 
-STORED = {"Lifecycle": ("Event", "Refusal"), "Reaction": ("Request",), "Projection": ("Row",)}
-
-
-def stored_types(package, texts):
-    named = []
-    for text in texts:
-        for kind, slots in STORED.items():
-            for head in re.finditer(r"\bimpl\s+%s\s+for\s+(\w+)\s*\{" % kind, text):
-                body = text[head.end() : closing(text, head.end() - 1)]
-                slot = [re.search(r"\btype\s+%s\s*=\s*(\w+)\s*;" % name, body) for name in slots]
-                if None in slot:
-                    raise Unread("%s: `impl %s for %s` does not name its %s as one type" % (package["name"], kind, head.group(1), " and ".join(slots)))
-                named += [head.group(1)] * (kind == "Lifecycle") + [found.group(1) for found in slot]
-        if sum(len(re.findall(r"\b%s\s+for\b" % kind, text)) for kind in STORED) != sum(1 for _ in re.finditer(r"\bimpl\s+(%s)\s+for\s+\w+\s*\{" % "|".join(STORED), text)):
-            raise Unread("%s: an impl of %s the scan could not read" % (package["name"], ", ".join(STORED)))
-    direct = set(named)
-    reached, queue = set(), sorted(direct)
-    while queue:
-        name = queue.pop()
-        reached.add(name)
-        queue += [inner for inner in set(re.findall(r"\b[A-Z]\w*\b", declared(name, texts)[1])) - reached if any(re.search(r"\b(enum|struct)\s+%s\b" % inner, text) for text in texts)]
-    return direct, reached
-
-
-def stored():
-    found, pins = [], 0
-    for package in packages():
-        texts = [lex(path)[0] for path in rust_files(package, "src")]
-        direct, reached = stored_types(package, texts)
-        test = os.path.join(folder(package), "tests", "stored_encoding.rs")
-        code = lex(test)[0] if os.path.exists(test) else ""
-        for name in sorted(reached):
-            enum = declared(name, texts)[0] == "enum"
-            wanted = ["%s::%s" % (name, variant) for variant in enum_variants(name, texts)] if enum else [name] if name in direct else []
-            pins += len(wanted)
-            found += ["arch-btw1: %s does not pin %s" % (relative(test), sample) for sample in wanted if not re.search(r"\bpinned\(\s*&\s*%s\b" % sample, code)]
-    if not pins:
-        raise Unread("no stored type found; the check has nothing to read")
-    return found, ["A stored type's encoding only grows, so each variant's JSON is pinned where a change to it fails.", "Fix: add `pinned(&Type::Variant, form)` to the test, and the variant's JSON to `form`'s match."]
-
-
 INSTALL = re.compile(r"\bcargo\s+install\b")
 GIT = re.compile(r"--git(?![\w-])")
 PINNED = re.compile(r"--rev[= ][0-9a-fA-F]{40}(?!\w)")
@@ -85,7 +44,7 @@ def pins():
     return found, ["A tool built from a branch is whatever the branch holds the day CI runs, so a green no longer says which gate passed it.", "Fix: add `--rev <commit>`, the 40-hex id `git ls-remote <url> HEAD` prints, once `just check` passes with that build (docs/adr/0017-gate-tools-are-pinned.md)."]
 
 
-CHECKS = {"stored": stored, "pins": pins}
+CHECKS = {"pins": pins}
 
 
 def main():

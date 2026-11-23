@@ -29,7 +29,7 @@ names the rule it enforces.
 | `allows` | a lexed scan of every member | no `allow` or `expect` attribute, bare or under `cfg_attr`, except the one of [`arch-4za`](enforcement.req.md) |
 | `wildcards` | a parsed scan of `domain` and `app` | no element of a tuple pattern is `_`, `..` or a bare name |
 | `traits` | a lexed scan of every member | no `trait` is declared outside `domain/src/lib.rs`, `app/src/lib.rs` and `ports/src` |
-| `stored` | a lexed scan of each crate that declares a lifecycle | every state, event, refusal, request and row, and every enum they hold, has each variant sampled in `tests/stored_encoding.rs` |
+| `stored` | a parsed scan of each crate that declares a lifecycle | every state, event, refusal, request and row, and every enum they hold, has each variant sampled in `tests/stored_encoding.rs` |
 | `pins` | a scan of every workflow under `.github/workflows` | every `cargo install --git` names `--rev` and a 40-hex commit; red when a `cargo install` is not one to a line |
 | `docs` | `guide-sync.bb` | every Rust block in these documents is code in the workspace |
 | `ids` | `req check` | the requirement ids and their projection are current |

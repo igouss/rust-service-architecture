@@ -9,6 +9,7 @@ const GATES: &[(&str, Gate)] = &[
     ("allows", gates::allows::allows),
     ("wildcards", gates::wildcards::wildcards),
     ("traits", gates::traits::traits),
+    ("stored", gates::stored::stored),
 ];
 
 fn main() -> ExitCode {

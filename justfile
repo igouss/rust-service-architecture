@@ -75,7 +75,7 @@ traits:
 
 [doc("arch-btw1: every variant of every stored type has a pinned sample in the crate's tests/stored_encoding.rs.")]
 stored:
-    @python3 lint.py stored
+    @cargo run -q -p gates -- stored
 
 [doc("arch-mov6: every tool a workflow builds with `cargo install --git` is pinned with `--rev` to a 40-hex commit.")]
 pins:

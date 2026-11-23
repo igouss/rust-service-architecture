@@ -2,6 +2,8 @@
 
 pub mod allows;
 pub mod comments;
+pub mod declared;
+pub mod stored;
 pub mod tokens;
 pub mod traits;
 pub mod wildcards;
