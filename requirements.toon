@@ -74,7 +74,7 @@ requirements[74]{id,verification}:
   arch-yod,exempt
   arch-yr1,test
   arch-zhm,test
-criteria[136]{id,requirement}:
+criteria[137]{id,requirement}:
   arch-06ys.1,arch-06ys
   arch-06ys.2,arch-06ys
   arch-0bd.1,arch-0bd
@@ -204,6 +204,7 @@ criteria[136]{id,requirement}:
   arch-v9j1.1,arch-v9j1
   arch-v9j1.2,arch-v9j1
   arch-v9j1.3,arch-v9j1
+  arch-v9j1.4,arch-v9j1
   arch-w0v.1,arch-w0v
   arch-wmwy.1,arch-wmwy
   arch-wp0.1,arch-wp0

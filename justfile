@@ -1,7 +1,7 @@
 default: check
 
 [doc("Everything that must be green before a commit. Seconds, not minutes.")]
-check: fmt clippy names test roles raw-store purity events comments allows wildcards traits stored pins docs ids views-current
+check: fmt clippy names test roles raw-store purity events comments allows wildcards traits stored refined pins docs ids views-current
 
 [doc("Serve the tasks and the payments. TASKS_DATABASE, TASKS_LISTEN, TASKS_DURABILITY (full|normal) and TASKS_RELAY_ATTEMPTS override the defaults.")]
 run:
@@ -76,6 +76,10 @@ traits:
 [doc("arch-btw1: every variant of every stored type has a pinned sample in the crate's tests/stored_encoding.rs.")]
 stored:
     @cargo run -q -p gates -- stored
+
+[doc("arch-v9j1: the TryFrom a refined type loads its stored values through does not call the type's new, which holds the rule for new input.")]
+refined:
+    @cargo run -q -p gates -- refined
 
 [doc("arch-mov6: every tool a workflow builds with `cargo install --git` is pinned with `--rev` to a 40-hex commit.")]
 pins:

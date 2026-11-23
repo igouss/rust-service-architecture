@@ -30,6 +30,7 @@ names the rule it enforces.
 | `wildcards` | a parsed scan of `domain` and `app` | no element of a tuple pattern is `_`, `..` or a bare name |
 | `traits` | a lexed scan of every member | no `trait` is declared outside `domain/src/lib.rs`, `app/src/lib.rs` and `ports/src` |
 | `stored` | a parsed scan of each crate that declares a lifecycle | every state, event, refusal, request and row, and every enum they hold, has each variant sampled in `tests/stored_encoding.rs` |
+| `refined` | a token scan of every member's `src` | the `TryFrom` of a type marked `#[serde(try_from)]` does not call the type's `new`; red when a mark or a loader is not read |
 | `pins` | a scan of every workflow under `.github/workflows` | every `cargo install --git` names `--rev` and a 40-hex commit; red when a `cargo install` is not one to a line |
 | `docs` | `gates docs` | every Rust block in these documents is code in the workspace |
 | `ids` | `req check` | the requirement ids and their projection are current |
@@ -46,7 +47,7 @@ weekly; it never blocks a change ([`arch-h6j`](enforcement.req.md)).
 
 ### Acceptance
 
-- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G30.
+- `arch-ajd.1` Each gate goes red on a planted violation: mutants G1 to G32.
 
 ## `arch-mov6` The gate tools shall be installed at a pinned revision
 
@@ -117,7 +118,7 @@ verification-reason: review only (T4); no gate is built
 | a check that an event carries what was decided, not the state after it | [core](core.req.md) | names only (`events`) |
 | a check that no query result enters a command as proof of uniqueness | [core](core.req.md) | review |
 | a check that forgettable state with unbounded keys is not a lifecycle | [adapters](adapters.req.md) | review |
-| a check that a refined type's `Deserialize` does not call its constructor | [`arch-v9j1`](core.req.md) | review; the constant assertion holds the two limits apart, not the two code paths, and at equal limits no test tells them apart |
+| a check that a refined type's stored rule and its rule for new input share no code | [`arch-v9j1`](core.req.md) | the `refined` recipe sees a call to `new` in the `TryFrom`; a helper both call, and a type that derives `Deserialize` with no mark, are review |
 | a check that a stream id is built with its lifecycle written out | [`arch-tx8f`](ports.req.md) | review; `StreamId::new` with no annotation takes the lifecycle of the call it is passed to |
 | a compile-time check that no two lifecycles and no two projections share a `NAME` | [`arch-1bmf`](core.req.md) | the `names` recipe (T3); decision record 0013 |
 | an idempotency key on the page's own forms | [`arch-59ap`](adapters.req.md) | not built; a request without a key is not safe to repeat |

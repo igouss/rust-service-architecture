@@ -55,6 +55,9 @@ every test and every mutant: the two rules differ only once one of them moves. T
 assertion catches the limits crossing; it does not catch the code paths merging. That is a row
 in the gap ledger (`arch-yod`), checked by review.
 
+Since [0029](0029-a-loader-does-not-call-the-constructor.md) the `refined` recipe catches the
+direct case, a `TryFrom` that calls `new`; the ledger row narrows to a helper both call.
+
 ## What would reverse it
 
 A rule that must be enforced on stored values too (a legal requirement to purge something) is

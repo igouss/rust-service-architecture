@@ -486,3 +486,31 @@ gate = [
     "pins",
 ]
 names = "igouss/req names no --rev"
+
+[[mutant]]
+name = "G31 a stored title loads through the constructor for new titles"
+path = "domain/src/task.rs"
+anchor = '(false, false) => Ok(Title(text)),'
+replacement = '(false, false) => Title::new(&text),'
+example = true
+
+[mutant.expect]
+gate = [
+    "just",
+    "refined",
+]
+names = "Title loads its stored values through TryFrom, which calls Title::new"
+
+[[mutant]]
+name = "G32 a title marked as loading through TryFrom has no loader the scan reads"
+path = "domain/src/task.rs"
+anchor = 'impl TryFrom<String> for Title {'
+replacement = 'impl<T: Into<String>> TryFrom<T> for Loaded<T> {'
+example = true
+
+[mutant.expect]
+gate = [
+    "just",
+    "refined",
+]
+names = "read as `impl TryFrom<…> for Type { … }`"

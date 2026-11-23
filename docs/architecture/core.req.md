@@ -203,7 +203,8 @@ and a constant assertion keeps the first from exceeding the second.
 
 ### Acceptance
 
-- `arch-v9j1.1` A title stored at the stored limit loads through the store: `a_title_stored_under_the_rule_of_its_day_loads_whatever_the_rule_for_new_titles_is_now`. While the two limits are equal this test cannot tell a load that calls the constructor from one that does not; it was seen to fail as `StoreError::Corrupt` only with `Title::LIMIT` lowered by hand (decision record 0011). That loading does not call the constructor is review (T4, gap ledger).
+- `arch-v9j1.1` A title stored at the stored limit loads through the store: `a_title_stored_under_the_rule_of_its_day_loads_whatever_the_rule_for_new_titles_is_now`. While the two limits are equal this test cannot tell a load that calls the constructor from one that does not; it was seen to fail as `StoreError::Corrupt` only with `Title::LIMIT` lowered by hand (decision record 0011).
+- `arch-v9j1.4` The `TryFrom` of a type marked `#[serde(try_from)]` does not call the type's `new`: the `refined` recipe (T3; mutants G31 and G32). A helper that both call is review (T4, gap ledger).
 - `arch-v9j1.2` The rule for new input cannot be looser than the stored rule, and the stored rule cannot be tightened below it: a constant assertion (E0080; mutants C15 and C16).
 - `arch-v9j1.3` The stored rule still refuses what was never valid: `a_stored_blank_title_is_refused_on_load`, `a_stored_over_long_title_is_refused_on_load` (mutants T24 and T80).
 

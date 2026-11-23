@@ -10,6 +10,7 @@ const GATES: &[(&str, Gate)] = &[
     ("wildcards", gates::wildcards::wildcards),
     ("traits", gates::traits::traits),
     ("stored", gates::stored::stored),
+    ("refined", gates::refined::refined),
     ("pins", gates::pins::pins),
     ("names", gates::names::names),
     ("events", gates::events::events),

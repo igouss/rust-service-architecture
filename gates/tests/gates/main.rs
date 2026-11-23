@@ -11,6 +11,7 @@ mod mutants;
 mod names;
 mod pins;
 mod raw_store;
+mod refined;
 mod stored;
 mod traits;
 mod views;
