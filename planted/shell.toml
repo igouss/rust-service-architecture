@@ -371,8 +371,8 @@ expect = "test"
 [[mutant]]
 name = "T84 the relay offers a request whose unit keeps failing for ever"
 path = "app/src/lib.rs"
-anchor = "=> stranded::<X::Reads, K>(store, id, &unsettled)?,"
-replacement = "=> store.failed(id).map(|()| drop(unsettled))?,"
+anchor = '=> stranded::<X::Reads, K>(store, id, &unsettled)?,'
+replacement = '=> store.failed(id, retry.again(now, failed)).map(|()| drop(unsettled))?,'
 expect = "test"
 
 [[mutant]]

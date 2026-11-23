@@ -51,7 +51,9 @@ call in the tests gains `Moment::ZERO` or a `Retry` with no wait, which keeps ea
 "at once" meaning. One expectation changes on purpose: `server` gives a request ten
 attempts by default where it gave five (`the_relay_gives_a_request_ten_attempts_by_default`).
 The anchors of T16, T26, T41, T42, T67, T68, T69 and T83 follow the lines that moved; their
-faults are the same. New mutants T87 to T92.
+faults are the same. New mutants T87 to T92. T84's planted line called `failed` with one
+argument and stopped compiling here; a full run of the mutants found it, and it now passes the
+moment as the code does.
 
 ## Flagged assumptions
 
