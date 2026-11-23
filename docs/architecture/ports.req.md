@@ -15,6 +15,12 @@ unit's transaction. There is no `save(state)`, no `append(event)`, no `Outbox::p
 `Outbox::done` and no `Rejections::record`: with a second method, "call both" is a sentence,
 and a sentence is what agents violate. An invariant the API can make impossible to violate lives in the API's shape.
 
+One method closes a request and applies nothing: `Unit::strand`. It changes no lifecycle, so
+it is not a second way to change one; it is a second way to close a request, beside
+`Unit::finish` and `Unit::park`, and it exists for the relay alone, for the request whose
+reaction is the thing that fails ([`arch-22kr`](invariants.req.md), decision record 0024).
+Nothing else may call it: a request closed with nothing applied leaves its lifecycle waiting.
+
 ```rust
 use std::fmt;
 use std::future::Future;

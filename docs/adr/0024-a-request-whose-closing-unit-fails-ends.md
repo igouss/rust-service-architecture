@@ -39,6 +39,12 @@ every variant, so a new `StoreError` does not compile until it is put on one sid
 
 No raw-store method changed; `strand` is `Writer::park` without `apply`.
 
+`strand` is a new method on a port, and `arch-s6q` lists `Outbox::done` among the methods
+that must not exist, for the reason that a request closed apart from its reaction invites
+"call both". `strand` is that method under a narrower name, admitted for one caller.
+`arch-s6q` now says so. Nothing in the types stops another caller: review holds that line,
+and the gap ledger has the row.
+
 ## What it preserved
 
 Every existing test, and every mutant's fault. The anchors of T15 and T66 follow the relay's

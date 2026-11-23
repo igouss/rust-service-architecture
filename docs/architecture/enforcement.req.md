@@ -121,6 +121,7 @@ verification-reason: review only (T4); no gate is built
 | a check that a refined type's stored rule and its rule for new input share no code | [`arch-v9j1`](core.req.md) | the `refined` recipe sees a call to `new` in the `TryFrom`; a helper both call, and a type that derives `Deserialize` with no mark, are review |
 | a check that a stream id is built with its lifecycle written out | [`arch-tx8f`](ports.req.md) | review; `StreamId::new` with no annotation takes the lifecycle of the call it is passed to |
 | a compile-time check that no two lifecycles and no two projections share a `NAME` | [`arch-1bmf`](core.req.md) | the `names` recipe (T3); decision record 0013 |
+| a check that only the relay closes a request with nothing applied (`Unit::strand`) | [`arch-s6q`](ports.req.md) | review; the method is public |
 | an idempotency key on the page's own forms | [`arch-59ap`](adapters.req.md) | not built; a request without a key is not safe to repeat |
 
 ### Acceptance
