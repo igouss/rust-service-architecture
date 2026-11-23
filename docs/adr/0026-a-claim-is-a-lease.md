@@ -56,8 +56,13 @@ T97.
 - A relay that fails to reach its store after the gateway answered leaves the request leased;
   it is performed again when the lease ends.
 - The Postgres claim is safe because it runs under the schema's advisory lock, not because of
-  row locks. The concurrency test passed here; without the lock it may also pass most of the
-  time, so no mutant is planted for it and review holds that line.
+  row locks. Mutant T39 removes that lock from the one place both the unit of work and the
+  claim take it, and `relays_claiming_at_once_under_a_lease_are_each_handed_different_requests`
+  was among the tests that killed it in the run made for this record. A race is not certain
+  to show on every run, so that test can pass by luck with the lock gone.
+- The moment a claim is made at and the moment its lease ends both come from the clock of the
+  process that claims. Two processes on one Postgres store whose clocks differ by more than
+  the lease are both handed the request. Nothing here takes the time from the database.
 
 ## What would reverse it
 
