@@ -106,7 +106,7 @@ Participants: `Outbox`, `app::relay`, every `Gateway`.
 - `arch-fif.2` A request whose gateway fails stays claimable: `a_request_the_gateway_fails_stays_claimable` (mutant T14), and does not hold back the next one: `a_request_that_keeps_failing_does_not_hold_back_the_next_one` (mutant T26).
 - `arch-fif.3` Each real gateway's duplicate-delivery test performs one request twice and observes one effect (CI).
 
-## `arch-8xq0` A claimed request shall be handed to no other claim until its lease ends
+## `arch-1do9` A claimed request shall be handed to no other claim until its lease ends
 
 When a request is claimed, the system shall put it off until the moment the claim names, in
 the transaction that hands it out. While that moment has not come and the request has not
@@ -117,10 +117,10 @@ Participants: `Outbox::claim`, `Store::requests`, `app::Retry`, `app::relay`.
 
 ### Acceptance
 
-- `arch-8xq0.1` A request under a lease is not claimed again before the lease ends and is claimed again when it does, one request or many: `a_request_claimed_under_a_lease_is_not_claimed_again_before_the_lease_ends`, `a_request_claimed_under_a_lease_is_claimed_again_when_the_lease_ends`, `many_requests_claimed_under_one_lease_are_all_held`, `a_lease_holds_only_the_requests_it_claimed` (mutants T93 to T95).
-- `arch-8xq0.2` A failure inside the lease decides when the request is due, and a claim with no lease moves nothing: `a_leased_request_that_fails_is_claimed_from_the_moment_it_was_put_off_to`, `a_claim_with_no_lease_leaves_a_request_put_off_where_it_was` (mutant T97).
-- `arch-8xq0.3` While the relay performs a request no other claim is handed it, and a relay that died leaves it until the lease ends: `while_a_relay_performs_a_request_under_its_lease_no_other_claim_is_handed_it`, `a_request_claimed_by_a_relay_that_died_is_not_performed_before_the_lease_ends`, `a_request_claimed_by_a_relay_that_died_is_performed_when_the_lease_ends` (mutant T96).
-- `arch-8xq0.4` Postgres relays claiming at once are each handed different requests: `relays_claiming_at_once_under_a_lease_are_each_handed_different_requests` (`just postgres`).
+- `arch-1do9.1` A request under a lease is not claimed again before the lease ends and is claimed again when it does, one request or many: `a_request_claimed_under_a_lease_is_not_claimed_again_before_the_lease_ends`, `a_request_claimed_under_a_lease_is_claimed_again_when_the_lease_ends`, `many_requests_claimed_under_one_lease_are_all_held`, `a_lease_holds_only_the_requests_it_claimed` (mutants T93 to T95).
+- `arch-1do9.2` A failure inside the lease decides when the request is due, and a claim with no lease moves nothing: `a_leased_request_that_fails_is_claimed_from_the_moment_it_was_put_off_to`, `a_claim_with_no_lease_leaves_a_request_put_off_where_it_was` (mutant T97).
+- `arch-1do9.3` While the relay performs a request no other claim is handed it, and a relay that died leaves it until the lease ends: `while_a_relay_performs_a_request_under_its_lease_no_other_claim_is_handed_it`, `a_request_claimed_by_a_relay_that_died_is_not_performed_before_the_lease_ends`, `a_request_claimed_by_a_relay_that_died_is_performed_when_the_lease_ends` (mutant T96).
+- `arch-1do9.4` Postgres relays claiming at once are each handed different requests: `relays_claiming_at_once_under_a_lease_are_each_handed_different_requests` (`just postgres`).
 
 ## `arch-ruz9` A gateway's reply shall re-enter the lifecycle that issued the request, once
 
@@ -162,8 +162,8 @@ Participants: `GatewayError`, `domain::Undelivered`, `app::relay`, `app::abandon
 - `arch-22kr.4` A parked request is closed once, like a finished one: `a_request_parked_twice_applies_its_reaction_once`, `a_request_finished_and_parked_in_one_unit_applies_only_the_first_reaction`, `a_unit_that_fails_after_parking_a_request_leaves_it_claimable`.
 - `arch-22kr.5` A parked request can be read where the store keeps it, with its cause and its attempts: `a_parked_request_is_read_with_sql_with_its_cause_and_its_attempts` for SQLite and Postgres, `a_parked_request_is_held_as_parked_with_its_cause_and_its_attempts` for memory (mutants T70 to T75).
 - `arch-22kr.6` A reply whose unit fails is counted, does not hold back the next request, and at the bound is parked with nothing applied: `a_reply_whose_unit_fails_is_counted_and_offered_again`, `a_request_behind_one_whose_unit_fails_is_performed_in_the_same_pass`, `a_reply_whose_unit_fails_as_often_as_the_bound_parks_the_request_and_tells_nothing` (mutants T83 to T85).
-- `arch-22kr.8` A failed request is put off for a wait that doubles with each failure up to a longest wait, and no store hands it out before that moment: `each_further_failure_doubles_the_wait`, `the_wait_is_never_longer_than_the_longest`, `a_failed_request_is_not_performed_again_before_its_wait_is_over`, `five_passes_half_a_second_apart_leave_a_fulfilment_reserving`, `a_request_put_off_is_not_claimed_before_its_moment`, `a_request_put_off_is_claimed_at_its_moment` (mutants T87 to T92).
-- `arch-22kr.7` A request whose lifecycle cannot be told is parked all the same, with a cause: `a_rejected_request_whose_lifecycle_cannot_be_told_is_parked_all_the_same`, `a_stranded_request_is_not_claimed_again_and_applies_nothing`, `a_stranded_request_is_held_as_parked_with_its_cause` (mutant T86).
+- `arch-22kr.7` A failed request is put off for a wait that doubles with each failure up to a longest wait, and no store hands it out before that moment: `each_further_failure_doubles_the_wait`, `the_wait_is_never_longer_than_the_longest`, `a_failed_request_is_not_performed_again_before_its_wait_is_over`, `five_passes_half_a_second_apart_leave_a_fulfilment_reserving`, `a_request_put_off_is_not_claimed_before_its_moment`, `a_request_put_off_is_claimed_at_its_moment` (mutants T87 to T92).
+- `arch-22kr.8` A request whose lifecycle cannot be told is parked all the same, with a cause: `a_rejected_request_whose_lifecycle_cannot_be_told_is_parked_all_the_same`, `a_stranded_request_is_not_claimed_again_and_applies_nothing`, `a_stranded_request_is_held_as_parked_with_its_cause` (mutant T86).
 
 ## `arch-oif` A read model shall hold exactly the fold of its lifecycle's facts up to its position
 
