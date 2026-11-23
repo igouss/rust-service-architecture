@@ -1,7 +1,7 @@
 # 0021. The source gates read Rust with a hand-written lexer; a `syn` tool could parse it
 
 Date: 2026-11-23
-Status: proposed
+Status: decided by [0022](0022-the-gates-are-a-workspace-crate.md), which takes option B inside this workspace
 
 ## Weakest part
 

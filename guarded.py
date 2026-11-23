@@ -5,7 +5,7 @@ from workspace import ROOT
 
 TABLES = (("workspace", "lints"), ("lints",), ("package", "metadata", "hex-arch"))
 TOP = ("justfile", "clippy.toml", "rustfmt.toml")
-UNDER = ("planted/", ".github/workflows/")
+UNDER = ("planted/", ".github/workflows/", "gates/")
 
 
 def git(*args):

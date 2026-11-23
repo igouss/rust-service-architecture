@@ -12,6 +12,7 @@ graph TD
     app["app<br/><i>usecase</i>"]
     bench["bench<br/><i>composition-root</i>"]
     domain["domain<br/><i>domain</i>"]
+    gates["gates<br/><i>infra</i>"]
     ports["ports<br/><i>port-and-adapter</i>"]
     server["server<br/><i>composition-root</i>"]
     adapter_http -.-> adapter_sqlite

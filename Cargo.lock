@@ -356,6 +356,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "gates"
+version = "0.0.0"
+dependencies = [
+ "proc-macro2",
+ "serde",
+ "serde_json",
+ "syn 2.0.119",
+]
+
+[[package]]
 name = "getrandom"
 version = "0.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
