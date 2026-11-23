@@ -4,7 +4,11 @@ use gates::{Unread, Verdict};
 
 type Gate = fn(&[String]) -> Result<Verdict, Unread>;
 
-const GATES: &[(&str, Gate)] = &[("comments", gates::comments::comments), ("allows", gates::allows::allows)];
+const GATES: &[(&str, Gate)] = &[
+    ("comments", gates::comments::comments),
+    ("allows", gates::allows::allows),
+    ("wildcards", gates::wildcards::wildcards),
+];
 
 fn main() -> ExitCode {
     let asked: Vec<String> = std::env::args().skip(2).collect();

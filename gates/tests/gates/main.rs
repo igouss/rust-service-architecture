@@ -4,6 +4,7 @@ use gates::tokens::Source;
 
 mod allows;
 mod comments;
+mod wildcards;
 
 pub fn source(text: &str) -> Source {
     Source::of(String::from("fixture.rs"), String::from(text)).expect("the fixture lexes")

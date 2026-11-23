@@ -8,45 +8,6 @@ TEST_ALLOWS = {"clippy::expect_used", "clippy::panic"}
 SHELL_FREE = CORE + ("usecase",)
 
 
-def patterns(code):
-    found = []
-    for keyword in re.finditer(r"\bmatch\b", code):
-        opened = top(code, "{", keyword.end(), len(code))
-        if opened == len(code):
-            raise Unread("line %d: a match with no body" % line_of(code, keyword.start()))
-        found += [pattern for pattern, _then in arms(code, opened)]
-    if len(found) != code.count("=>"):
-        raise Unread("%d `=>` and %d match arms read" % (code.count("=>"), len(found)))
-    return found
-
-
-def loose(pattern, element):
-    for alternative in split(pattern, "|"):
-        text = re.sub(r"^\s*&?\s*(?:\w+\s*@)?", "", alternative).strip()
-        if text.startswith("(") and closing(text, 0, "()") == len(text) - 1:
-            for inner in split(text[1:-1], ","):
-                yield from loose(inner, True)
-        elif element and text not in ("true", "false") and re.fullmatch(r"\.\.|(?:(?:ref|mut)\s+)*[a-z_]\w*", text):
-            yield " ".join(alternative.split())
-
-
-def wildcards():
-    found, read = [], 0
-    for package in packages():
-        if role(package) not in SHELL_FREE:
-            continue
-        for path in rust_files(package, "src"):
-            try:
-                read_arms = patterns(lex(path)[0])
-            except Unread as unread:
-                raise Unread("%s: %s" % (relative(path), unread))
-            read += len(read_arms)
-            found += ["arch-j0k: %s `%s`" % (relative(path), " ".join(alternative.split())) for pattern in read_arms for alternative in split(pattern, "|") if any(loose(alternative, False))]
-    if not read:
-        raise Unread("no match arm in a crate of role %s; the check has nothing to read" % ", ".join(SHELL_FREE))
-    return found, ["A tuple element that is `_`, `..` or a bare name takes every case the arms above left, and a new variant lands there unseen.", "Fix: spell out every pair, naming each variant the element can be (`A | B`)."]
-
-
 def traits():
     found = []
     for package in packages():
@@ -142,7 +103,7 @@ def pins():
     return found, ["A tool built from a branch is whatever the branch holds the day CI runs, so a green no longer says which gate passed it.", "Fix: add `--rev <commit>`, the 40-hex id `git ls-remote <url> HEAD` prints, once `just check` passes with that build (docs/adr/0017-gate-tools-are-pinned.md)."]
 
 
-CHECKS = {"wildcards": wildcards, "traits": traits, "stored": stored, "pins": pins}
+CHECKS = {"traits": traits, "stored": stored, "pins": pins}
 
 
 def main():

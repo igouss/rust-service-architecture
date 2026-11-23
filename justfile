@@ -67,7 +67,7 @@ allows:
 
 [doc("arch-j0k: no element of a tuple pattern in domain or app catches every remaining case.")]
 wildcards:
-    @python3 lint.py wildcards
+    @cargo run -q -p gates -- wildcards
 
 [doc("arch-u8nl: a trait is declared only where the primitives live; a feature is an instance, never a new kind.")]
 traits:

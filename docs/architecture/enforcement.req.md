@@ -27,7 +27,7 @@ names the rule it enforces.
 | `events` | a lexed scan of every member's `src` | no lifecycle's event is named for a generic change; red when a lifecycle or its event enum is not read |
 | `comments` | a lexed scan of every member | no line or block comment except a `///` or `//!` doc comment, and `fc-allow` in the core |
 | `allows` | a lexed scan of every member | no `allow` or `expect` attribute, bare or under `cfg_attr`, except the one of [`arch-4za`](enforcement.req.md) |
-| `wildcards` | a lexed scan of `domain` and `app` | no element of a tuple pattern is `_`, `..` or a bare name |
+| `wildcards` | a parsed scan of `domain` and `app` | no element of a tuple pattern is `_`, `..` or a bare name |
 | `traits` | a lexed scan of every member | no `trait` is declared outside `domain/src/lib.rs`, `app/src/lib.rs` and `ports/src` |
 | `stored` | a lexed scan of each crate that declares a lifecycle | every state, event, refusal, request and row, and every enum they hold, has each variant sampled in `tests/stored_encoding.rs` |
 | `pins` | a scan of every workflow under `.github/workflows` | every `cargo install --git` names `--rev` and a 40-hex commit; red when a `cargo install` is not one to a line |

@@ -3,6 +3,7 @@
 pub mod allows;
 pub mod comments;
 pub mod tokens;
+pub mod wildcards;
 pub mod workspace;
 
 /// A gate that could not read what it checks: red, exit 2, never a pass.
