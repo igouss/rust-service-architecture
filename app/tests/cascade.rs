@@ -158,6 +158,95 @@ fn chain(store: &Sqlite) -> (Version, Chain) {
     store.read(|view: &mut View<'_>| view.state::<Chain>(&StreamId::new("c-1"))).expect("read")
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+enum Walker {
+    Resting,
+    Walked,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+enum Paced {
+    Step { left: u64, spread: u64 },
+}
+
+impl Lifecycle for Walker {
+    const NAME: &'static str = "cascade_walker";
+    type Event = Paced;
+    type Refusal = Never;
+
+    fn initial() -> Walker {
+        Walker::Resting
+    }
+
+    fn evolve(self, event: &Paced) -> Walker {
+        match (self, event) {
+            (Walker::Resting | Walker::Walked, Paced::Step { .. }) => Walker::Walked,
+        }
+    }
+}
+
+struct Walk {
+    left: u64,
+    spread: u64,
+}
+
+impl Reaction for Walk {
+    type Reads = Walker;
+    type Request = Never;
+
+    fn react(self, _reads: &Walker) -> Step<Paced, Never> {
+        Step {
+            events: vec![Paced::Step {
+                left: self.left,
+                spread: self.spread,
+            }],
+            requests: Vec::new(),
+        }
+    }
+}
+
+impl Policy for Walker {
+    fn after(unit: &mut Unit<'_>, fact: &Recorded<Walker>) -> Result<(), StoreError> {
+        let Paced::Step { left, spread } = fact.event();
+        (0..*spread).try_for_each(|spoke: u64| react(unit, &StreamId::<Walker>::new(format!("spoke-{spoke}")), Walk { left: 0, spread: 0 }))?;
+        match left {
+            0 => Ok(()),
+            more => react(unit, &StreamId::<Walker>::new(format!("walk-{}", more - 1)), Walk { left: more - 1, spread: 0 }),
+        }
+    }
+}
+
+fn walkers(store: &Sqlite) -> usize {
+    store.read(|view: &mut View<'_>| view.states::<Walker>()).expect("read").len()
+}
+
+#[test]
+fn one_fact_whose_policy_reaches_forty_streams_is_stored() {
+    let store: Sqlite = Sqlite::in_memory().expect("opens");
+    assert_eq!(advance(&store, &StreamId::new("hub"), Walk { left: 0, spread: 40 }), Ok(()));
+    assert_eq!(walkers(&store), 41);
+}
+
+#[test]
+fn a_cascade_over_fresh_streams_as_long_as_a_unit_allows_is_stored() {
+    let store: Sqlite = Sqlite::in_memory().expect("opens");
+    assert_eq!(advance(&store, &StreamId::new("walk-1023"), Walk { left: 1023, spread: 0 }), Ok(()));
+    assert_eq!(walkers(&store), 1024);
+}
+
+#[test]
+fn a_cascade_over_fresh_streams_one_outcome_longer_is_a_runaway_and_stores_nothing() {
+    let store: Sqlite = Sqlite::in_memory().expect("opens");
+    assert_eq!(
+        advance(&store, &StreamId::new("walk-1024"), Walk { left: 1024, spread: 0 }),
+        Err(StoreError::Runaway {
+            lifecycle: "cascade_walker",
+            outcomes: 1024
+        })
+    );
+    assert_eq!(walkers(&store), 0);
+}
+
 #[test]
 fn two_policies_that_trigger_each_other_end_the_unit_as_a_runaway_and_store_nothing() {
     let store: Sqlite = Sqlite::in_memory().expect("opens");

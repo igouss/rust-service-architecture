@@ -115,7 +115,7 @@ path = "app/src/lib.rs"
 anchor = "pub trait Policy: Lifecycle {"
 replacement = """
 pub fn unit(store: &mut dyn ports::store::Writer) -> Unit<'_> {
-    Unit { store, last: None, applied: 0 }
+    Unit { store, last: None, applied: 0, visits: std::collections::BTreeMap::new() }
 }
 
 pub trait Policy: Lifecycle {"""
@@ -255,15 +255,15 @@ expect = "E0271"
 [[mutant]]
 name = "T81 a unit of work allows one outcome more than its bound"
 path = "ports/src/lib.rs"
-anchor = "pub const OUTCOMES: u32 = 32;"
-replacement = "pub const OUTCOMES: u32 = 33;"
+anchor = 'pub const OUTCOMES: u32 = 1024;'
+replacement = 'pub const OUTCOMES: u32 = 1025;'
 expect = "test"
 
 [[mutant]]
 name = "T82 the bound on a unit's outcomes is checked one outcome late"
 path = "ports/src/lib.rs"
-anchor = "if self.applied == Unit::OUTCOMES {"
-replacement = "if self.applied > Unit::OUTCOMES {"
+anchor = 'self.applied == Unit::OUTCOMES) {'
+replacement = 'self.applied > Unit::OUTCOMES) {'
 expect = "test"
 
 [[mutant]]
@@ -408,4 +408,25 @@ name = "T96 the relay claims under a lease that ends at once"
 path = "app/src/lib.rs"
 anchor = 'now.after(u64::try_from(self.lease.as_millis()).unwrap_or(u64::MAX))'
 replacement = 'now.after(u64::try_from(self.lease.as_millis()).unwrap_or(u64::MAX).min(0))'
+expect = "test"
+
+[[mutant]]
+name = "T98 a unit of work allows one visit more to a stream than its bound"
+path = "ports/src/lib.rs"
+anchor = 'pub const VISITS: u32 = 32;'
+replacement = 'pub const VISITS: u32 = 33;'
+expect = "test"
+
+[[mutant]]
+name = "T99 the bound on visits to a stream is checked one visit late"
+path = "ports/src/lib.rs"
+anchor = '(visits == Unit::VISITS,'
+replacement = '(visits > Unit::VISITS,'
+expect = "test"
+
+[[mutant]]
+name = "T100 a unit of work never counts a visit to a stream"
+path = "ports/src/lib.rs"
+anchor = 'self.visits.insert(stream, visits + 1);'
+replacement = 'self.visits.insert(stream, visits);'
 expect = "test"

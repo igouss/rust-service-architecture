@@ -64,17 +64,20 @@ Participants: `Journal::write`, `Unit::apply`, `Policy::after`, the store adapte
 
 ## `arch-goru` A unit of work shall apply a bounded number of outcomes
 
-While a unit of work has applied fewer than `Unit::OUTCOMES` outcomes, the system shall apply
-the next. If a unit of work has applied `Unit::OUTCOMES` outcomes, then the system shall
-refuse the next with `StoreError::Runaway`, naming the lifecycle it was for, and the unit
-shall store nothing.
+While a unit of work has applied fewer than `Unit::VISITS` outcomes to a stream and fewer than
+`Unit::OUTCOMES` in all, the system shall apply the next. If a unit of work has applied
+`Unit::VISITS` outcomes to the stream the next is for, or `Unit::OUTCOMES` in all, then the
+system shall refuse the next with `StoreError::Runaway`, naming the lifecycle it was for and
+the count it reached, and the unit shall store nothing.
 
 Participants: `Unit::apply`, `Policy::after`, `app::react`.
 
 ### Acceptance
 
 - `arch-goru.1` Two policies that trigger each other end as a named error with nothing stored: `two_policies_that_trigger_each_other_end_the_unit_as_a_runaway_and_store_nothing`.
-- `arch-goru.2` A cascade of exactly the bound is stored and one outcome more is refused: `a_cascade_of_as_many_outcomes_as_a_unit_allows_is_stored`, `a_cascade_one_outcome_longer_is_a_runaway_and_stores_nothing` (mutants T81 and T82).
+- `arch-goru.2` A cascade of exactly the bound is stored and one outcome more is refused: `a_cascade_of_as_many_outcomes_as_a_unit_allows_is_stored`, `a_cascade_one_outcome_longer_is_a_runaway_and_stores_nothing` (mutants T98 to T100).
+- `arch-goru.3` One fact whose policy reaches more streams than a stream may be visited is stored: `one_fact_whose_policy_reaches_forty_streams_is_stored`.
+- `arch-goru.4` A cascade that never returns to a stream is stored up to the bound on all outcomes and refused one past it: `a_cascade_over_fresh_streams_as_long_as_a_unit_allows_is_stored`, `a_cascade_over_fresh_streams_one_outcome_longer_is_a_runaway_and_stores_nothing` (mutants T81 and T82).
 
 ## `arch-9k6q` The system shall hand every fact to its lifecycle's policy before the unit ends
 

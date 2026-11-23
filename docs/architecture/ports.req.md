@@ -266,18 +266,25 @@ pub struct Unit<'a> {
     store: &'a mut dyn Writer,
     last: Option<Position>,
     applied: u32,
+    visits: BTreeMap<(&'static str, String), u32>,
 }
 
 impl Unit<'_> {
-    pub const OUTCOMES: u32 = 32;
+    pub const OUTCOMES: u32 = 1024;
+    pub const VISITS: u32 = 32;
 
     pub fn apply<S: Lifecycle, R: Serialize>(&mut self, id: &StreamId<S>, decide: impl FnOnce(S) -> Outcome<S, R>) -> Result<Applied<S>, StoreError> {
-        if self.applied == Unit::OUTCOMES {
-            return Err(StoreError::Runaway {
-                lifecycle: S::NAME,
-                outcomes: self.applied,
-            });
+        let stream: (&'static str, String) = (S::NAME, id.as_str().to_string());
+        let visits: u32 = self.visits.get(&stream).copied().unwrap_or(0);
+        let runaway: Option<u32> = match (visits == Unit::VISITS, self.applied == Unit::OUTCOMES) {
+            (true, true | false) => Some(visits),
+            (false, true) => Some(self.applied),
+            (false, false) => None,
+        };
+        if let Some(outcomes) = runaway {
+            return Err(StoreError::Runaway { lifecycle: S::NAME, outcomes });
         }
+        self.visits.insert(stream, visits + 1);
         self.applied += 1;
         let (version, state): (Version, S) = state_in(self.store.state(S::NAME, id.as_str())?)?;
         match decide(state) {
@@ -349,7 +356,12 @@ pub trait Journal {
 impl<K: Store> Journal for K {
     fn write<T>(&self, work: impl FnOnce(&mut Unit<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
         let (value, last): (T, Option<Position>) = self.transact(Key::new(), |store: &mut dyn Writer| {
-            let mut unit: Unit<'_> = Unit { store, last: None, applied: 0 };
+            let mut unit: Unit<'_> = Unit {
+                store,
+                last: None,
+                applied: 0,
+                visits: BTreeMap::new(),
+            };
             let value: T = work(&mut unit)?;
             Ok((value, unit.last))
         })?;

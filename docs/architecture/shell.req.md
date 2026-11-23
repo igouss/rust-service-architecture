@@ -102,8 +102,8 @@ the unit that recorded the fact. Nothing is delivered later, so nothing is deliv
 
 A policy may call `react`, whose facts go to a policy, which may call `react` again. Two
 policies that trigger each other without a state that ends it would never return, so a unit of
-work applies at most `Unit::OUTCOMES` outcomes and fails with `StoreError::Runaway` on the
-next, storing nothing ([`arch-goru`](invariants.req.md)).
+work applies at most `Unit::VISITS` outcomes to one stream and `Unit::OUTCOMES` in all, and
+fails with `StoreError::Runaway` on the next, storing nothing ([`arch-goru`](invariants.req.md)).
 
 Cross-aggregate flows are process managers, never one command calling another and never a
 decider nested in a decider. A position in an `async fn` is not persisted state: a future
