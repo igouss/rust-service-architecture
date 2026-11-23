@@ -37,9 +37,10 @@ form you are copying.
    process crash, can lose the last commits on power loss, and commits about a hundred times
    faster. The default is `full`.
 6. If a process manager of yours issues requests, write a `Gateway` for each receiver, with
-   the `Reply` it answers and `impl From<ThatReply>` for the process manager's `Reaction`, and
-   run `app::relay` on a thread of its own ([`arch-w0v`](../architecture/shell.req.md)). A
-   result that arrives later than the call comes back through `app::advance`.
+   the `Reply` it answers, `impl From<ThatReply>` and `impl From<Undelivered<ThatRequest>>`
+   for the process manager's `Reaction`, and run `app::relay` on a thread of its own with the
+   number of attempts a request gets ([`arch-w0v`](../architecture/shell.req.md)). A result
+   that arrives later than the call comes back through `app::advance`.
 
 ## The mutants after the examples are gone
 
@@ -51,7 +52,7 @@ A follow-up task, started from the mutation job's report, not part of starting t
   it must now be killed by yours. Do not delete one that survives: it is telling you that your
   tests do not exercise that guarantee (a refusal being recorded, a failed unit storing
   nothing, a policy being run). Add the use-case test that kills it. The outbox and relay
-  mutants (T14, T15, T16, T19, T26) and the failed-unit mutant (T9) need a `Reaction`; if your
+  mutants (T14, T15, T16, T19, T26, T66 to T69) and the failed-unit mutant (T9) need a `Reaction`; if your
   service has no process manager yet, keep them alive with a small lifecycle and reaction
   defined inside the test file, not by turning one of your aggregates into a process manager.
   A test may take `serde` as a dev-dependency for that.

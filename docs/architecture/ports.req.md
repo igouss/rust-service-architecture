@@ -208,8 +208,9 @@ pub fn project<P: Projection>(row: Option<P::Row>, fact: &Fact<P>) -> Change<P> 
 `Unit` and `View` are structs in `ports`, not traits an adapter implements. `Unit::apply` is
 the one place that numbers versions, serializes, and builds a `Recorded` fact. `Unit::finish`
 is `apply` for the reply to a request: it closes the request and applies the reaction to the
-stream the stored request names, or does neither when the request is already finished
-([`arch-ruz9`](invariants.req.md)):
+stream the stored request names, or does neither when the request is already closed
+([`arch-ruz9`](invariants.req.md)). `Unit::park` is the same for a request that will not be
+performed, and records why:
 
 ```rust
 pub struct Unit<'a> {
@@ -257,7 +258,22 @@ impl Unit<'_> {
     }
 
     pub fn finish<S: Lifecycle, R: Serialize>(&mut self, request: RequestId, decide: impl FnOnce(S) -> Outcome<S, R>) -> Result<Finished<S>, StoreError> {
-        match self.store.finish(S::NAME, request)? {
+        let closed: Option<StreamId> = self.store.finish(S::NAME, request)?;
+        self.closed(closed, decide)
+    }
+
+    pub fn park<S: Lifecycle, R: Serialize>(
+        &mut self,
+        request: RequestId,
+        cause: &str,
+        decide: impl FnOnce(S) -> Outcome<S, R>,
+    ) -> Result<Finished<S>, StoreError> {
+        let closed: Option<StreamId> = self.store.park(S::NAME, request, cause)?;
+        self.closed(closed, decide)
+    }
+
+    fn closed<S: Lifecycle, R: Serialize>(&mut self, closed: Option<StreamId>, decide: impl FnOnce(S) -> Outcome<S, R>) -> Result<Finished<S>, StoreError> {
+        match closed {
             Some(stream) => self.apply(&stream, decide).map(Finished::Applied),
             None => Ok(Finished::Already),
         }
@@ -340,6 +356,7 @@ pub struct StoredRequest {
     pub id: RequestId,
     pub stream: StreamId,
     pub request: String,
+    pub attempts: u64,
 }
 
 pub type Listener = Box<dyn Fn(Position) + Send + Sync>;
@@ -358,6 +375,7 @@ pub trait Writer: Reader {
     fn reject(&mut self, lifecycle: &'static str, stream: &StreamId, refusal: &str) -> Result<(), StoreError>;
     fn request(&mut self, lifecycle: &'static str, stream: &StreamId, request: &str) -> Result<(), StoreError>;
     fn finish(&mut self, lifecycle: &'static str, id: RequestId) -> Result<Option<StreamId>, StoreError>;
+    fn park(&mut self, lifecycle: &'static str, id: RequestId, cause: &str) -> Result<Option<StreamId>, StoreError>;
     fn facts(
         &mut self,
         lifecycle: &'static str,
@@ -416,6 +434,7 @@ pub struct Claimed<R> {
     pub id: RequestId,
     pub stream: StreamId,
     pub request: R,
+    pub attempts: u64,
 }
 
 pub trait Outbox {
@@ -424,8 +443,9 @@ pub trait Outbox {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct GatewayError {
-    pub cause: String,
+pub enum GatewayError {
+    Unavailable { cause: String },
+    Rejected { cause: String },
 }
 
 pub trait Gateway<R> {

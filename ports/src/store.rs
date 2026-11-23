@@ -21,6 +21,7 @@ pub struct StoredRequest {
     pub id: RequestId,
     pub stream: StreamId,
     pub request: String,
+    pub attempts: u64,
 }
 
 pub type Listener = Box<dyn Fn(Position) + Send + Sync>;
@@ -39,6 +40,7 @@ pub trait Writer: Reader {
     fn reject(&mut self, lifecycle: &'static str, stream: &StreamId, refusal: &str) -> Result<(), StoreError>;
     fn request(&mut self, lifecycle: &'static str, stream: &StreamId, request: &str) -> Result<(), StoreError>;
     fn finish(&mut self, lifecycle: &'static str, id: RequestId) -> Result<Option<StreamId>, StoreError>;
+    fn park(&mut self, lifecycle: &'static str, id: RequestId, cause: &str) -> Result<Option<StreamId>, StoreError>;
     fn facts(
         &mut self,
         lifecycle: &'static str,

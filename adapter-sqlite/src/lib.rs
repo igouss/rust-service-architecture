@@ -37,6 +37,11 @@ CREATE TABLE IF NOT EXISTS outbox (
     done INTEGER NOT NULL DEFAULT 0,
     attempts INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS parked (
+    id INTEGER PRIMARY KEY REFERENCES outbox (id),
+    cause TEXT NOT NULL,
+    parked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 CREATE TABLE IF NOT EXISTS read_models (
     name TEXT NOT NULL,
     key TEXT NOT NULL,
@@ -121,6 +126,16 @@ struct Session<'a> {
 }
 
 impl Session<'_> {
+    fn close(&self, lifecycle: &'static str, id: RequestId, failures: i64) -> Result<Option<StreamId>, StoreError> {
+        self.transaction
+            .prepare_cached("UPDATE outbox SET done = 1, attempts = attempts + ?3 WHERE id = ?1 AND lifecycle = ?2 AND done = 0 RETURNING stream")
+            .map_err(unavailable)?
+            .query_row(params![id.stored(), lifecycle, failures], |row: &rusqlite::Row<'_>| row.get::<_, String>(0))
+            .optional()
+            .map(|stream: Option<String>| stream.map(StreamId))
+            .map_err(unavailable)
+    }
+
     fn execute(&self, sql: &str, values: impl rusqlite::Params) -> Result<(), StoreError> {
         self.transaction
             .prepare_cached(sql)
@@ -223,13 +238,15 @@ impl Writer for Session<'_> {
     }
 
     fn finish(&mut self, lifecycle: &'static str, id: RequestId) -> Result<Option<StreamId>, StoreError> {
-        self.transaction
-            .prepare_cached("UPDATE outbox SET done = 1 WHERE id = ?1 AND lifecycle = ?2 AND done = 0 RETURNING stream")
-            .map_err(unavailable)?
-            .query_row(params![id.stored(), lifecycle], |row: &rusqlite::Row<'_>| row.get::<_, String>(0))
-            .optional()
-            .map(|stream: Option<String>| stream.map(StreamId))
-            .map_err(unavailable)
+        self.close(lifecycle, id, 0)
+    }
+
+    fn park(&mut self, lifecycle: &'static str, id: RequestId, cause: &str) -> Result<Option<StreamId>, StoreError> {
+        let parked: Option<StreamId> = self.close(lifecycle, id, 1)?;
+        if parked.is_some() {
+            self.execute("INSERT INTO parked (id, cause) VALUES (?1, ?2)", params![id.stored(), cause])?;
+        }
+        Ok(parked)
     }
 
     fn facts(
@@ -319,20 +336,21 @@ impl Store for Sqlite {
         let connection: MutexGuard<'_, Connection> = self.connection()?;
         let limit: i64 = i64::try_from(limit).unwrap_or(i64::MAX);
         let mut statement = connection
-            .prepare_cached("SELECT id, stream, request FROM outbox WHERE lifecycle = ?1 AND done = 0 ORDER BY attempts, id LIMIT ?2")
+            .prepare_cached("SELECT id, stream, request, attempts FROM outbox WHERE lifecycle = ?1 AND done = 0 ORDER BY attempts, id LIMIT ?2")
             .map_err(unavailable)?;
         let rows = statement
             .query_map(params![lifecycle, limit], |row: &rusqlite::Row<'_>| {
-                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?))
+                Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, i64>(3)?))
             })
             .map_err(unavailable)?;
         let mut requests: Vec<StoredRequest> = Vec::new();
         for row in rows {
-            let (id, stream, request) = row.map_err(unavailable)?;
+            let (id, stream, request, attempts) = row.map_err(unavailable)?;
             requests.push(StoredRequest {
                 id: loaded("outbox", id, RequestId::loaded)?,
                 stream: StreamId(stream),
                 request,
+                attempts: loaded("outbox", attempts, |count: i64| u64::try_from(count).ok())?,
             });
         }
         Ok(requests)

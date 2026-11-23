@@ -50,8 +50,21 @@ pub fn resume<X: Reaction>(unit: &mut Unit<'_>, request: RequestId, progress: X)
 where
     X::Reads: Policy,
 {
-    match unit.finish(request, |state: X::Reads| ports::react(progress, state))? {
-        Finished::Applied(applied) => settle(unit, applied).map(|_answer: Answer<<X::Reads as Lifecycle>::Refusal>| ()),
+    let finished: Finished<X::Reads> = unit.finish(request, |state: X::Reads| ports::react(progress, state))?;
+    closed(unit, finished)
+}
+
+pub fn abandon<X: Reaction>(unit: &mut Unit<'_>, request: RequestId, cause: &str, progress: X) -> Result<(), StoreError>
+where
+    X::Reads: Policy,
+{
+    let parked: Finished<X::Reads> = unit.park(request, cause, |state: X::Reads| ports::react(progress, state))?;
+    closed(unit, parked)
+}
+
+fn closed<S: Policy>(unit: &mut Unit<'_>, finished: Finished<S>) -> Result<(), StoreError> {
+    match finished {
+        Finished::Applied(applied) => settle(unit, applied).map(|_answer: Answer<S::Refusal>| ()),
         Finished::Already => Ok(()),
     }
 }
@@ -113,32 +126,47 @@ at least once, its receiver drops a second copy by the `RequestId`, and its repl
 the process manager once: a second relay, or one that crashed between the gateway and the
 unit, finds the request finished and applies nothing ([`arch-fif`](invariants.req.md),
 [`arch-ruz9`](invariants.req.md)). A
-request whose gateway fails is counted and claimed after those that have failed less, so one
-dead receiver does not hold back the rest. A result that arrives later than the call (a
-webhook) comes back through `app::advance`, called by the route that receives it.
+result that arrives later than the call (a webhook) comes back through `app::advance`, called
+by the route that receives it.
+
+A gateway fails in one of two ways. `Unavailable` is worth another attempt: the request is
+counted and claimed after those that have failed less, so one dead receiver does not hold back
+the rest. `Rejected` is not. A rejected request, and one that has been unavailable as often as
+the relay's bound allows, is parked: `app::abandon` closes it, records the cause, and applies
+the reaction built from `Undelivered`, in one unit, so the process manager gives up instead of
+waiting ([`arch-22kr`](invariants.req.md)). The bound is the composition root's setting.
 
 `relay` waits on the gateway and makes blocking store calls around it, so it runs on a thread
 of its own with its own runtime, never on the executor that serves requests
 ([`arch-v1q`](ports.req.md)).
 
 ```rust
-pub async fn relay<X, K, G>(store: &K, gateway: &G, limit: usize) -> Result<usize, StoreError>
+pub async fn relay<X, K, G>(store: &K, gateway: &G, limit: usize, attempts: NonZeroU32) -> Result<usize, StoreError>
 where
-    X: Reaction + From<G::Reply>,
+    X: Reaction + From<G::Reply> + From<Undelivered<X::Request>>,
     X::Reads: Policy,
     K: Journal + Outbox,
     G: Gateway<X::Request>,
 {
     let claimed: Vec<Claimed<X::Request>> = store.claim::<X>(limit)?;
     let mut performed: usize = 0;
-    for request in &claimed {
-        let outcome: Result<G::Reply, GatewayError> = gateway.perform(request.id, &request.stream, &request.request).await;
+    for Claimed {
+        id,
+        stream,
+        request,
+        attempts: failures,
+    } in claimed
+    {
+        let outcome: Result<G::Reply, GatewayError> = gateway.perform(id, &stream, &request).await;
         match outcome {
             Ok(reply) => {
-                store.write(|unit: &mut Unit<'_>| resume(unit, request.id, X::from(reply)))?;
+                store.write(|unit: &mut Unit<'_>| resume(unit, id, X::from(reply)))?;
                 performed += 1;
             }
-            Err(GatewayError { .. }) => store.failed(request.id)?,
+            Err(GatewayError::Unavailable { .. }) if failures.saturating_add(1) < u64::from(attempts.get()) => store.failed(id)?,
+            Err(GatewayError::Unavailable { cause } | GatewayError::Rejected { cause }) => {
+                store.write(|unit: &mut Unit<'_>| abandon(unit, id, &cause, X::from(Undelivered { request })))?;
+            }
         }
     }
     Ok(performed)

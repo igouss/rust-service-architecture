@@ -1,9 +1,9 @@
 #![allow(clippy::expect_used, clippy::panic)]
 
-use adapter_memory::{Held, Kept, Memory};
+use adapter_memory::{Held, Kept, Memory, Parked};
 use domain::fulfilment::{Fulfilment, FulfilmentRequest, Progress};
 use domain::task::{AddTask, CompleteTask, Task, TaskEvent, TaskRefusal, Title};
-use ports::{Applied, Claimed, Finished, Journal, Outbox, Position, Recorded, StoreError, StreamId, View};
+use ports::{Applied, Claimed, Finished, Journal, Outbox, Position, Recorded, RequestId, StoreError, StreamId, View};
 
 fn id(text: &str) -> StreamId {
     StreamId(text.to_string())
@@ -115,4 +115,40 @@ fn a_failed_request_is_still_held() {
     let claimed: Vec<Claimed<FulfilmentRequest>> = store.claim::<Progress>(10).expect("claimed");
     store.failed(claimed[0].id).expect("failed");
     assert_eq!(store.held().requests, 1);
+}
+
+#[test]
+fn a_parked_request_is_held_as_parked_with_its_cause_and_its_attempts() {
+    let store: Memory = store(2, 2);
+    request(&store, "p-1");
+    store.failed(RequestId::from(1)).expect("failed");
+    let _parked: Finished<Fulfilment> = store
+        .write(|unit| {
+            unit.park(RequestId::from(1), "no such warehouse", |state: Fulfilment| {
+                ports::react(Progress::ReservationUndelivered, state)
+            })
+        })
+        .expect("parked");
+    assert_eq!((store.held().requests, store.held().parked), (0, 1));
+    assert_eq!(
+        store.parked(),
+        vec![Parked {
+            id: RequestId::from(1),
+            lifecycle: "fulfilment",
+            stream: id("p-1"),
+            request: "\"ReserveStock\"".to_string(),
+            attempts: 2,
+            cause: "no such warehouse".to_string()
+        }]
+    );
+}
+
+#[test]
+fn a_finished_request_is_not_held_as_parked() {
+    let store: Memory = store(2, 2);
+    request(&store, "p-1");
+    let _finished: Finished<Fulfilment> = store
+        .write(|unit| unit.finish(RequestId::from(1), |state: Fulfilment| ports::react(Progress::StockUnavailable, state)))
+        .expect("finished");
+    assert_eq!(store.parked(), Vec::new());
 }

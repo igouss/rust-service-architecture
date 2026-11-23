@@ -69,6 +69,11 @@ impl<E, R> Step<E, R> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Undelivered<R> {
+    pub request: R,
+}
+
 pub trait Reaction {
     type Reads: Lifecycle;
     type Request: Serialize + DeserializeOwned;
@@ -86,6 +91,7 @@ pub trait Projection {
 
 - A `Command` reads one lifecycle and returns the facts it decides, or a refusal. It has nowhere to put a request, so an aggregate cannot issue one ([`arch-hbw`](invariants.req.md)).
 - A `Reaction` is one step of a process manager: it returns facts and requests, and cannot refuse. Its lifecycle's `Refusal` is `Never`.
+- `Undelivered<R>` is a request that will not be performed. A process manager's reaction is built from it (`From<Undelivered<Request>>`), as it is from its gateway's reply, so every request it issues has a way to end ([`arch-w0v`](shell.req.md)).
 - Something that already happened outside (a webhook, a clock tick) is a `Command` on the lifecycle that records it; when nothing can refuse it, that lifecycle's `Refusal` is `Never`.
 - `Lifecycle::NAME` and `Projection::NAME` name the stored rows. A projection's name carries its version.
 - A test calls `decide` or `react` directly and compares the result; it needs no store and no runtime.
@@ -209,7 +215,8 @@ No `Box<dyn Error>` and no `anyhow` in `domain`, `ports` or `app`. `StoreError` 
 cause, one variant for each thing a caller can do about it: `Unavailable` (try again),
 `Misconfigured` (fix the setting), `Corrupt` with the table (repair what is stored),
 `Unencodable` with the table (fix the type), `OutOfOrder` with the read model, `Trimmed` with
-the oldest position still held (read from there).
+the oldest position still held (read from there). `GatewayError` does the same for the relay:
+`Unavailable` (try again, up to the bound), `Rejected` (do not).
 
 ### Acceptance
 

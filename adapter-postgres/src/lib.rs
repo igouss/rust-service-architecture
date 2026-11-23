@@ -311,6 +311,7 @@ impl Store for Postgres {
                     id: number("outbox", row, 0, RequestId::loaded)?,
                     stream: StreamId(text("outbox", row, 1)?.to_string()),
                     request: text("outbox", row, 2)?.to_string(),
+                    attempts: number("outbox", row, 3, |count: i64| u64::try_from(count).ok())?,
                 })
             })
             .collect()

@@ -13,6 +13,7 @@ stateDiagram-v2
     Idle --> Reserving: ReservationRequested
     Reserving --> Shipping: ShipmentRequested
     Reserving --> Abandoned: Abandoned
+    Shipping --> Abandoned: Abandoned
     Shipping --> Done: Completed
 ```
 

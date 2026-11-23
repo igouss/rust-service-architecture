@@ -106,6 +106,23 @@ Participants: `Gateway::Reply`, `app::relay`, `app::resume`, `Unit::finish`, `Wr
 - `arch-ruz9.4` A unit that fails after finishing a request leaves it claimable: `a_unit_that_fails_after_finishing_a_request_leaves_it_claimable`.
 - `arch-ruz9.5` The facts of a finished request that never reach a policy are a compile error: `Finished` is `must_use` (mutant C14).
 
+## `arch-22kr` A request shall end: finished by a reply, or parked with its lifecycle told
+
+If a gateway rejects a request, or has been unavailable for it as often as the relay's bound
+allows, then the system shall park the request, record the cause, and apply to the lifecycle
+that issued it the reaction built from `Undelivered`, in one unit of work. While a request has
+failed less often than the bound and was not rejected, the system shall offer it again.
+
+Participants: `GatewayError`, `domain::Undelivered`, `app::relay`, `app::abandon`, `Unit::park`, `Writer::park`.
+
+### Acceptance
+
+- `arch-22kr.1` An unavailable request is offered again with its failure counted: `a_request_that_fails_once_under_a_bound_of_two_is_offered_again_with_its_failure_counted` (mutants T68 and T76 to T78).
+- `arch-22kr.2` A rejected request is not offered again and its lifecycle is told: `a_request_the_gateway_rejects_is_not_offered_again_and_its_fulfilment_is_abandoned` (mutant T66).
+- `arch-22kr.3` A request that fails as often as the bound is parked and its lifecycle is told: `a_request_that_fails_as_often_as_the_bound_is_parked_and_its_fulfilment_abandoned`, `under_a_bound_of_one_the_first_failure_parks_the_request` (mutants T67 and T69).
+- `arch-22kr.4` A parked request is closed once, like a finished one: `a_request_parked_twice_applies_its_reaction_once`, `a_request_finished_and_parked_in_one_unit_applies_only_the_first_reaction`, `a_unit_that_fails_after_parking_a_request_leaves_it_claimable`.
+- `arch-22kr.5` A parked request can be read where the store keeps it, with its cause and its attempts: `a_parked_request_is_read_with_sql_with_its_cause_and_its_attempts` for SQLite and Postgres, `a_parked_request_is_held_as_parked_with_its_cause_and_its_attempts` for memory (mutants T70 to T75).
+
 ## `arch-oif` A read model shall hold exactly the fold of its lifecycle's facts up to its position
 
 When a fact is projected, the system shall write the row and the read model's position

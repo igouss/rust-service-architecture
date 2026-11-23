@@ -293,6 +293,23 @@ fn receive(store: &Subject, request: RequestId, count: u64) -> Option<usize> {
     )
 }
 
+fn shelve(store: &Subject, request: RequestId, count: u64) -> Option<usize> {
+    facts_of(
+        store
+            .write(|unit| unit.park(request, "refused", |state: Courier| ports::react(Receive { count }, state)))
+            .expect("parked"),
+    )
+}
+
+fn attempts(store: &Subject) -> Vec<u64> {
+    store
+        .claim::<Send>(10)
+        .expect("claimed")
+        .into_iter()
+        .map(|claimed: Claimed<Parcel>| claimed.attempts)
+        .collect()
+}
+
 fn courier(store: &Subject, stream: &str) -> (Version, Courier) {
     store.read(|view| view.state::<Courier>(&id(stream))).expect("read")
 }

@@ -74,7 +74,7 @@ the same gates.
 
 - `arch-e5eb.1` Every case of the suite passes against the SQLite and memory adapters (`just test`) and against the Postgres adapter (`just postgres`, which needs a server and fails unless it counts every case as passed; mutant G26).
 - `arch-e5eb.2` The `raw-store` recipe fails when a crate that implements `Store` has no `tests/conformance.rs` that includes the suite (T2, `just check`; mutant G11).
-- `arch-e5eb.3` A fault planted in a store adapter fails a case of the suite: mutants T4 to T9, T14, T16, T26, T51, T59 and T62 in the SQLite adapter, mutants T27 to T38, T60 and T63 in the memory adapter, mutants T40 to T42, T52, T61 and T64 in the Postgres adapter, mutants T17, T53 and T65 in the port.
+- `arch-e5eb.3` A fault planted in a store adapter fails a case of the suite: mutants T4 to T9, T14, T16, T26, T51, T59, T62, T70, T73 and T76 in the SQLite adapter, mutants T27 to T38, T60, T63, T71, T74 and T77 in the memory adapter, mutants T40 to T42, T52, T61, T64, T72, T75 and T78 in the Postgres adapter, mutants T17, T53 and T65 in the port.
 
 ## `arch-7h52` The memory store shall hold a bounded history, and what a service may forget shall not be a lifecycle
 
@@ -83,7 +83,7 @@ the same gates.
 | state rows, read-model rows | all | all |
 | facts | all | the last `Kept::facts` |
 | recorded refusals | all | the last `Kept::refusals` |
-| requests | all, marked done | until done, then none |
+| requests | all, marked done; a parked one also in `parked`, with its cause | until done, then none; every parked one, in `Memory::parked` |
 
 On disk, history is what a read model is rebuilt from and what explains a state, so it is
 kept whole and archiving it is an operation, not a code path. In memory a rebuild serves
@@ -100,6 +100,9 @@ forgotten, and whose keys the outside world can mint without limit (a session, a
 limiter's window, a cache entry), is not a lifecycle (`arch-f5d`): it lives inside the
 adapter that owns it, with that adapter's own expiry, and no decision reads it without it
 first entering as a command (`arch-jbno`).
+
+A parked request is not trimmed by any store, in memory either: it is a request nobody will
+perform, kept until someone has looked at it.
 
 Recorded refusals on disk grow with refused requests. Limiting how many a client may send is
 the driving adapter's bound (`arch-kpb`), not the store's.

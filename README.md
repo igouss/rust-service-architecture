@@ -74,6 +74,7 @@ The worked example is [`domain/src/task.rs`](domain/src/task.rs); the recipe is
 - **Saved state always matches its events.** The only way to produce a new state is to fold the decided events through `evolve`; any other route is a compile error.
 - **A command's whole effect is atomic.** One write call takes the whole outcome, inside one transaction, together with every view and process-manager step it causes.
 - **Refusals are recorded**, so you can see with SQL why something was rejected.
+- **A request for outside work ends.** Its reply goes back to the process manager once; a request that is rejected, or fails more often than the bound, is parked where SQL can see it and the process manager is told.
 - **Time, ids and outside data enter as input**, never read inside the core, so any decision can be replayed in a test.
 - **Stored data keeps its encoding.** A test pins the JSON of every stored type.
 

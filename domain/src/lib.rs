@@ -38,6 +38,11 @@ impl<E, R> Step<E, R> {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Undelivered<R> {
+    pub request: R,
+}
+
 pub trait Reaction {
     type Reads: Lifecycle;
     type Request: Serialize + DeserializeOwned;

@@ -4,10 +4,10 @@ use std::sync::{Arc, Mutex};
 
 use adapter_postgres::{Durability, Postgres};
 use app::{handle, relay};
-use domain::fulfilment::{FulfilmentReply, FulfilmentRequest, Progress};
+use domain::fulfilment::{Fulfilment, FulfilmentReply, FulfilmentRequest, Progress};
 use domain::payment::{Amount, Authorize, Capture};
 use domain::task::{AddTask, TaskRefusal, Title};
-use ports::{Answer, Gateway, GatewayError, Journal, RequestId, StoreError, StreamId, Version};
+use ports::{Answer, Finished, Gateway, GatewayError, Journal, Outbox, RequestId, StoreError, StreamId, Version};
 use tokio::runtime::{Builder, Runtime};
 
 fn url() -> String {
@@ -72,7 +72,10 @@ fn the_relay_runs_on_a_runtime_of_its_own_with_the_store_as_its_outbox() {
         performed: Mutex::new(Vec::new()),
     };
     let runtime: Runtime = Builder::new_current_thread().build().expect("runtime");
-    assert_eq!(runtime.block_on(relay::<Progress, Postgres, Recording>(&store, &gateway, 10)), Ok(1));
+    assert_eq!(
+        runtime.block_on(relay::<Progress, Postgres, Recording>(&store, &gateway, 10, std::num::NonZeroU32::MIN)),
+        Ok(1)
+    );
     assert_eq!(*gateway.performed.lock().expect("lock"), vec![FulfilmentRequest::ReserveStock]);
 }
 
@@ -146,4 +149,48 @@ fn a_store_opened_as_normal_does_not_wait_for_the_disk() {
 fn a_schema_name_that_is_not_plain_is_refused_as_a_misconfiguration() {
     let opened: Result<Postgres, StoreError> = Postgres::connect(&url(), "Tasks; DROP", 1, Durability::Full);
     assert!(matches!(opened.map(|_store: Postgres| ()), Err(StoreError::Misconfigured { .. })));
+}
+
+fn parked(schema: &str) -> Vec<(String, String, i64, String)> {
+    let mut raw: postgres::Client = postgres::Client::connect(&url(), postgres::NoTls).expect("connects");
+    raw.query(
+        &format!("SELECT o.lifecycle, o.stream, o.attempts, p.cause FROM {schema}.parked p JOIN {schema}.outbox o USING (id) ORDER BY id"),
+        &[],
+    )
+    .expect("queried")
+    .iter()
+    .map(|row: &postgres::Row| (row.get(0), row.get(1), row.get(2), row.get(3)))
+    .collect()
+}
+
+fn captured(schema: &str) -> Postgres {
+    let store: Postgres = store(schema);
+    let amount: Amount = Amount::new(500).expect("positive");
+    handle(&store, &id("p-1"), Authorize { amount }).expect("authorized");
+    handle(&store, &id("p-1"), Capture { amount }).expect("captured");
+    store
+}
+
+#[test]
+fn with_no_request_parked_the_parked_table_is_empty() {
+    let store: Postgres = captured("parked_none");
+    store.failed(RequestId::from(1)).expect("failed");
+    assert_eq!(parked("parked_none"), Vec::new());
+}
+
+#[test]
+fn a_parked_request_is_read_with_sql_with_its_cause_and_its_attempts() {
+    let store: Postgres = captured("parked_one");
+    store.failed(RequestId::from(1)).expect("failed");
+    let _parked: Finished<Fulfilment> = store
+        .write(|unit| {
+            unit.park(RequestId::from(1), "no such warehouse", |state: Fulfilment| {
+                ports::react(Progress::ReservationUndelivered, state)
+            })
+        })
+        .expect("parked");
+    assert_eq!(
+        parked("parked_one"),
+        vec![("fulfilment".to_string(), "p-1".to_string(), 2, "no such warehouse".to_string())]
+    );
 }

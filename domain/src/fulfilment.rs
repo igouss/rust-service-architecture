@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::{Lifecycle, Never, Reaction, Step};
+use crate::{Lifecycle, Never, Reaction, Step, Undelivered};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Fulfilment {
@@ -31,6 +31,8 @@ pub enum Progress {
     StockReserved,
     StockUnavailable,
     Shipped,
+    ReservationUndelivered,
+    ShipmentUndelivered,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,6 +53,16 @@ impl From<FulfilmentReply> for Progress {
     }
 }
 
+impl From<Undelivered<FulfilmentRequest>> for Progress {
+    /// When a request will not be performed, `from` shall return the progress that names that request as undelivered.
+    fn from(undelivered: Undelivered<FulfilmentRequest>) -> Progress {
+        match undelivered.request {
+            FulfilmentRequest::ReserveStock => Progress::ReservationUndelivered,
+            FulfilmentRequest::Ship => Progress::ShipmentUndelivered,
+        }
+    }
+}
+
 impl Lifecycle for Fulfilment {
     const NAME: &'static str = "fulfilment";
     type Event = FulfilmentEvent;
@@ -61,16 +73,18 @@ impl Lifecycle for Fulfilment {
     }
 
     /// When a requested step is folded in the state that requested it, `evolve` shall return the next state.
+    /// While the fulfilment is `Reserving` or `Shipping`, when `Abandoned` is folded, `evolve` shall return `Abandoned`.
     /// If an event does not apply to the state, then `evolve` shall return the state unchanged.
     fn evolve(self, event: &FulfilmentEvent) -> Fulfilment {
         match (self, event) {
             (Fulfilment::Idle, FulfilmentEvent::ReservationRequested) => Fulfilment::Reserving,
             (Fulfilment::Reserving, FulfilmentEvent::ShipmentRequested) => Fulfilment::Shipping,
             (Fulfilment::Reserving, FulfilmentEvent::Abandoned) => Fulfilment::Abandoned,
+            (Fulfilment::Shipping, FulfilmentEvent::Abandoned) => Fulfilment::Abandoned,
             (Fulfilment::Shipping, FulfilmentEvent::Completed) => Fulfilment::Done,
             (s @ Fulfilment::Idle, FulfilmentEvent::ShipmentRequested | FulfilmentEvent::Completed | FulfilmentEvent::Abandoned)
             | (s @ Fulfilment::Reserving, FulfilmentEvent::ReservationRequested | FulfilmentEvent::Completed)
-            | (s @ Fulfilment::Shipping, FulfilmentEvent::ReservationRequested | FulfilmentEvent::ShipmentRequested | FulfilmentEvent::Abandoned)
+            | (s @ Fulfilment::Shipping, FulfilmentEvent::ReservationRequested | FulfilmentEvent::ShipmentRequested)
             | (
                 s @ (Fulfilment::Done | Fulfilment::Abandoned),
                 FulfilmentEvent::ReservationRequested | FulfilmentEvent::ShipmentRequested | FulfilmentEvent::Completed | FulfilmentEvent::Abandoned,
@@ -87,6 +101,8 @@ impl Reaction for Progress {
     /// While the fulfilment is `Reserving`, when stock is reserved, `react` shall emit `ShipmentRequested` and request `Ship`.
     /// While the fulfilment is `Reserving`, when stock is unavailable, `react` shall emit `Abandoned` and request nothing.
     /// While the fulfilment is `Shipping`, when the order is shipped, `react` shall emit `Completed`.
+    /// While the fulfilment is `Reserving`, when the reservation is undelivered, `react` shall emit `Abandoned` and request nothing.
+    /// While the fulfilment is `Shipping`, when the shipment is undelivered, `react` shall emit `Abandoned` and request nothing.
     /// If progress does not apply to the state, then `react` shall emit and request nothing.
     fn react(self, reads: &Fulfilment) -> Step<FulfilmentEvent, FulfilmentRequest> {
         match (reads, self) {
@@ -98,20 +114,30 @@ impl Reaction for Progress {
                 events: vec![FulfilmentEvent::ShipmentRequested],
                 requests: vec![FulfilmentRequest::Ship],
             },
-            (Fulfilment::Reserving, Progress::StockUnavailable) => Step {
-                events: vec![FulfilmentEvent::Abandoned],
-                requests: Vec::new(),
-            },
+            (Fulfilment::Reserving, Progress::StockUnavailable | Progress::ReservationUndelivered) | (Fulfilment::Shipping, Progress::ShipmentUndelivered) => {
+                Step {
+                    events: vec![FulfilmentEvent::Abandoned],
+                    requests: Vec::new(),
+                }
+            }
             (Fulfilment::Shipping, Progress::Shipped) => Step {
                 events: vec![FulfilmentEvent::Completed],
                 requests: Vec::new(),
             },
-            (Fulfilment::Idle, Progress::StockReserved | Progress::StockUnavailable | Progress::Shipped)
-            | (Fulfilment::Reserving, Progress::PaymentCaptured | Progress::Shipped)
-            | (Fulfilment::Shipping, Progress::PaymentCaptured | Progress::StockReserved | Progress::StockUnavailable)
+            (
+                Fulfilment::Idle,
+                Progress::StockReserved | Progress::StockUnavailable | Progress::Shipped | Progress::ReservationUndelivered | Progress::ShipmentUndelivered,
+            )
+            | (Fulfilment::Reserving, Progress::PaymentCaptured | Progress::Shipped | Progress::ShipmentUndelivered)
+            | (Fulfilment::Shipping, Progress::PaymentCaptured | Progress::StockReserved | Progress::StockUnavailable | Progress::ReservationUndelivered)
             | (
                 Fulfilment::Done | Fulfilment::Abandoned,
-                Progress::PaymentCaptured | Progress::StockReserved | Progress::StockUnavailable | Progress::Shipped,
+                Progress::PaymentCaptured
+                | Progress::StockReserved
+                | Progress::StockUnavailable
+                | Progress::Shipped
+                | Progress::ReservationUndelivered
+                | Progress::ShipmentUndelivered,
             ) => Step::nothing(),
         }
     }
@@ -183,6 +209,58 @@ mod tests {
     #[test]
     fn a_reply_that_the_order_shipped_is_that_progress() {
         assert_eq!(Progress::from(FulfilmentReply::Shipped), Progress::Shipped);
+    }
+
+    #[test]
+    fn an_undelivered_reservation_is_that_progress() {
+        assert_eq!(
+            Progress::from(Undelivered {
+                request: FulfilmentRequest::ReserveStock
+            }),
+            Progress::ReservationUndelivered
+        );
+    }
+
+    #[test]
+    fn an_undelivered_shipment_is_that_progress() {
+        assert_eq!(
+            Progress::from(Undelivered {
+                request: FulfilmentRequest::Ship
+            }),
+            Progress::ShipmentUndelivered
+        );
+    }
+
+    #[test]
+    fn an_undelivered_reservation_abandons_and_requests_nothing() {
+        assert_eq!(
+            Progress::ReservationUndelivered.react(&Fulfilment::Reserving),
+            Step {
+                events: vec![FulfilmentEvent::Abandoned],
+                requests: Vec::new()
+            }
+        );
+    }
+
+    #[test]
+    fn an_undelivered_shipment_abandons_and_requests_nothing() {
+        assert_eq!(
+            Progress::ShipmentUndelivered.react(&Fulfilment::Shipping),
+            Step {
+                events: vec![FulfilmentEvent::Abandoned],
+                requests: Vec::new()
+            }
+        );
+    }
+
+    #[test]
+    fn an_undelivered_shipment_does_nothing_while_reserving() {
+        assert_eq!(Progress::ShipmentUndelivered.react(&Fulfilment::Reserving), Step::nothing());
+    }
+
+    #[test]
+    fn an_abandonment_evolves_shipping_to_abandoned() {
+        assert_eq!(Fulfilment::Shipping.evolve(&FulfilmentEvent::Abandoned), Fulfilment::Abandoned);
     }
 
     #[test]

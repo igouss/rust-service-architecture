@@ -32,6 +32,11 @@ CREATE TABLE IF NOT EXISTS outbox (
     done BOOLEAN NOT NULL DEFAULT false,
     attempts BIGINT NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS parked (
+    id BIGINT PRIMARY KEY REFERENCES outbox (id),
+    cause TEXT NOT NULL,
+    parked_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
 CREATE TABLE IF NOT EXISTS read_models (
     name TEXT NOT NULL,
     key TEXT NOT NULL,
@@ -62,7 +67,8 @@ pub struct Statements {
     pub clear_rows: Statement,
     pub clear_position: Statement,
     pub requests: Statement,
-    pub finish: Statement,
+    pub close: Statement,
+    pub park: Statement,
     pub failed: Statement,
     pub rejections: Statement,
 }
@@ -98,8 +104,9 @@ impl Statements {
             delete: client.prepare("DELETE FROM read_models WHERE name = $1 AND key = $2")?,
             clear_rows: client.prepare("DELETE FROM read_models WHERE name = $1")?,
             clear_position: client.prepare("DELETE FROM read_model_positions WHERE name = $1")?,
-            requests: client.prepare("SELECT id, stream, request FROM outbox WHERE lifecycle = $1 AND NOT done ORDER BY attempts, id LIMIT $2")?,
-            finish: client.prepare("UPDATE outbox SET done = true WHERE id = $1 AND lifecycle = $2 AND NOT done RETURNING stream")?,
+            requests: client.prepare("SELECT id, stream, request, attempts FROM outbox WHERE lifecycle = $1 AND NOT done ORDER BY attempts, id LIMIT $2")?,
+            close: client.prepare("UPDATE outbox SET done = true, attempts = attempts + $3 WHERE id = $1 AND lifecycle = $2 AND NOT done RETURNING stream")?,
+            park: client.prepare("INSERT INTO parked (id, cause) VALUES ($1, $2)")?,
             failed: client.prepare("UPDATE outbox SET attempts = attempts + 1 WHERE id = $1")?,
             rejections: client.prepare("SELECT refusal FROM rejections WHERE lifecycle = $1 AND stream = $2 ORDER BY id")?,
         })

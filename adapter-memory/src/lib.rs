@@ -23,6 +23,16 @@ struct Request {
     attempts: u64,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Parked {
+    pub id: RequestId,
+    pub lifecycle: &'static str,
+    pub stream: StreamId,
+    pub request: String,
+    pub attempts: u64,
+    pub cause: String,
+}
+
 #[derive(Debug, Clone)]
 struct Rejection {
     lifecycle: &'static str,
@@ -37,6 +47,7 @@ struct Tables {
     appended: u64,
     rejections: VecDeque<Rejection>,
     outbox: BTreeMap<u64, Request>,
+    parked: Vec<Parked>,
     issued: u64,
     rows: BTreeMap<Row, String>,
     positions: BTreeMap<&'static str, Position>,
@@ -54,6 +65,7 @@ pub struct Held {
     pub facts: usize,
     pub refusals: usize,
     pub requests: usize,
+    pub parked: usize,
     pub rows: usize,
 }
 
@@ -63,7 +75,7 @@ struct Pending {
     facts: Vec<Fact>,
     rejections: Vec<Rejection>,
     outbox: Vec<Request>,
-    finished: BTreeSet<u64>,
+    closed: BTreeMap<u64, Option<String>>,
     rows: BTreeMap<Row, Option<String>>,
     positions: BTreeMap<&'static str, Position>,
     cleared: BTreeSet<&'static str>,
@@ -120,8 +132,13 @@ impl Memory {
             facts: tables.facts.len(),
             refusals: tables.rejections.len(),
             requests: tables.outbox.len(),
+            parked: tables.parked.len(),
             rows: tables.rows.len(),
         }
+    }
+
+    pub fn parked(&self) -> Vec<Parked> {
+        self.reading().parked.clone()
     }
 
     pub fn on_commit(self, listener: impl Fn(Position) + Send + Sync + 'static) -> Memory {
@@ -172,6 +189,17 @@ struct MemoryWriter<'a> {
 }
 
 impl MemoryWriter<'_> {
+    fn close(&mut self, lifecycle: &'static str, id: RequestId, parked: Option<&str>) -> Option<StreamId> {
+        let open: Option<&Request> = self.tables.outbox.get(&id.get()).filter(|request: &&Request| request.lifecycle == lifecycle);
+        match open {
+            Some(request) if !self.pending.closed.contains_key(&id.get()) => {
+                self.pending.closed.insert(id.get(), parked.map(str::to_string));
+                Some(request.stream.clone())
+            }
+            Some(_) | None => None,
+        }
+    }
+
     fn merged_states(&self, lifecycle: &'static str) -> BTreeMap<String, String> {
         let mut merged: BTreeMap<String, String> = states_in(self.tables, lifecycle)
             .map(|(stream, state): (&Stream, &(Version, String))| (stream.1.clone(), state.1.clone()))
@@ -277,11 +305,11 @@ impl Writer for MemoryWriter<'_> {
     }
 
     fn finish(&mut self, lifecycle: &'static str, id: RequestId) -> Result<Option<StreamId>, StoreError> {
-        let open: Option<&Request> = self.tables.outbox.get(&id.get()).filter(|request: &&Request| request.lifecycle == lifecycle);
-        match open {
-            Some(request) if self.pending.finished.insert(id.get()) => Ok(Some(request.stream.clone())),
-            Some(_) | None => Ok(None),
-        }
+        Ok(self.close(lifecycle, id, None))
+    }
+
+    fn park(&mut self, lifecycle: &'static str, id: RequestId, cause: &str) -> Result<Option<StreamId>, StoreError> {
+        Ok(self.close(lifecycle, id, Some(cause)))
     }
 
     fn facts(
@@ -361,8 +389,18 @@ fn commit(tables: &mut Tables, pending: Pending, kept: Kept) {
     tables.appended += count(pending.facts.len());
     tables.facts.extend(pending.facts);
     tables.rejections.extend(pending.rejections);
-    for id in pending.finished {
-        tables.outbox.remove(&id);
+    for (id, cause) in pending.closed {
+        let closed: Option<Request> = tables.outbox.remove(&id);
+        if let (Some(request), Some(cause)) = (closed, cause) {
+            tables.parked.push(Parked {
+                id: RequestId::ZERO.after(id),
+                lifecycle: request.lifecycle,
+                stream: request.stream,
+                request: request.request,
+                attempts: request.attempts + 1,
+                cause,
+            });
+        }
     }
     for request in pending.outbox {
         tables.issued += 1;
@@ -415,10 +453,11 @@ impl Store for Memory {
         Ok(open
             .into_iter()
             .take(limit)
-            .map(|(_attempts, id, request): (u64, u64, &Request)| StoredRequest {
+            .map(|(attempts, id, request): (u64, u64, &Request)| StoredRequest {
                 id: RequestId::ZERO.after(id),
                 stream: request.stream.clone(),
                 request: request.request.clone(),
+                attempts,
             })
             .collect())
     }

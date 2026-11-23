@@ -5,6 +5,19 @@ use postgres::{Client, Row};
 use crate::statements::Statements;
 use crate::{number, text, Session};
 
+impl Session<'_> {
+    fn close(&self, lifecycle: &'static str, id: RequestId, failures: i64) -> Result<Option<StreamId>, StoreError> {
+        let id: i64 = id.stored();
+        match self
+            .worker
+            .call(move |client: &mut Client, statements: &Statements| client.query_opt(&statements.close, &[&id, &lifecycle, &failures]))?
+        {
+            None => Ok(None),
+            Some(row) => Ok(Some(StreamId(text("outbox", &row, 0)?.to_string()))),
+        }
+    }
+}
+
 impl Reader for Session<'_> {
     fn state(&mut self, lifecycle: &'static str, stream: &StreamId) -> Result<Option<(Version, String)>, StoreError> {
         let stream: String = stream.0.clone();
@@ -83,14 +96,18 @@ impl Writer for Session<'_> {
     }
 
     fn finish(&mut self, lifecycle: &'static str, id: RequestId) -> Result<Option<StreamId>, StoreError> {
-        let id: i64 = id.stored();
-        match self
-            .worker
-            .call(move |client: &mut Client, statements: &Statements| client.query_opt(&statements.finish, &[&id, &lifecycle]))?
-        {
-            None => Ok(None),
-            Some(row) => Ok(Some(StreamId(text("outbox", &row, 0)?.to_string()))),
+        self.close(lifecycle, id, 0)
+    }
+
+    fn park(&mut self, lifecycle: &'static str, id: RequestId, cause: &str) -> Result<Option<StreamId>, StoreError> {
+        let parked: Option<StreamId> = self.close(lifecycle, id, 1)?;
+        if parked.is_some() {
+            let (id, cause): (i64, String) = (id.stored(), cause.to_string());
+            self.worker
+                .call(move |client: &mut Client, statements: &Statements| client.execute(&statements.park, &[&id, &cause]))
+                .map(|_changed: u64| ())?;
         }
+        Ok(parked)
     }
 
     fn facts(
