@@ -141,6 +141,14 @@ the relay's bound allows, is parked: `app::abandon` closes it, records the cause
 the reaction built from `Undelivered`, in one unit, so the process manager gives up instead of
 waiting ([`arch-22kr`](invariants.req.md)). The bound is the composition root's setting.
 
+The unit that closes a request can itself fail: the reply's reaction runs into a corrupt row or
+a runaway policy. The gateway has already been called, and a pass that returned the error would
+call it again on every pass and never reach the requests behind it. So a closing unit that
+fails for a reason that is not the store being down counts as a failed attempt, and at the
+bound the request is parked through `Unit::strand` with the error as its cause and no
+reaction, because the reaction is what failed. A store that is `Unavailable` or
+`Misconfigured` ends the pass: nothing can be recorded.
+
 `relay` waits on the gateway and makes blocking store calls around it, so it runs on a thread
 of its own with its own runtime, never on the executor that serves requests
 ([`arch-v1q`](ports.req.md)). The composition root starts that thread, passes over the outbox
@@ -165,16 +173,35 @@ where
         attempts: failures,
     } in claimed
     {
+        let again: bool = failures.saturating_add(1) < u64::from(attempts.get());
         let outcome: Result<G::Reply, GatewayError> = gateway.perform(id, &stream, &request).await;
-        match outcome {
-            Ok(reply) => {
-                store.write(|unit: &mut Unit<'_>| resume(unit, id, X::from(reply)))?;
-                performed += 1;
-            }
-            Err(GatewayError::Unavailable { .. }) if failures.saturating_add(1) < u64::from(attempts.get()) => store.failed(id)?,
-            Err(GatewayError::Unavailable { cause } | GatewayError::Rejected { cause }) => {
-                store.write(|unit: &mut Unit<'_>| abandon(unit, id, &cause, X::from(Undelivered { request })))?;
-            }
+        let (closed, counted): (Result<usize, StoreError>, bool) = match outcome {
+            Ok(reply) => (store.write(|unit: &mut Unit<'_>| resume(unit, id, X::from(reply))).map(|()| 1), again),
+            Err(GatewayError::Unavailable { .. }) if again => (store.failed(id).map(|()| 0), false),
+            Err(GatewayError::Unavailable { cause } | GatewayError::Rejected { cause }) => (
+                store
+                    .write(|unit: &mut Unit<'_>| abandon(unit, id, &cause, X::from(Undelivered { request })))
+                    .map(|()| 0),
+                false,
+            ),
+        };
+        match closed {
+            Ok(done) => performed += done,
+            Err(down @ (StoreError::Unavailable { .. } | StoreError::Misconfigured { .. })) => return Err(down),
+            Err(
+                StoreError::Corrupt { .. }
+                | StoreError::Unencodable { .. }
+                | StoreError::OutOfOrder { .. }
+                | StoreError::Trimmed { .. }
+                | StoreError::Runaway { .. },
+            ) if counted => store.failed(id)?,
+            Err(
+                unsettled @ (StoreError::Corrupt { .. }
+                | StoreError::Unencodable { .. }
+                | StoreError::OutOfOrder { .. }
+                | StoreError::Trimmed { .. }
+                | StoreError::Runaway { .. }),
+            ) => stranded::<X::Reads, K>(store, id, &unsettled)?,
         }
     }
     Ok(performed)

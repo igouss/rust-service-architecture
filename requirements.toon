@@ -73,7 +73,7 @@ requirements[73]{id,verification}:
   arch-yod,exempt
   arch-yr1,test
   arch-zhm,test
-criteria[126]{id,requirement}:
+criteria[128]{id,requirement}:
   arch-06ys.1,arch-06ys
   arch-06ys.2,arch-06ys
   arch-0bd.1,arch-0bd
@@ -93,6 +93,8 @@ criteria[126]{id,requirement}:
   arch-22kr.3,arch-22kr
   arch-22kr.4,arch-22kr
   arch-22kr.5,arch-22kr
+  arch-22kr.6,arch-22kr
+  arch-22kr.7,arch-22kr
   arch-30c.1,arch-30c
   arch-30c.2,arch-30c
   arch-30c.4,arch-30c

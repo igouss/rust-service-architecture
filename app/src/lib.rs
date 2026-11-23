@@ -91,6 +91,10 @@ pub fn rebuild<J: Journal, P: Projection>(journal: &J, batch: usize) -> Result<u
     })
 }
 
+fn stranded<S: Lifecycle, K: Journal>(store: &K, request: RequestId, unsettled: &StoreError) -> Result<(), StoreError> {
+    store.write(|unit: &mut Unit<'_>| unit.strand::<S>(request, &format!("{unsettled:?}")).map(|_parked: bool| ()))
+}
+
 pub async fn relay<X, K, G>(store: &K, gateway: &G, limit: usize, attempts: NonZeroU32) -> Result<usize, StoreError>
 where
     X: Reaction + From<G::Reply> + From<Undelivered<X::Request>>,
@@ -107,16 +111,35 @@ where
         attempts: failures,
     } in claimed
     {
+        let again: bool = failures.saturating_add(1) < u64::from(attempts.get());
         let outcome: Result<G::Reply, GatewayError> = gateway.perform(id, &stream, &request).await;
-        match outcome {
-            Ok(reply) => {
-                store.write(|unit: &mut Unit<'_>| resume(unit, id, X::from(reply)))?;
-                performed += 1;
-            }
-            Err(GatewayError::Unavailable { .. }) if failures.saturating_add(1) < u64::from(attempts.get()) => store.failed(id)?,
-            Err(GatewayError::Unavailable { cause } | GatewayError::Rejected { cause }) => {
-                store.write(|unit: &mut Unit<'_>| abandon(unit, id, &cause, X::from(Undelivered { request })))?;
-            }
+        let (closed, counted): (Result<usize, StoreError>, bool) = match outcome {
+            Ok(reply) => (store.write(|unit: &mut Unit<'_>| resume(unit, id, X::from(reply))).map(|()| 1), again),
+            Err(GatewayError::Unavailable { .. }) if again => (store.failed(id).map(|()| 0), false),
+            Err(GatewayError::Unavailable { cause } | GatewayError::Rejected { cause }) => (
+                store
+                    .write(|unit: &mut Unit<'_>| abandon(unit, id, &cause, X::from(Undelivered { request })))
+                    .map(|()| 0),
+                false,
+            ),
+        };
+        match closed {
+            Ok(done) => performed += done,
+            Err(down @ (StoreError::Unavailable { .. } | StoreError::Misconfigured { .. })) => return Err(down),
+            Err(
+                StoreError::Corrupt { .. }
+                | StoreError::Unencodable { .. }
+                | StoreError::OutOfOrder { .. }
+                | StoreError::Trimmed { .. }
+                | StoreError::Runaway { .. },
+            ) if counted => store.failed(id)?,
+            Err(
+                unsettled @ (StoreError::Corrupt { .. }
+                | StoreError::Unencodable { .. }
+                | StoreError::OutOfOrder { .. }
+                | StoreError::Trimmed { .. }
+                | StoreError::Runaway { .. }),
+            ) => stranded::<X::Reads, K>(store, id, &unsettled)?,
         }
     }
     Ok(performed)

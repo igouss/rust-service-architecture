@@ -152,3 +152,18 @@ fn a_finished_request_is_not_held_as_parked() {
         .expect("finished");
     assert_eq!(store.parked(), Vec::new());
 }
+
+#[test]
+fn a_stranded_request_is_held_as_parked_with_its_cause() {
+    let store: Memory = store(2, 2);
+    request(&store, "p-1");
+    assert_eq!(store.write(|unit| unit.strand::<Fulfilment>(RequestId::from(1), "cannot be told")), Ok(true));
+    assert_eq!(
+        store
+            .parked()
+            .into_iter()
+            .map(|parked: Parked| (parked.id, parked.cause))
+            .collect::<Vec<(RequestId, String)>>(),
+        vec![(RequestId::from(1), "cannot be told".to_string())]
+    );
+}

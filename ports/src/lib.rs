@@ -334,6 +334,10 @@ impl Unit<'_> {
         }
     }
 
+    pub fn strand<S: Lifecycle>(&mut self, request: RequestId, cause: &str) -> Result<bool, StoreError> {
+        Ok(self.store.park(S::NAME, request, cause)?.is_some())
+    }
+
     pub fn row<P: Projection>(&mut self, key: &str) -> Result<Option<P::Row>, StoreError> {
         row_in::<P>(self.store.row(P::NAME, key)?)
     }

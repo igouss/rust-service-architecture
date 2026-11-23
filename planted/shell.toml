@@ -360,3 +360,31 @@ anchor = "(true, true | false) => Err(TitleError::Blank),"
 replacement = "(true, true | false) => Ok(Title(text)),"
 example = true
 expect = "test"
+
+[[mutant]]
+name = "T83 the relay does not count a reply whose unit failed"
+path = "app/src/lib.rs"
+anchor = ") if counted => store.failed(id)?,"
+replacement = ") if counted => (),"
+expect = "test"
+
+[[mutant]]
+name = "T84 the relay offers a request whose unit keeps failing for ever"
+path = "app/src/lib.rs"
+anchor = "=> stranded::<X::Reads, K>(store, id, &unsettled)?,"
+replacement = "=> store.failed(id).map(|()| drop(unsettled))?,"
+expect = "test"
+
+[[mutant]]
+name = "T85 the relay ends its pass at a request whose unit failed"
+path = "app/src/lib.rs"
+anchor = "Err(down @ (StoreError::Unavailable { .. } | StoreError::Misconfigured { .. })) => return Err(down),"
+replacement = "Err(down @ (StoreError::Unavailable { .. } | StoreError::Misconfigured { .. } | StoreError::Runaway { .. })) => return Err(down),"
+expect = "test"
+
+[[mutant]]
+name = "T86 a stranded request is finished and no cause is recorded"
+path = "ports/src/lib.rs"
+anchor = "Ok(self.store.park(S::NAME, request, cause)?.is_some())"
+replacement = "Ok(self.store.finish(S::NAME, request)?.is_some())"
+expect = "test"

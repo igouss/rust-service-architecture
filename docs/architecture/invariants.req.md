@@ -127,7 +127,12 @@ allows, then the system shall park the request, record the cause, and apply to t
 that issued it the reaction built from `Undelivered`, in one unit of work. While a request has
 failed less often than the bound and was not rejected, the system shall offer it again.
 
-Participants: `GatewayError`, `domain::Undelivered`, `app::relay`, `app::abandon`, `Unit::park`, `Writer::park`.
+If the unit that applies a reply fails and the store is neither unavailable nor misconfigured,
+then the system shall count a failed attempt, and shall go on to the next request. If that
+unit has failed as often as the bound allows, or the unit that parks a request fails so, then
+the system shall park the request with the error as its cause and apply no reaction.
+
+Participants: `GatewayError`, `domain::Undelivered`, `app::relay`, `app::abandon`, `Unit::park`, `Unit::strand`, `Writer::park`.
 
 ### Acceptance
 
@@ -136,6 +141,8 @@ Participants: `GatewayError`, `domain::Undelivered`, `app::relay`, `app::abandon
 - `arch-22kr.3` A request that fails as often as the bound is parked and its lifecycle is told: `a_request_that_fails_as_often_as_the_bound_is_parked_and_its_fulfilment_abandoned`, `under_a_bound_of_one_the_first_failure_parks_the_request` (mutants T67 and T69).
 - `arch-22kr.4` A parked request is closed once, like a finished one: `a_request_parked_twice_applies_its_reaction_once`, `a_request_finished_and_parked_in_one_unit_applies_only_the_first_reaction`, `a_unit_that_fails_after_parking_a_request_leaves_it_claimable`.
 - `arch-22kr.5` A parked request can be read where the store keeps it, with its cause and its attempts: `a_parked_request_is_read_with_sql_with_its_cause_and_its_attempts` for SQLite and Postgres, `a_parked_request_is_held_as_parked_with_its_cause_and_its_attempts` for memory (mutants T70 to T75).
+- `arch-22kr.6` A reply whose unit fails is counted, does not hold back the next request, and at the bound is parked with nothing applied: `a_reply_whose_unit_fails_is_counted_and_offered_again`, `a_request_behind_one_whose_unit_fails_is_performed_in_the_same_pass`, `a_reply_whose_unit_fails_as_often_as_the_bound_parks_the_request_and_tells_nothing` (mutants T83 to T85).
+- `arch-22kr.7` A request whose lifecycle cannot be told is parked all the same, with a cause: `a_rejected_request_whose_lifecycle_cannot_be_told_is_parked_all_the_same`, `a_stranded_request_is_not_claimed_again_and_applies_nothing`, `a_stranded_request_is_held_as_parked_with_its_cause` (mutant T86).
 
 ## `arch-oif` A read model shall hold exactly the fold of its lifecycle's facts up to its position
 

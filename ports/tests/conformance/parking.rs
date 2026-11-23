@@ -115,3 +115,32 @@ fn a_unit_that_fails_after_parking_a_request_leaves_it_claimable() {
     assert_eq!(courier(&store, "p-1"), (Version::from(1), Courier::Sent { parcels: 1 }));
     assert_eq!(attempts(&store), vec![0]);
 }
+
+#[test]
+fn a_stranded_request_is_not_claimed_again_and_applies_nothing() {
+    let store: Subject = subject();
+    send(&store, "p-1", 1);
+    send(&store, "p-2", 2);
+    let claimed: Vec<Claimed<Parcel>> = store.claim::<Send>(10).expect("claimed");
+    assert_eq!(store.write(|unit| unit.strand::<Courier>(claimed[0].id, "cannot be told")), Ok(true));
+    assert_eq!(parcels(&store, 10), vec![(id("p-2"), Parcel { number: 2 })]);
+    assert_eq!(courier(&store, "p-1"), (Version::from(1), Courier::Sent { parcels: 1 }));
+}
+
+#[test]
+fn a_request_stranded_twice_is_parked_once() {
+    let store: Subject = subject();
+    send(&store, "p-1", 1);
+    let claimed: Vec<Claimed<Parcel>> = store.claim::<Send>(10).expect("claimed");
+    assert_eq!(store.write(|unit| unit.strand::<Courier>(claimed[0].id, "cannot be told")), Ok(true));
+    assert_eq!(store.write(|unit| unit.strand::<Courier>(claimed[0].id, "cannot be told")), Ok(false));
+}
+
+#[test]
+fn a_request_is_stranded_only_by_the_lifecycle_that_issued_it() {
+    let store: Subject = subject();
+    send(&store, "p-1", 1);
+    let claimed: Vec<Claimed<Parcel>> = store.claim::<Send>(10).expect("claimed");
+    assert_eq!(store.write(|unit| unit.strand::<Porter>(claimed[0].id, "cannot be told")), Ok(false));
+    assert_eq!(parcels(&store, 10), vec![(id("p-1"), Parcel { number: 1 })]);
+}

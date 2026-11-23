@@ -257,7 +257,8 @@ the one place that numbers versions, serializes, and builds a `Recorded` fact. `
 is `apply` for the reply to a request: it closes the request and applies the reaction to the
 stream the stored request names, or does neither when the request is already closed
 ([`arch-ruz9`](invariants.req.md)). `Unit::park` is the same for a request that will not be
-performed, and records why:
+performed, and records why; `Unit::strand` parks a request and applies nothing, for the
+relay to use when the reaction itself is what fails:
 
 ```rust
 pub struct Unit<'a> {
