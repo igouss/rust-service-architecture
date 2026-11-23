@@ -68,7 +68,7 @@ Nothing in `ports` or `adapter-sqlite` changes for a new use case.
    `blocking`, which runs it off the async executor.
 2. Map the `Answer` exhaustively: accepted is 204, a refusal is 409 with its name. Record the
    route, the command and the outcome on the request span; never log user text.
-3. The page is not rendered by the route. `GET /events` sends the whole board as a
+3. The page is not rendered by the route. `GET /events` sends the whole board (`app::board`, one read) as a
    `datastar-patch-elements` frame at once and again after every commit, so a new thing to show
    goes in the query the frame reads and in the function that renders it. Escape user text.
 4. Tests go in `adapter-http/tests/routes/`, one file per area, one behaviour per test:

@@ -34,11 +34,13 @@ pub struct TaskBoard {
     pub tally: Option<Tally>,
 }
 
-pub fn task_board<J: Journal>(journal: &J) -> Result<TaskBoard, StoreError> {
-    journal.read(|view: &mut View<'_>| {
-        Ok(TaskBoard {
-            open: open_in(view)?,
-            tally: view.row::<TaskTally>(TaskTally::KEY)?,
-        })
+pub(crate) fn task_board_in(view: &mut View<'_>) -> Result<TaskBoard, StoreError> {
+    Ok(TaskBoard {
+        open: open_in(view)?,
+        tally: view.row::<TaskTally>(TaskTally::KEY)?,
     })
+}
+
+pub fn task_board<J: Journal>(journal: &J) -> Result<TaskBoard, StoreError> {
+    journal.read(|view: &mut View<'_>| task_board_in(view))
 }

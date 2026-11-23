@@ -1,6 +1,6 @@
 use domain::fulfilment::{Fulfilment, FulfilmentEvent, Progress};
 use domain::payment::{Payment, PaymentEvent};
-use ports::{Recorded, StoreError, StreamId, Unit};
+use ports::{Journal, Recorded, StoreError, StreamId, Unit, View};
 
 use crate::{react, Policy};
 
@@ -23,4 +23,26 @@ impl Policy for Fulfilment {
             FulfilmentEvent::ReservationRequested | FulfilmentEvent::ShipmentRequested | FulfilmentEvent::Completed | FulfilmentEvent::Abandoned => Ok(()),
         }
     }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PaymentStatus {
+    pub id: StreamId,
+    pub payment: Payment,
+    pub fulfilment: Fulfilment,
+}
+
+pub(crate) fn payments_in(view: &mut View<'_>) -> Result<Vec<PaymentStatus>, StoreError> {
+    let payments: Vec<(StreamId, Payment)> = view.states::<Payment>()?;
+    payments
+        .into_iter()
+        .map(|(id, payment): (StreamId, Payment)| {
+            let (_version, fulfilment): (ports::Version, Fulfilment) = view.state::<Fulfilment>(&fulfilment_of(&id))?;
+            Ok(PaymentStatus { id, payment, fulfilment })
+        })
+        .collect()
+}
+
+pub fn payments<J: Journal>(journal: &J) -> Result<Vec<PaymentStatus>, StoreError> {
+    journal.read(|view: &mut View<'_>| payments_in(view))
 }

@@ -12,10 +12,10 @@ form you are copying.
 | `adapter-sqlite/`, `adapter-memory/`, `adapter-postgres/` | keep the one store adapter your service uses, byte for byte, with its tests; delete the others together with their workspace member lines and their mutants ([adapters](../architecture/adapters.req.md)). Without `adapter-postgres`, delete the `postgres` recipes and the `postgres` job too |
 | `app/src/lib.rs`, `domain/src/lib.rs` | keep; only their `pub mod` lines change |
 | `clippy.toml`, `rustfmt.toml`, the root `Cargo.toml`, `workspace.py`, `lint.py`, `guarded.py`, `views.py`, `guide-sync.bb`, `CLAUDE.md`, `.req/`, `requirements.toon`, `LICENSE-*`, `.gitignore` | keep |
-| `domain/src/task.rs`, `payment.rs`, `fulfilment.rs`; `app/src/tasks.rs`, `payments.rs` | replace with your lifecycles, policies and queries |
+| `domain/src/task.rs`, `payment.rs`, `fulfilment.rs`; `app/src/tasks.rs`, `payments.rs`, `board.rs` | replace with your lifecycles, policies and queries |
 | `app/tests/use_cases.rs`, `adapter-sqlite/tests/store.rs`, `domain/tests/stored_encoding.rs` | port: keep every assertion's intent, swap the example types for yours |
-| `adapter-http/src/lib.rs`, `adapter-http/tests/routes/` | keep `blocking`, `Changes`, the frame encoding and the request span (rename its `task` field); replace the routes, the page and the renderers |
-| `server/`, `justfile` | keep; rename the `TASKS_*` settings and the default database file |
+| `adapter-http/src/`, `adapter-http/tests/routes/` | keep `blocking`, `Changes`, the frame encoding and the request span (rename its `task` and `payment` fields); replace the routes, the page and the renderers |
+| `server/`, `justfile` | keep; rename the `TASKS_*` settings and the default database file. Replace `server/src/warehouse.rs` with your gateways, each in an adapter crate of its own once it calls a real system, and name your process manager's reaction where `relayed` names `Progress`; without a process manager, delete the relay |
 | `mutants.py`, `planted/` | keep the runner and the machinery mutants; re-plant the example ones (below) and update `EXAMPLE` |
 | `docs/architecture/`, `docs/how-to/add-a-use-case.md`, `AGENTS.md` | keep the rules; re-point every pointer at an example file and every cited example test to yours (`just check` names a citation that no longer exists) |
 | `docs/adr/` | keep: they say why the architecture is this way; number your own after them |
@@ -70,5 +70,5 @@ A follow-up task, started from the mutation job's report, not part of starting t
 
 ## Not provided
 
-Schema migrations, authentication, a scheduler adapter, a running relay and a published wire
-format are not built. The README's "Not built" list is the current state.
+Schema migrations, authentication, a scheduler adapter, a gateway to a real system and a
+published wire format are not built. The README's "Not built" list is the current state.

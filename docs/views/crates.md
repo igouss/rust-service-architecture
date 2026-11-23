@@ -35,5 +35,7 @@ graph TD
     ports --> domain
     server --> adapter_http
     server --> adapter_sqlite
+    server --> app
+    server --> domain
     server --> ports
 ```

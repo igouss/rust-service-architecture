@@ -11,14 +11,14 @@ context = "example"
 [dependencies]
 adapter-http = { path = "../adapter-http" }
 adapter-sqlite = { path = "../adapter-sqlite" }
+app = { path = "../app" }
 axum = { workspace = true }
+domain = { path = "../domain" }
 ports = { path = "../ports" }
-tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal"] }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal", "time"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 
-[dev-dependencies]
-tokio = { workspace = true, features = ["time"] }
 
 [lints]
 workspace = true

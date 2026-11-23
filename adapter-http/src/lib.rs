@@ -1,6 +1,7 @@
 use std::convert::Infallible;
 use std::sync::Arc;
 
+use app::board::Board;
 use app::tasks::TaskBoard;
 use axum::body::Bytes;
 use axum::extract::{DefaultBodyLimit, Path, State};
@@ -20,6 +21,8 @@ use tracing::field::Empty;
 use tracing::Span;
 use uuid::Uuid;
 
+mod payments;
+
 pub const BODY_LIMIT: usize = 4096;
 
 const PATCH_ELEMENTS: &str = "datastar-patch-elements";
@@ -38,6 +41,12 @@ const PAGE: &str = r#"<!doctype html>
 <button>Add</button>
 </form>
 <main id="tasks"></main>
+<h1>Payments</h1>
+<form data-on:submit="@post('/payments', {contentType: 'form'})">
+<input name="amount" required inputmode="numeric" placeholder="Cents to authorize">
+<button>Authorize</button>
+</form>
+<section id="payments"></section>
 </body>
 </html>
 "#;
@@ -56,6 +65,11 @@ impl Changes {
 
     pub fn stop(&self) {
         self.stopped.send_modify(|stopped: &mut bool| *stopped = true);
+    }
+
+    pub async fn stopped(&self) {
+        let mut stopped: watch::Receiver<bool> = self.stopped.subscribe();
+        let _closed: Result<watch::Ref<'_, bool>, watch::error::RecvError> = stopped.wait_for(|asked: &bool| *asked).await;
     }
 }
 
@@ -78,6 +92,8 @@ pub fn router<J: Journal + Send + Sync + 'static>(journal: Arc<J>, changes: Chan
         .route("/", get(page))
         .route("/tasks", post(add_task::<J>))
         .route("/tasks/{id}/complete", post(complete_task::<J>))
+        .route("/payments", post(payments::authorize::<J>))
+        .route("/payments/{id}/capture", post(payments::capture::<J>))
         .route("/events", get(events::<J>))
         .layer(DefaultBodyLimit::max(BODY_LIMIT))
         .with_state(Service { journal, changes })
@@ -89,6 +105,7 @@ fn request(route: &'static str) -> Span {
         route,
         command = Empty,
         task = Empty,
+        payment = Empty,
         outcome = Empty,
         version = Empty,
         refusal = Empty,
@@ -128,6 +145,7 @@ enum BadInput {
     BlankTitle,
     TitleTooLong,
     MalformedId,
+    BadAmount,
 }
 
 fn rejected(span: &Span, bad: BadInput) -> Response {
@@ -136,13 +154,14 @@ fn rejected(span: &Span, bad: BadInput) -> Response {
         BadInput::BlankTitle => "BlankTitle",
         BadInput::TitleTooLong => "TitleTooLong",
         BadInput::MalformedId => "MalformedId",
+        BadInput::BadAmount => "BadAmount",
     };
     span.record("outcome", "rejected");
     span.record("reason", name);
     (StatusCode::BAD_REQUEST, name).into_response()
 }
 
-fn refusal_name(refusal: TaskRefusal) -> &'static str {
+fn task_refusal(refusal: TaskRefusal) -> &'static str {
     match refusal {
         TaskRefusal::AlreadyExists => "AlreadyExists",
         TaskRefusal::Absent => "Absent",
@@ -156,7 +175,7 @@ fn failed(span: &Span, failure: &Failure) -> Response {
     StatusCode::INTERNAL_SERVER_ERROR.into_response()
 }
 
-fn answered(span: &Span, outcome: Result<Answer<TaskRefusal>, Failure>) -> Response {
+fn answered<R: Copy>(span: &Span, outcome: Result<Answer<R>, Failure>, refusal_name: fn(R) -> &'static str) -> Response {
     match outcome {
         Ok(Answer::Accepted(version)) => {
             span.record("outcome", "accepted");
@@ -189,7 +208,7 @@ fn bad_title(error: TitleError) -> BadInput {
     }
 }
 
-fn task_id(text: &str) -> Result<StreamId, BadInput> {
+fn stream_id(text: &str) -> Result<StreamId, BadInput> {
     Uuid::parse_str(text)
         .map(|id: Uuid| StreamId(id.to_string()))
         .map_err(|_malformed: uuid::Error| BadInput::MalformedId)
@@ -208,7 +227,11 @@ async fn add_task<J: Journal + Send + Sync + 'static>(State(service): State<Serv
         Ok(command) => {
             let id: StreamId = StreamId(Uuid::now_v7().to_string());
             span.record("task", id.0.as_str());
-            answered(&span, blocking(service.journal, move |journal: &J| app::handle(journal, &id, command)).await)
+            answered(
+                &span,
+                blocking(service.journal, move |journal: &J| app::handle(journal, &id, command)).await,
+                task_refusal,
+            )
         }
     }
 }
@@ -216,13 +239,14 @@ async fn add_task<J: Journal + Send + Sync + 'static>(State(service): State<Serv
 async fn complete_task<J: Journal + Send + Sync + 'static>(State(service): State<Service<J>>, Path(id): Path<String>) -> Response {
     let span: Span = request("POST /tasks/{id}/complete");
     span.record("command", "CompleteTask");
-    match task_id(&id) {
+    match stream_id(&id) {
         Err(bad) => rejected(&span, bad),
         Ok(id) => {
             span.record("task", id.0.as_str());
             answered(
                 &span,
                 blocking(service.journal, move |journal: &J| app::handle(journal, &id, CompleteTask)).await,
+                task_refusal,
             )
         }
     }
@@ -274,6 +298,10 @@ fn render(board: &TaskBoard) -> String {
     )
 }
 
+fn shown(board: &Board) -> Event {
+    patch(&format!("{}{}", render(&board.tasks), payments::render(&board.payments)))
+}
+
 fn patch(html: &str) -> Event {
     let lines: Vec<String> = html.lines().map(|line: &str| format!("elements {line}")).collect();
     Event::default().event(PATCH_ELEMENTS).data(lines.join("\n"))
@@ -291,8 +319,8 @@ async fn next_patch<J: Journal + Send + Sync + 'static>(mut feed: Feed<J>) -> Op
         changed = feed.commits.changed() => changed.ok()?,
         _stopped = feed.stopped.wait_for(|stopped: &bool| *stopped) => return None,
     }
-    match blocking(Arc::clone(&feed.journal), app::tasks::task_board::<J>).await {
-        Ok(shown) => Some((Ok(patch(&render(&shown))), feed)),
+    match blocking(Arc::clone(&feed.journal), app::board::board::<J>).await {
+        Ok(board) => Some((Ok(shown(&board)), feed)),
         Err(failure) => {
             reported(&feed.span, &failure, "a store failure ended the event stream");
             None
@@ -307,11 +335,11 @@ async fn events<J: Journal + Send + Sync + 'static>(State(service): State<Servic
         stopped: service.changes.stopped.subscribe(),
         span: request("GET /events"),
     };
-    match blocking(Arc::clone(&feed.journal), app::tasks::task_board::<J>).await {
+    match blocking(Arc::clone(&feed.journal), app::board::board::<J>).await {
         Err(failure) => failed(&feed.span, &failure),
-        Ok(shown) => {
+        Ok(board) => {
             feed.span.record("outcome", "streaming");
-            let first: Result<Event, Infallible> = Ok(patch(&render(&shown)));
+            let first: Result<Event, Infallible> = Ok(shown(&board));
             Sse::new(stream::once(future::ready(first)).chain(stream::unfold(feed, next_patch::<J>)))
                 .keep_alive(KeepAlive::default())
                 .into_response()

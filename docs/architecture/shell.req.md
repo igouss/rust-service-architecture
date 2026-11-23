@@ -138,7 +138,10 @@ waiting ([`arch-22kr`](invariants.req.md)). The bound is the composition root's 
 
 `relay` waits on the gateway and makes blocking store calls around it, so it runs on a thread
 of its own with its own runtime, never on the executor that serves requests
-([`arch-v1q`](ports.req.md)).
+([`arch-v1q`](ports.req.md)). The composition root starts that thread, passes over the outbox
+after each pause, and stops it on the signal that stops the driving adapters; `server` does so
+with a demonstration gateway that answers from nothing. A gateway that calls a real system is a
+driven adapter in a crate of its own.
 
 ```rust
 pub async fn relay<X, K, G>(store: &K, gateway: &G, limit: usize, attempts: NonZeroU32) -> Result<usize, StoreError>

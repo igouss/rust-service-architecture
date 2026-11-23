@@ -3,7 +3,7 @@ default: check
 [doc("Everything that must be green before a commit. Seconds, not minutes.")]
 check: fmt clippy test roles raw-store purity events comments allows wildcards traits stored docs ids views-current
 
-[doc("Serve the task list. TASKS_DATABASE, TASKS_LISTEN and TASKS_DURABILITY (full|normal) override the defaults.")]
+[doc("Serve the tasks and the payments. TASKS_DATABASE, TASKS_LISTEN, TASKS_DURABILITY (full|normal) and TASKS_RELAY_ATTEMPTS override the defaults.")]
 run:
     cargo run -p server
 

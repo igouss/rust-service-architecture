@@ -11,6 +11,10 @@ impl Amount {
     pub fn new(cents: u64) -> Option<Amount> {
         NonZeroU64::new(cents).map(Amount)
     }
+
+    pub fn cents(self) -> u64 {
+        self.0.get()
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -112,6 +116,11 @@ mod tests {
 
     fn given(events: &[PaymentEvent]) -> Payment {
         events.iter().fold(Payment::initial(), Payment::evolve)
+    }
+
+    #[test]
+    fn an_amount_says_its_cents() {
+        assert_eq!(cents(500).cents(), 500);
     }
 
     #[test]

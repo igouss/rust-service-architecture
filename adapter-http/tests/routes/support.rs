@@ -11,6 +11,8 @@ pub use axum::body::Body;
 pub use axum::http::{Request, StatusCode};
 pub use axum::response::Response;
 pub use axum::Router;
+pub use domain::fulfilment::Fulfilment;
+pub use domain::payment::{Amount, DeclineReason, Payment};
 pub use domain::task::{Tally, Title};
 pub use http_body_util::BodyExt;
 pub use ports::{Journal, Position, StoreError, StreamId, Unit, View};
@@ -101,6 +103,30 @@ pub fn first_id(service: &Service) -> String {
 
 pub async fn complete(service: &Service, id: &str) -> Response {
     send(&service.router, post(&format!("/tasks/{id}/complete"), String::new())).await
+}
+
+pub async fn authorize(service: &Service, amount: &str) -> Response {
+    send(&service.router, post("/payments", format!("amount={amount}"))).await
+}
+
+pub fn payments(service: &Service) -> Vec<(StreamId, Payment)> {
+    service.store.read(|view: &mut View<'_>| view.states::<Payment>()).expect("read")
+}
+
+pub fn first_payment(service: &Service) -> String {
+    payments(service)
+        .into_iter()
+        .map(|(id, _payment): (StreamId, Payment)| id.0)
+        .next()
+        .expect("one payment")
+}
+
+pub async fn capture(service: &Service, id: &str, amount: &str) -> Response {
+    send(&service.router, post(&format!("/payments/{id}/capture"), format!("amount={amount}"))).await
+}
+
+pub fn cents(value: u64) -> Amount {
+    Amount::new(value).expect("positive")
 }
 
 pub async fn text(response: Response) -> String {

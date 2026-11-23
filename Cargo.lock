@@ -943,7 +943,9 @@ version = "0.0.0"
 dependencies = [
  "adapter-http",
  "adapter-sqlite",
+ "app",
  "axum",
+ "domain",
  "ports",
  "tokio",
  "tracing",

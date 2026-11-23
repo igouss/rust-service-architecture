@@ -115,3 +115,16 @@ async fn a_store_error_after_the_first_frame_ends_the_event_stream() {
         .is_none();
     assert!(ended);
 }
+
+#[tokio::test]
+async fn a_stop_is_heard_by_whoever_waits_for_it() {
+    let changes: Changes = Changes::default();
+    changes.stop();
+    assert_eq!(tokio::time::timeout(Duration::from_secs(5), changes.stopped()).await, Ok(()));
+}
+
+#[tokio::test]
+async fn nobody_hears_a_stop_that_was_not_asked_for() {
+    let changes: Changes = Changes::default();
+    assert!(tokio::time::timeout(Duration::from_millis(50), changes.stopped()).await.is_err());
+}

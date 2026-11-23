@@ -3,6 +3,7 @@ use std::num::NonZeroU32;
 use domain::{Command, Lifecycle, Projection, Reaction, Undelivered};
 use ports::{Answer, Applied, Claimed, Finished, Gateway, GatewayError, Journal, Outbox, Position, Recorded, RequestId, StoreError, StreamId, Unit};
 
+pub mod board;
 pub mod payments;
 pub mod tasks;
 

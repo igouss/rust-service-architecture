@@ -1,7 +1,8 @@
 # rust-service-architecture
 
 A reference architecture for a Rust backend service, written to be read and followed by AI
-coding agents. It is a working service (a task list with a Datastar front end on SQLite), the
+coding agents. It is a working service (a task list and a payment with its fulfilment, with a
+Datastar front end on SQLite), the
 rules it obeys, and the checks that prove it obeys them. Start a service from it, or point an
 agent at it when an existing project needs to know how to structure a feature.
 
@@ -21,6 +22,13 @@ just check        # every gate, in seconds
 just run          # the server on http://127.0.0.1:3000
 ```
 
+The page adds and completes tasks, and authorizes and captures payments. A captured payment
+starts a fulfilment; the relay, on a thread of its own, hands its requests to a demonstration
+warehouse that is always in stock and feeds each reply back, so the page shows the fulfilment
+move to shipped. `TASKS_DATABASE`, `TASKS_LISTEN`, `TASKS_DURABILITY` (`full` or `normal`)
+and `TASKS_RELAY_ATTEMPTS` (how often a request is tried before it is parked, 5 unless set)
+override the defaults.
+
 Needs Rust 1.95 (pinned in `rust-toolchain.toml`), [`just`](https://github.com/casey/just),
 [`hex-lint`](https://github.com/igouss/hex-lint), [`effect-audit`](https://github.com/igouss/effect-audit),
 [`req`](https://github.com/igouss/req), and [babashka](https://babashka.org) for the docs check.
@@ -35,7 +43,7 @@ Each is a crate; dependencies only point inward.
 | Ports | `ports` | the traits the outside must implement and the types that cross them | the core |
 | Shell | `app` | the handler, each record type's policy, queries, the relay | core and ports |
 | Adapters | `adapter-sqlite`, `adapter-memory`, `adapter-postgres`, `adapter-http` | a store, on SQLite, in memory or on Postgres; HTTP and Datastar server-sent events | the outside world |
-| Root | `server` | `main()`, which plugs adapters into the shell | everything |
+| Root | `server` | `main()`, which plugs adapters into the shell and runs the relay | everything |
 
 The generated picture is [`docs/views/crates.md`](docs/views/crates.md).
 
@@ -116,11 +124,8 @@ run and its conditions. Commit ids and the `baseline-2026-11-11` tag named in th
 
 Not built:
 
-- **A running relay.** `app::relay`, the outbox and the `Gateway` port are tested library code,
-  but the example served over HTTP (tasks) issues no requests, so `server` starts no relay and
-  ships no gateway.
-- **A way in for the payment example.** `Payment` and `Fulfilment` show a process manager and
-  are exercised by tests only; no route reaches them.
+- **A gateway to a real system.** The warehouse in `server` answers from nothing; it shows
+  where a gateway plugs in, not how to call one.
 - **Schema migrations.** State rows are meant to change shape by migration; there is no
   migration mechanism yet, and the tables are created only if absent.
 - **A scheduler adapter, a published wire format for other services, authentication.**

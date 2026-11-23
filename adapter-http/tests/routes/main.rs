@@ -3,5 +3,6 @@
 mod events;
 mod logging;
 mod page;
+mod payments;
 mod support;
 mod tasks;
