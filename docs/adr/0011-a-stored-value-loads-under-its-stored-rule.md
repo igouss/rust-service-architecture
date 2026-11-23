@@ -48,6 +48,13 @@ T22 to T24 are unchanged. New: C15 and C16 (the constant assertion, E0080) and T
 blank title loads). Each was applied by hand and seen to die as stated; with `LIMIT` lowered
 to 100 the hazard test passes.
 
+## What is not gated
+
+While `LIMIT` and `STORED_LIMIT` are equal, a `TryFrom` that calls `Title::new` again passes
+every test and every mutant: the two rules differ only once one of them moves. The constant
+assertion catches the limits crossing; it does not catch the code paths merging. That is a row
+in the gap ledger (`arch-yod`), checked by review.
+
 ## What would reverse it
 
 A rule that must be enforced on stored values too (a legal requirement to purge something) is

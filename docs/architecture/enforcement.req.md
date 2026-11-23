@@ -117,6 +117,10 @@ verification-reason: review only (T4); no gate is built
 | a check that an event carries what was decided, not the state after it | [core](core.req.md) | names only (`events`) |
 | a check that no query result enters a command as proof of uniqueness | [core](core.req.md) | review |
 | a check that forgettable state with unbounded keys is not a lifecycle | [adapters](adapters.req.md) | review |
+| a check that a refined type's `Deserialize` does not call its constructor | [`arch-v9j1`](core.req.md) | review; the constant assertion holds the two limits apart, not the two code paths, and at equal limits no test tells them apart |
+| a check that a stream id is built with its lifecycle written out | [`arch-tx8f`](ports.req.md) | review; `StreamId::new` with no annotation takes the lifecycle of the call it is passed to |
+| a compile-time check that no two lifecycles and no two projections share a `NAME` | [`arch-1bmf`](core.req.md) | the `names` recipe (T3); decision record 0013 |
+| an idempotency key on the page's own forms | [`arch-59ap`](adapters.req.md) | not built; a request without a key is not safe to repeat |
 
 ### Acceptance
 

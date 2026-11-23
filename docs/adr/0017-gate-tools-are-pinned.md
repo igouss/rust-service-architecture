@@ -33,8 +33,9 @@ installed from a local path, not from git).
 
 - Each `cargo install --git` in `.github/workflows/ci.yml` names a full 40-character commit
   with `--rev`: the `HEAD` that `git ls-remote` reported for each tool on 2026-11-23.
-  `just check` was run green at the pinning commit with binaries built from exactly those
-  revisions.
+  `just check` was run green with binaries built from exactly those revisions, on the
+  commit the pins were first made on and again after that commit was placed on top of the
+  port and gate changes of decision records 0012 to 0015.
 - The `pins` recipe (`python3 lint.py pins`, `arch-mov6`) keeps it: it reads every workflow
   under `.github/workflows` and fails on a `cargo install --git` with no `--rev` of 40 hex
   digits. It reads one install to a line, and exits 2 when a `cargo install` or a `--git` in a
