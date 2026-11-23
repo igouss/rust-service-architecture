@@ -24,7 +24,7 @@ names the rule it enforces.
 | `roles` | `hex-lint` | the role matrix and the context axis |
 | `raw-store` | a `cargo metadata` and source check | a driven adapter depends on no `domain` and no serializer outside its tests; a store adapter includes the conformance suite |
 | `purity` | `effect-audit --require-domain --strict` | no I/O, clock, async or unvouched dependency in the core |
-| `events` | a lexed scan of every member's `src` | no lifecycle's event is named for a generic change; red when a lifecycle or its event enum is not read |
+| `events` | a parsed scan of every member's `src` | no lifecycle's event is named for a generic change; red when a lifecycle or its event enum is not read |
 | `comments` | a lexed scan of every member | no line or block comment except a `///` or `//!` doc comment, and `fc-allow` in the core |
 | `allows` | a lexed scan of every member | no `allow` or `expect` attribute, bare or under `cfg_attr`, except the one of [`arch-4za`](enforcement.req.md) |
 | `wildcards` | a parsed scan of `domain` and `app` | no element of a tuple pattern is `_`, `..` or a bare name |

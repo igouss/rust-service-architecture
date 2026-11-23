@@ -51,7 +51,7 @@ purity:
 
 [doc("An event names what happened: no lifecycle's event is called Updated, Changed or their kin.")]
 events:
-    python3 events.py
+    cargo run -q -p gates -- events
 
 [doc("arch-1bmf: no two lifecycles and no two projections share a NAME; they would share rows. Runs before the tests.")]
 names:
