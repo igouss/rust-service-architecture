@@ -49,20 +49,20 @@ fn captured() -> Sqlite {
     store
 }
 
-fn passed(store: &Sqlite, gateway: &Down, attempts: u32, at: &[u64]) -> usize {
-    at.iter().for_each(|millis: &u64| {
-        assert_eq!(
-            ready(relay::<Progress, Sqlite, Down>(
-                store,
-                gateway,
-                10,
-                &retry(attempts),
-                Moment::ZERO.after(*millis)
-            )),
-            Ok::<usize, StoreError>(0)
-        );
-    });
-    gateway.0.load(Ordering::SeqCst)
+fn pass(store: &Sqlite, gateway: &Down, attempts: u32, millis: u64) -> Result<usize, StoreError> {
+    ready(relay::<Progress, Sqlite, Down>(
+        store,
+        gateway,
+        10,
+        &retry(attempts),
+        Moment::ZERO.after(millis),
+    ))
+}
+
+fn passed(store: &Sqlite, attempts: u32, at: &[u64]) -> (Vec<Result<usize, StoreError>>, usize) {
+    let gateway: Down = Down(AtomicUsize::new(0));
+    let passes: Vec<Result<usize, StoreError>> = at.iter().map(|millis: &u64| pass(store, &gateway, attempts, *millis)).collect();
+    (passes, gateway.0.load(Ordering::SeqCst))
 }
 
 fn fulfilment(store: &Sqlite) -> Fulfilment {
@@ -98,32 +98,32 @@ fn the_wait_is_never_longer_than_the_longest() {
 #[test]
 fn a_failed_request_is_not_performed_again_before_its_wait_is_over() {
     let store: Sqlite = captured();
-    assert_eq!(passed(&store, &Down(AtomicUsize::new(0)), 5, &[0, 999]), 1);
+    assert_eq!(passed(&store, 5, &[0, 999]), (vec![Ok(0), Ok(0)], 1));
 }
 
 #[test]
 fn a_failed_request_is_performed_again_once_its_wait_is_over() {
     let store: Sqlite = captured();
-    assert_eq!(passed(&store, &Down(AtomicUsize::new(0)), 5, &[0, 1000]), 2);
+    assert_eq!(passed(&store, 5, &[0, 1000]), (vec![Ok(0), Ok(0)], 2));
 }
 
 #[test]
 fn a_request_that_failed_twice_waits_twice_as_long() {
     let store: Sqlite = captured();
-    assert_eq!(passed(&store, &Down(AtomicUsize::new(0)), 5, &[0, 1000, 2999]), 2);
+    assert_eq!(passed(&store, 5, &[0, 1000, 2999]), (vec![Ok(0), Ok(0), Ok(0)], 2));
 }
 
 #[test]
 fn five_passes_half_a_second_apart_leave_a_fulfilment_reserving() {
     let store: Sqlite = captured();
-    assert_eq!(passed(&store, &Down(AtomicUsize::new(0)), 5, &[0, 500, 1000, 1500, 2000]), 2);
+    assert_eq!(passed(&store, 5, &[0, 500, 1000, 1500, 2000]), (vec![Ok(0), Ok(0), Ok(0), Ok(0), Ok(0)], 2));
     assert_eq!(fulfilment(&store), Fulfilment::Reserving);
 }
 
 #[test]
 fn a_request_that_fails_after_every_wait_is_parked_at_the_bound() {
     let store: Sqlite = captured();
-    assert_eq!(passed(&store, &Down(AtomicUsize::new(0)), 3, &[0, 1000, 3000, 7000]), 3);
+    assert_eq!(passed(&store, 3, &[0, 1000, 3000, 7000]), (vec![Ok(0), Ok(0), Ok(0), Ok(0)], 3));
     assert_eq!(fulfilment(&store), Fulfilment::Abandoned);
 }
 
@@ -167,12 +167,12 @@ fn with_no_lease_a_second_claim_is_handed_the_request_being_performed() {
 fn a_request_claimed_by_a_relay_that_died_is_not_performed_before_the_lease_ends() {
     let store: Sqlite = captured();
     let died: usize = store.claim::<Progress>(10, Moment::ZERO, Moment::ZERO.after(60_000)).expect("claimed").len();
-    assert_eq!((died, passed(&store, &Down(AtomicUsize::new(0)), 5, &[59_999])), (1, 0));
+    assert_eq!((died, passed(&store, 5, &[59_999])), (1, (vec![Ok(0)], 0)));
 }
 
 #[test]
 fn a_request_claimed_by_a_relay_that_died_is_performed_when_the_lease_ends() {
     let store: Sqlite = captured();
     let died: usize = store.claim::<Progress>(10, Moment::ZERO, Moment::ZERO.after(60_000)).expect("claimed").len();
-    assert_eq!((died, passed(&store, &Down(AtomicUsize::new(0)), 5, &[60_000])), (1, 1));
+    assert_eq!((died, passed(&store, 5, &[60_000])), (1, (vec![Ok(0)], 1)));
 }
