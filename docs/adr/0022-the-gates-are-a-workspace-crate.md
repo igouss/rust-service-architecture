@@ -78,8 +78,21 @@ Every recipe's name, exit codes and printed text. The fail-closed counts. The mu
 
 ## What it gives up
 
-A build: `syn`, `proc-macro2` and what they pull in join the lock file, in a crate nothing
-else depends on. The measured cost is recorded with the last port.
+- Time. `just check` on a warm cache took 2.8 s before the move and takes 4.2 s after it
+  (two runs each, on the machine this was written on). A gate took 0.02 to 0.14 s as a
+  script and takes 0.15 to 0.35 s through `cargo run`, most of it cargo finding the binary
+  fresh. Building the crate into an empty target directory took 6.7 s there with the compilation
+  cache off (2.2 s with it), every dependency already downloaded; continuous integration was
+  not timed.
+- Dependencies, in `gates` only: `syn` 2 and `proc-macro2`, `quote`, `regex`, `toml`,
+  `ra-ap-rustc_lexer` (pinned exactly), with `serde` and `serde_json` from the workspace;
+  twenty-seven crates in all. `syn` 3 exists and `serde_derive` already builds it; the
+  gates were written against 2, which is an assumption to revisit, not a decision.
+- Two readings changed, both named under `wildcards` above: one is stricter, one turns a
+  named finding into exit 2.
+- Not built: a check that no script comes back. `guarded` still counts a `.py` or `.bb`
+  file at the top of the repository as a gate, so one that returns needs a record; nothing
+  fails on the file alone.
 
 ## What would reverse it
 
