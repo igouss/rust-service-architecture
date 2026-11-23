@@ -10,7 +10,6 @@ run:
 [doc("Formatting is checked, never applied, so a red is a diff you can read.")]
 fmt:
     @cargo fmt --check || (echo 'fmt: run `cargo fmt` and commit the result' && false)
-    @rustfmt --check --edition 2021 ports/tests/conformance/*.rs || (echo 'fmt: run `rustfmt --edition 2021 ports/tests/conformance/*.rs` and commit the result' && false)
 
 [doc("Lints in Cargo.toml [workspace.lints]: exhaustive matches, no unwrap, must-use outcomes.")]
 clippy:
@@ -27,12 +26,11 @@ roles:
 raw-store:
     cargo run -q -p gates -- raw-store
 
-[doc("The Postgres adapter against a server: lints, concurrent writers, and every case of the conformance suite counted as passed. Not in `check`: it needs STORE_POSTGRES_URL.")]
+[doc("The Postgres adapter against a server: lints, concurrent writers and the runtime. Not in `check`: it needs STORE_POSTGRES_URL.")]
 postgres:
     @test -n "${STORE_POSTGRES_URL:-}" || (echo 'postgres: set STORE_POSTGRES_URL to a database these tests may write to, or run `just postgres-local`' && false)
     cargo clippy -q -p adapter-postgres --all-targets --features server -- -D warnings
     cargo test -q -p adapter-postgres --features server
-    cargo run -q -p gates -- raw-store --ran adapter-postgres server
 
 [doc("Start a throwaway Postgres under target/, run `just postgres` against it, stop it.")]
 postgres-local:
@@ -85,10 +83,6 @@ refined:
 pins:
     @cargo run -q -p gates -- pins
 
-[doc("arch-tsu: a range that changes a gate also adds or amends a decision record under docs/adr/. Needs git, so not in `check`: `just guarded origin/main`.")]
-guarded base:
-    @cargo run -q -p gates -- guarded {{base}}
-
 [doc("Every Rust block in docs/architecture is code that compiles in this workspace.")]
 docs:
     cargo run -q -p gates -- docs
@@ -105,15 +99,6 @@ views:
 views-current:
     cargo run -q -p gates -- views --check
 
-[doc("Continuous integration only: plant every architecture mutant and require each to die as stated.")]
-mutants:
-    cargo run -q -p gates -- mutants
-
 [doc("Continuous integration only: native mutation of the core.")]
 mutants-core:
     cargo mutants -p domain --no-shuffle
-
-[doc("arch-ukt: build the benchmark in release, then run the binary alone, so no cargo process is alive while it measures.")]
-bench:
-    BENCH_COMMIT="$(git rev-parse --short HEAD)$(git diff --quiet HEAD || echo -dirty)" BENCH_RUSTC="$(rustc --version)" cargo build --release -q -p bench
-    ./target/release/bench

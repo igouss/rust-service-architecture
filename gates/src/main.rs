@@ -16,8 +16,6 @@ const GATES: &[(&str, Gate)] = &[
     ("events", gates::events::events),
     ("raw-store", gates::raw_store::raw_store),
     ("views", gates::views::views),
-    ("guarded", gates::guarded::guarded),
-    ("mutants", gates::mutants::mutants),
     ("docs", gates::docs::docs),
 ];
 

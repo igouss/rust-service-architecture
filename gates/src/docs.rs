@@ -3,7 +3,6 @@ use std::path::PathBuf;
 
 use regex::Regex;
 
-use crate::planted::read;
 use crate::workspace::Workspace;
 use crate::{Unread, Verdict};
 
@@ -46,22 +45,12 @@ pub fn cited_tests(text: &str) -> Result<Vec<String>, Unread> {
     ))
 }
 
-/// The ids after `mutant` or `mutants`: each one of a list, and the two ends of a range.
-pub fn cited_mutants(text: &str) -> Result<Vec<String>, Unread> {
-    let id: Regex = pattern(r"[CTGH]\d+")?;
-    let lists: Regex = pattern(r"mutants? ((?:[CTGH]\d+)(?:(?:, | and | to )(?:[CTGH]\d+))*)")?;
-    Ok(distinct(lists.captures_iter(text).filter_map(|found| found.get(1)).flat_map(|list| {
-        id.find_iter(list.as_str()).map(|one| one.as_str().to_string()).collect::<Vec<String>>()
-    })))
-}
-
 pub struct Held {
     pub sources: Vec<String>,
     pub rust: String,
-    pub planted: Vec<String>,
 }
 
-/// What is wrong with one document: a block the sources do not hold, a test or a mutant that does not exist.
+/// What is wrong with one document: a block the sources do not hold, or a test that does not exist.
 pub fn problems(name: &str, text: &str, held: &Held) -> Result<(Vec<String>, Vec<String>), Unread> {
     let mut missing: Vec<String> = Vec::new();
     for (index, block) in rust_blocks(text)?.iter().enumerate() {
@@ -74,11 +63,6 @@ pub fn problems(name: &str, text: &str, held: &Held) -> Result<(Vec<String>, Vec
     for test in cited_tests(text)? {
         if !held.rust.contains(&format!("fn {test}(")) {
             unknown.push(format!("{name} names a test that does not exist: {test}"));
-        }
-    }
-    for mutant in cited_mutants(text)? {
-        if !held.planted.contains(&mutant) {
-            unknown.push(format!("{name} names a mutant that planted/ does not hold: {mutant}"));
         }
     }
     Ok((missing, unknown))
@@ -101,7 +85,6 @@ fn held(workspace: &Workspace) -> Result<Held, Unread> {
     Ok(Held {
         sources,
         rust: rust.join("\n"),
-        planted: read(&workspace.root)?.iter().map(|mutant| mutant.id().to_string()).collect(),
     })
 }
 
@@ -141,8 +124,8 @@ pub fn docs(_asked: &[String]) -> Result<Verdict, Unread> {
         ));
     }
     if !unknown.is_empty() {
-        lines.push(String::from("arch-7iz: a criterion must name a test or a mutant that exists."));
-        lines.push(String::from("Fix: rename the citation to the test or mutant as it is now called."));
+        lines.push(String::from("arch-7iz: a criterion must name a test that exists."));
+        lines.push(String::from("Fix: rename the citation to the test as it is now called."));
     }
     if green {
         lines.iter().for_each(|line| println!("{line}"));

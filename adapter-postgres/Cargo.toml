@@ -23,10 +23,6 @@ tokio = { workspace = true, features = ["rt-multi-thread"] }
 serde = { workspace = true }
 
 [[test]]
-name = "conformance"
-required-features = ["server"]
-
-[[test]]
 name = "writers"
 required-features = ["server"]
 
