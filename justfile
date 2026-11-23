@@ -55,7 +55,7 @@ events:
 
 [doc("arch-1bmf: no two lifecycles and no two projections share a NAME; they would share rows. Runs before the tests.")]
 names:
-    @python3 names.py
+    @cargo run -q -p gates -- names
 
 [doc("arch-0d2: no comments; names and types carry the meaning. Doc comments, and fc-allow in the core, only.")]
 comments:

@@ -3,6 +3,7 @@
 pub mod allows;
 pub mod comments;
 pub mod declared;
+pub mod names;
 pub mod pins;
 pub mod stored;
 pub mod tokens;

@@ -19,7 +19,7 @@ names the rule it enforces.
 |---|---|---|
 | `fmt` | `cargo fmt --check` | one layout, so a diff shows only the change |
 | `clippy` | workspace lints, warnings denied | wildcard arms, `unwrap`, dropped outcomes, `unsafe` |
-| `names` | a lexed scan of every member | no two lifecycles and no two projections share a `NAME`; red when a `NAME` is not a literal it can read |
+| `names` | a parsed scan of every member's `src` | no two lifecycles and no two projections share a `NAME`; red when a `NAME` is not a literal it can read |
 | `test` | `cargo test` | behaviour, through the real SQLite store; the conformance suite against every store adapter |
 | `roles` | `hex-lint` | the role matrix and the context axis |
 | `raw-store` | a `cargo metadata` and source check | a driven adapter depends on no `domain` and no serializer outside its tests; a store adapter includes the conformance suite |

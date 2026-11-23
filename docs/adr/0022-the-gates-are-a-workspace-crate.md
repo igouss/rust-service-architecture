@@ -63,6 +63,7 @@ Each line is one commit: the gate, and what was compared.
 - `traits`: the tree, mutant G20 and four probes (a trait in a nested module, one inside a macro, one in `server`, the word in a string): the same lines and exit codes.
 - `stored`: the tree, mutant G25 and six probes (a slot written as a path, an event enum renamed, a sample no longer pinned, a struct and an enum reached through a new variant, a type declared twice, an impl for a generic type): the same lines and exit codes. An impl is read only when its trait and its type are each one bare name with no generics, as before; the count of `Lifecycle for`, `Reaction for` and `Projection for` over the tokens still ends the gate with exit 2 on any other.
 - `pins`: the tree, mutant G27 and six probes (two installs on a line, an install continued past its line, a `--git` off an install's line, a short revision, forty-one digits, an install from the registry): the same lines and exit codes. `lint.py` is deleted with it. The patterns are the same but for two look-aheads, which `regex` does not have and which are written as a following character or the end.
+- `names`: the tree, mutants G28, G29 and G30, and six probes (`&str` with the lifetime left out, a raw string, an escape, spaces inside the type, an impl for a generic type, a trait written as a path): the same lines and exit codes. A `NAME` is still read only as `&'static str` and a plain literal. The three mutants ran `python3 names.py`; they run `just names`, and each was planted and seen to exit non-zero with its text.
 
 ## What it preserved
 
