@@ -79,7 +79,7 @@ stored:
 
 [doc("arch-mov6: every tool a workflow builds with `cargo install --git` is pinned with `--rev` to a 40-hex commit.")]
 pins:
-    @python3 lint.py pins
+    @cargo run -q -p gates -- pins
 
 [doc("arch-tsu: a range that changes a gate also adds or amends a decision record under docs/adr/. Needs git, so not in `check`: `just guarded origin/main`.")]
 guarded base:
