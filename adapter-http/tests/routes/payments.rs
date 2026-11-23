@@ -14,7 +14,7 @@ async fn an_authorization_is_stored_with_its_amount() {
     assert_eq!(
         payments(&service)
             .into_iter()
-            .map(|(_id, payment): (StreamId, Payment)| payment)
+            .map(|(_id, payment): (StreamId<Payment>, Payment)| payment)
             .collect::<Vec<Payment>>(),
         vec![Payment::Authorized { amount: cents(500) }]
     );
@@ -78,11 +78,11 @@ async fn a_captured_payment_starts_its_fulfilment() {
     authorize(&service, "500").await;
     let id: String = first_payment(&service);
     capture(&service, &id, "300").await;
-    assert_eq!(payments(&service), vec![(StreamId(id.clone()), Payment::Captured { amount: cents(300) })]);
+    assert_eq!(payments(&service), vec![(StreamId::new(id.clone()), Payment::Captured { amount: cents(300) })]);
     assert_eq!(
         service
             .store
-            .read(|view: &mut View<'_>| view.state::<Fulfilment>(&StreamId(id)))
+            .read(|view: &mut View<'_>| view.state::<Fulfilment>(&StreamId::new(id)))
             .map(|(_version, fulfilment)| fulfilment),
         Ok(Fulfilment::Reserving)
     );
@@ -97,7 +97,7 @@ async fn capturing_more_than_was_authorized_answers_204_and_declines_the_payment
     assert_eq!(
         payments(&service),
         vec![(
-            StreamId(id),
+            StreamId::new(id),
             Payment::Declined {
                 reason: DeclineReason::ExceedsAuthorization
             }

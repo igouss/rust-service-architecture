@@ -10,7 +10,7 @@ use axum::response::sse::{Event, KeepAlive, Sse};
 use axum::response::{Html, IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::Router;
-use domain::task::{AddTask, CompleteTask, Tally, TaskRefusal, Title, TitleError};
+use domain::task::{AddTask, CompleteTask, Tally, Task, TaskRefusal, Title, TitleError};
 use futures_util::future;
 use futures_util::stream::{self, StreamExt};
 use ports::{Answer, Journal, Position, StoreError, StreamId};
@@ -208,9 +208,9 @@ fn bad_title(error: TitleError) -> BadInput {
     }
 }
 
-fn stream_id(text: &str) -> Result<StreamId, BadInput> {
+fn stream_id<S>(text: &str) -> Result<StreamId<S>, BadInput> {
     Uuid::parse_str(text)
-        .map(|id: Uuid| StreamId(id.to_string()))
+        .map(|id: Uuid| StreamId::new(id.to_string()))
         .map_err(|_malformed: uuid::Error| BadInput::MalformedId)
 }
 
@@ -225,8 +225,8 @@ async fn add_task<J: Journal + Send + Sync + 'static>(State(service): State<Serv
     match new_task(&body) {
         Err(bad) => rejected(&span, bad),
         Ok(command) => {
-            let id: StreamId = StreamId(Uuid::now_v7().to_string());
-            span.record("task", id.0.as_str());
+            let id: StreamId<Task> = StreamId::new(Uuid::now_v7().to_string());
+            span.record("task", id.as_str());
             answered(
                 &span,
                 blocking(service.journal, move |journal: &J| app::handle(journal, &id, command)).await,
@@ -239,10 +239,10 @@ async fn add_task<J: Journal + Send + Sync + 'static>(State(service): State<Serv
 async fn complete_task<J: Journal + Send + Sync + 'static>(State(service): State<Service<J>>, Path(id): Path<String>) -> Response {
     let span: Span = request("POST /tasks/{id}/complete");
     span.record("command", "CompleteTask");
-    match stream_id(&id) {
+    match stream_id::<Task>(&id) {
         Err(bad) => rejected(&span, bad),
         Ok(id) => {
-            span.record("task", id.0.as_str());
+            span.record("task", id.as_str());
             answered(
                 &span,
                 blocking(service.journal, move |journal: &J| app::handle(journal, &id, CompleteTask)).await,
@@ -283,12 +283,12 @@ fn render(board: &TaskBoard) -> String {
     let items: String = board
         .open
         .iter()
-        .map(|(id, title): &(StreamId, Title)| {
+        .map(|(id, title): &(StreamId<Task>, Title)| {
             format!(
                 "<li id=\"task-{}\"><span>{}</span> <button data-on:click=\"@post('/tasks/{}/complete')\">Done</button></li>\n",
-                path_segment(&id.0),
+                path_segment(id.as_str()),
                 escape(title.as_str()),
-                path_segment(&id.0)
+                path_segment(id.as_str())
             )
         })
         .collect();

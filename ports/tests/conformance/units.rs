@@ -53,9 +53,9 @@ fn a_unit_reads_the_facts_and_rows_it_wrote() {
 #[test]
 fn a_unit_that_clears_and_puts_leaves_only_what_it_put() {
     let store: Subject = subject();
-    let fact: Recorded<Counted> = first_fact(&store, "c-1", 5);
+    let fact: Recorded<Counter> = first_fact(&store, "c-1", 5);
     store.write(|unit| unit.put(ports::project::<PerStream>(None, &fact))).expect("put");
-    let other: Recorded<Counted> = first_fact(&store, "c-2", 2);
+    let other: Recorded<Counter> = first_fact(&store, "c-2", 2);
     store
         .write(|unit| {
             unit.clear::<PerStream>()?;
@@ -88,7 +88,7 @@ fn a_fact_after_a_failed_unit_takes_the_next_free_version() {
         let _applied: Applied<Counter> = unit.apply(&id("c-1"), |state: Counter| ports::decide(Add { by: 1 }, state))?;
         Err(StoreError::Unavailable { cause: "injected".to_string() })
     });
-    let facts: Vec<Recorded<Counted>> = add(&store, "c-1", 2);
+    let facts: Vec<Recorded<Counter>> = add(&store, "c-1", 2);
     assert_eq!((facts[0].stream().clone(), facts[0].version()), (id("c-1"), Version::from(1)));
 }
 

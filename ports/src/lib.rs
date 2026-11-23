@@ -1,4 +1,7 @@
+use std::fmt;
 use std::future::Future;
+use std::hash::{Hash, Hasher};
+use std::marker::PhantomData;
 
 use domain::{Command, Lifecycle, Never, Projection, Reaction, Step};
 use serde::de::DeserializeOwned;
@@ -8,8 +11,49 @@ pub mod store;
 
 use store::{Key, Reader, Store, StoredFact, StoredRequest, Writer};
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct StreamId(pub String);
+pub struct StreamId<S> {
+    text: String,
+    lifecycle: PhantomData<fn() -> S>,
+}
+
+impl<S> StreamId<S> {
+    pub fn new(text: impl Into<String>) -> StreamId<S> {
+        StreamId {
+            text: text.into(),
+            lifecycle: PhantomData,
+        }
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.text
+    }
+}
+
+impl<S> Clone for StreamId<S> {
+    fn clone(&self) -> StreamId<S> {
+        StreamId::new(self.text.clone())
+    }
+}
+
+impl<S> PartialEq for StreamId<S> {
+    fn eq(&self, other: &StreamId<S>) -> bool {
+        self.text == other.text
+    }
+}
+
+impl<S> Eq for StreamId<S> {}
+
+impl<S> Hash for StreamId<S> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.text.hash(state);
+    }
+}
+
+impl<S> fmt::Debug for StreamId<S> {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.debug_tuple("StreamId").field(&self.text).finish()
+    }
+}
 
 macro_rules! ordinal {
     ($name:ident) => {
@@ -116,20 +160,19 @@ pub fn react<X: Reaction>(reaction: X, state: X::Reads) -> Outcome<X::Reads, X::
     Outcome::Accepted(Transition::fold(state, step.events, step.requests))
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Recorded<E> {
+pub struct Recorded<S: Lifecycle> {
     position: Position,
-    stream: StreamId,
+    stream: StreamId<S>,
     version: Version,
-    event: E,
+    event: S::Event,
 }
 
-impl<E> Recorded<E> {
+impl<S: Lifecycle> Recorded<S> {
     pub fn position(&self) -> Position {
         self.position
     }
 
-    pub fn stream(&self) -> &StreamId {
+    pub fn stream(&self) -> &StreamId<S> {
         &self.stream
     }
 
@@ -137,7 +180,7 @@ impl<E> Recorded<E> {
         self.version
     }
 
-    pub fn event(&self) -> &E {
+    pub fn event(&self) -> &S::Event {
         &self.event
     }
 }
@@ -145,7 +188,7 @@ impl<E> Recorded<E> {
 #[must_use = "the facts of an applied outcome must reach their lifecycle's policy"]
 pub struct Applied<S: Lifecycle> {
     pub answer: Answer<S::Refusal>,
-    pub facts: Vec<Recorded<S::Event>>,
+    pub facts: Vec<Recorded<S>>,
 }
 
 #[must_use = "the facts of a finished request must reach their lifecycle's policy"]
@@ -166,10 +209,10 @@ pub struct Change<P: Projection> {
     write: Write<P>,
 }
 
-pub type Fact<P> = Recorded<<<P as Projection>::Reads as Lifecycle>::Event>;
+pub type Fact<P> = Recorded<<P as Projection>::Reads>;
 
 pub fn key<P: Projection>(fact: &Fact<P>) -> Option<String> {
-    P::key(&fact.stream.0, &fact.event)
+    P::key(fact.stream.as_str(), &fact.event)
 }
 
 pub fn project<P: Projection>(row: Option<P::Row>, fact: &Fact<P>) -> Change<P> {
@@ -217,11 +260,11 @@ pub struct Unit<'a> {
 }
 
 impl Unit<'_> {
-    pub fn apply<S: Lifecycle, R: Serialize>(&mut self, id: &StreamId, decide: impl FnOnce(S) -> Outcome<S, R>) -> Result<Applied<S>, StoreError> {
-        let (version, state): (Version, S) = state_in(self.store.state(S::NAME, id)?)?;
+    pub fn apply<S: Lifecycle, R: Serialize>(&mut self, id: &StreamId<S>, decide: impl FnOnce(S) -> Outcome<S, R>) -> Result<Applied<S>, StoreError> {
+        let (version, state): (Version, S) = state_in(self.store.state(S::NAME, id.as_str())?)?;
         match decide(state) {
             Outcome::Refused(refusal) => {
-                self.store.reject(S::NAME, id, &encode("rejections", &refusal)?)?;
+                self.store.reject(S::NAME, id.as_str(), &encode("rejections", &refusal)?)?;
                 Ok(Applied {
                     answer: Answer::Refused(refusal),
                     facts: Vec::new(),
@@ -229,10 +272,10 @@ impl Unit<'_> {
             }
             Outcome::Accepted(Transition { state, events, requests }) => {
                 let mut next: Version = version;
-                let mut facts: Vec<Recorded<S::Event>> = Vec::with_capacity(events.len());
+                let mut facts: Vec<Recorded<S>> = Vec::with_capacity(events.len());
                 for event in events {
                     next = next.after(1);
-                    let position: Position = self.store.append(S::NAME, id, next, &encode("facts", &event)?)?;
+                    let position: Position = self.store.append(S::NAME, id.as_str(), next, &encode("facts", &event)?)?;
                     self.last = Some(position);
                     facts.push(Recorded {
                         position,
@@ -242,10 +285,10 @@ impl Unit<'_> {
                     });
                 }
                 if next != version {
-                    self.store.save(S::NAME, id, next, &encode("states", &state)?)?;
+                    self.store.save(S::NAME, id.as_str(), next, &encode("states", &state)?)?;
                 }
                 for request in &requests {
-                    self.store.request(S::NAME, id, &encode("outbox", request)?)?;
+                    self.store.request(S::NAME, id.as_str(), &encode("outbox", request)?)?;
                 }
                 Ok(Applied {
                     answer: Answer::Accepted(next),
@@ -256,7 +299,7 @@ impl Unit<'_> {
     }
 
     pub fn finish<S: Lifecycle, R: Serialize>(&mut self, request: RequestId, decide: impl FnOnce(S) -> Outcome<S, R>) -> Result<Finished<S>, StoreError> {
-        let closed: Option<StreamId> = self.store.finish(S::NAME, request)?;
+        let closed: Option<String> = self.store.finish(S::NAME, request)?;
         self.closed(closed, decide)
     }
 
@@ -266,13 +309,13 @@ impl Unit<'_> {
         cause: &str,
         decide: impl FnOnce(S) -> Outcome<S, R>,
     ) -> Result<Finished<S>, StoreError> {
-        let closed: Option<StreamId> = self.store.park(S::NAME, request, cause)?;
+        let closed: Option<String> = self.store.park(S::NAME, request, cause)?;
         self.closed(closed, decide)
     }
 
-    fn closed<S: Lifecycle, R: Serialize>(&mut self, closed: Option<StreamId>, decide: impl FnOnce(S) -> Outcome<S, R>) -> Result<Finished<S>, StoreError> {
+    fn closed<S: Lifecycle, R: Serialize>(&mut self, closed: Option<String>, decide: impl FnOnce(S) -> Outcome<S, R>) -> Result<Finished<S>, StoreError> {
         match closed {
-            Some(stream) => self.apply(&stream, decide).map(Finished::Applied),
+            Some(stream) => self.apply(&StreamId::new(stream), decide).map(Finished::Applied),
             None => Ok(Finished::Already),
         }
     }
@@ -303,12 +346,12 @@ impl Unit<'_> {
         self.store.clear(P::NAME)
     }
 
-    pub fn facts<S: Lifecycle>(&mut self, after: Position, limit: usize) -> Result<Vec<Recorded<S::Event>>, StoreError> {
-        let mut facts: Vec<Recorded<S::Event>> = Vec::new();
+    pub fn facts<S: Lifecycle>(&mut self, after: Position, limit: usize) -> Result<Vec<Recorded<S>>, StoreError> {
+        let mut facts: Vec<Recorded<S>> = Vec::new();
         self.store.facts(S::NAME, after, limit, &mut |fact: StoredFact<'_>| {
             facts.push(Recorded {
                 position: fact.position,
-                stream: fact.stream,
+                stream: StreamId::new(fact.stream),
                 version: fact.version,
                 event: decode("facts", fact.event)?,
             });
@@ -323,14 +366,14 @@ pub struct View<'a> {
 }
 
 impl View<'_> {
-    pub fn state<S: Lifecycle>(&mut self, id: &StreamId) -> Result<(Version, S), StoreError> {
-        state_in(self.store.state(S::NAME, id)?)
+    pub fn state<S: Lifecycle>(&mut self, id: &StreamId<S>) -> Result<(Version, S), StoreError> {
+        state_in(self.store.state(S::NAME, id.as_str())?)
     }
 
-    pub fn states<S: Lifecycle>(&mut self) -> Result<Vec<(StreamId, S)>, StoreError> {
-        let mut states: Vec<(StreamId, S)> = Vec::new();
-        self.store.states(S::NAME, &mut |stream: StreamId, state: &str| {
-            states.push((stream, decode("states", state)?));
+    pub fn states<S: Lifecycle>(&mut self) -> Result<Vec<(StreamId<S>, S)>, StoreError> {
+        let mut states: Vec<(StreamId<S>, S)> = Vec::new();
+        self.store.states(S::NAME, &mut |stream: String, state: &str| {
+            states.push((StreamId::new(stream), decode("states", state)?));
             Ok(())
         })?;
         Ok(states)
@@ -340,12 +383,12 @@ impl View<'_> {
         row_in::<P>(self.store.row(P::NAME, key)?)
     }
 
-    pub fn refusals<S: Lifecycle>(&mut self, id: &StreamId) -> Result<Vec<S::Refusal>, StoreError>
+    pub fn refusals<S: Lifecycle>(&mut self, id: &StreamId<S>) -> Result<Vec<S::Refusal>, StoreError>
     where
         S::Refusal: DeserializeOwned,
     {
         self.store
-            .refusals(S::NAME, id)?
+            .refusals(S::NAME, id.as_str())?
             .iter()
             .map(|refusal: &String| decode("rejections", refusal))
             .collect()
@@ -387,7 +430,7 @@ impl<K: Store> Journal for K {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Claimed<R> {
     pub id: RequestId,
-    pub stream: StreamId,
+    pub stream: String,
     pub request: R,
     pub attempts: u64,
 }
@@ -405,7 +448,7 @@ pub enum GatewayError {
 
 pub trait Gateway<R> {
     type Reply;
-    fn perform(&self, id: RequestId, stream: &StreamId, request: &R) -> impl Future<Output = Result<Self::Reply, GatewayError>> + Send;
+    fn perform(&self, id: RequestId, stream: &str, request: &R) -> impl Future<Output = Result<Self::Reply, GatewayError>> + Send;
 }
 
 impl<K: Store> Outbox for K {

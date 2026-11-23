@@ -4,7 +4,7 @@ use std::time::Duration;
 use adapter_sqlite::{Durability, Sqlite};
 use app::handle;
 use app::tasks::{open_tasks, task_board, task_tally, TaskBoard};
-use domain::task::{AddTask, CompleteTask, Tally, Title};
+use domain::task::{AddTask, CompleteTask, Tally, Task, Title};
 use ports::{StoreError, StreamId};
 
 use crate::fault::Fault;
@@ -16,7 +16,7 @@ const POPULATIONS: [u64; 5] = [10, 100, 1_000, 10_000, 100_000];
 fn populate(path: &Path, tasks: u64) -> Result<(), Fault> {
     let store: Sqlite = Sqlite::open(path, Durability::Normal)?;
     for number in 0..tasks {
-        let id: StreamId = StreamId(format!("t-{number:06}"));
+        let id: StreamId<Task> = StreamId::new(format!("t-{number:06}"));
         accepted(handle(&store, &id, AddTask { title: title()? }), 1, &id)?;
         if number % 2 == 1 {
             accepted(handle(&store, &id, CompleteTask), 2, &id)?;
@@ -25,8 +25,10 @@ fn populate(path: &Path, tasks: u64) -> Result<(), Fault> {
     Ok(())
 }
 
+type Open = Vec<(StreamId<Task>, Title)>;
+
 fn list(store: &Sqlite, open: u64) -> Result<Duration, Fault> {
-    let (elapsed, listed): (Duration, Result<Vec<(StreamId, Title)>, StoreError>) = timed(|| open_tasks(store));
+    let (elapsed, listed): (Duration, Result<Open, StoreError>) = timed(|| open_tasks(store));
     same("open tasks listed", count(listed?.len())?, open)?;
     Ok(elapsed)
 }

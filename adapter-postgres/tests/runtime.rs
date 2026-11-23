@@ -24,8 +24,8 @@ fn store(schema: &str) -> Postgres {
     Postgres::connect(&url(), schema, 4, Durability::Full).expect("opens")
 }
 
-fn id(text: &str) -> StreamId {
-    StreamId(text.to_string())
+fn id<S>(text: &str) -> StreamId<S> {
+    StreamId::new(text)
 }
 
 fn add(store: &Postgres, task: &str) -> Result<Answer<TaskRefusal>, StoreError> {
@@ -45,7 +45,7 @@ struct Recording {
 impl Gateway<FulfilmentRequest> for Recording {
     type Reply = FulfilmentReply;
 
-    async fn perform(&self, _id: RequestId, _stream: &StreamId, request: &FulfilmentRequest) -> Result<FulfilmentReply, GatewayError> {
+    async fn perform(&self, _id: RequestId, _stream: &str, request: &FulfilmentRequest) -> Result<FulfilmentReply, GatewayError> {
         tokio::task::yield_now().await;
         self.performed.lock().expect("lock").push(request.clone());
         Ok(FulfilmentReply::StockUnavailable)

@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use ports::store::{Key, Listener, Reader, Store, StoredFact, StoredRequest, Writer};
-use ports::{Position, RequestId, StoreError, StreamId, Version};
+use ports::{Position, RequestId, StoreError, Version};
 use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
 
 const SCHEMA: &str = "
@@ -126,13 +126,12 @@ struct Session<'a> {
 }
 
 impl Session<'_> {
-    fn close(&self, lifecycle: &'static str, id: RequestId, failures: i64) -> Result<Option<StreamId>, StoreError> {
+    fn close(&self, lifecycle: &'static str, id: RequestId, failures: i64) -> Result<Option<String>, StoreError> {
         self.transaction
             .prepare_cached("UPDATE outbox SET done = 1, attempts = attempts + ?3 WHERE id = ?1 AND lifecycle = ?2 AND done = 0 RETURNING stream")
             .map_err(unavailable)?
             .query_row(params![id.stored(), lifecycle, failures], |row: &rusqlite::Row<'_>| row.get::<_, String>(0))
             .optional()
-            .map(|stream: Option<String>| stream.map(StreamId))
             .map_err(unavailable)
     }
 
@@ -147,12 +146,12 @@ impl Session<'_> {
 }
 
 impl Reader for Session<'_> {
-    fn state(&mut self, lifecycle: &'static str, stream: &StreamId) -> Result<Option<(Version, String)>, StoreError> {
+    fn state(&mut self, lifecycle: &'static str, stream: &str) -> Result<Option<(Version, String)>, StoreError> {
         let found: Option<(i64, String)> = self
             .transaction
             .prepare_cached("SELECT version, state FROM states WHERE lifecycle = ?1 AND stream = ?2")
             .map_err(unavailable)?
-            .query_row(params![lifecycle, stream.0], |row: &rusqlite::Row<'_>| Ok((row.get(0)?, row.get(1)?)))
+            .query_row(params![lifecycle, stream], |row: &rusqlite::Row<'_>| Ok((row.get(0)?, row.get(1)?)))
             .optional()
             .map_err(unavailable)?;
         match found {
@@ -161,14 +160,14 @@ impl Reader for Session<'_> {
         }
     }
 
-    fn states(&mut self, lifecycle: &'static str, each: &mut dyn FnMut(StreamId, &str) -> Result<(), StoreError>) -> Result<(), StoreError> {
+    fn states(&mut self, lifecycle: &'static str, each: &mut dyn FnMut(String, &str) -> Result<(), StoreError>) -> Result<(), StoreError> {
         let mut statement = self
             .transaction
             .prepare_cached("SELECT stream, state FROM states WHERE lifecycle = ?1 ORDER BY stream")
             .map_err(unavailable)?;
         let mut rows = statement.query(params![lifecycle]).map_err(unavailable)?;
         while let Some(row) = rows.next().map_err(unavailable)? {
-            each(StreamId(row.get(0).map_err(unavailable)?), text("states", row, 1)?)?;
+            each(row.get(0).map_err(unavailable)?, text("states", row, 1)?)?;
         }
         Ok(())
     }
@@ -194,55 +193,55 @@ impl Reader for Session<'_> {
         Ok(())
     }
 
-    fn refusals(&mut self, lifecycle: &'static str, stream: &StreamId) -> Result<Vec<String>, StoreError> {
+    fn refusals(&mut self, lifecycle: &'static str, stream: &str) -> Result<Vec<String>, StoreError> {
         let mut statement = self
             .transaction
             .prepare_cached("SELECT refusal FROM rejections WHERE lifecycle = ?1 AND stream = ?2 ORDER BY id")
             .map_err(unavailable)?;
         let rows = statement
-            .query_map(params![lifecycle, stream.0], |row: &rusqlite::Row<'_>| row.get::<_, String>(0))
+            .query_map(params![lifecycle, stream], |row: &rusqlite::Row<'_>| row.get::<_, String>(0))
             .map_err(unavailable)?;
         rows.collect::<Result<Vec<String>, rusqlite::Error>>().map_err(unavailable)
     }
 }
 
 impl Writer for Session<'_> {
-    fn append(&mut self, lifecycle: &'static str, stream: &StreamId, version: Version, event: &str) -> Result<Position, StoreError> {
+    fn append(&mut self, lifecycle: &'static str, stream: &str, version: Version, event: &str) -> Result<Position, StoreError> {
         self.execute(
             "INSERT INTO facts (lifecycle, stream, version, event) VALUES (?1, ?2, ?3, ?4)",
-            params![lifecycle, stream.0, version.stored(), event],
+            params![lifecycle, stream, version.stored(), event],
         )?;
         loaded("facts", self.transaction.last_insert_rowid(), Position::loaded)
     }
 
-    fn save(&mut self, lifecycle: &'static str, stream: &StreamId, version: Version, state: &str) -> Result<(), StoreError> {
+    fn save(&mut self, lifecycle: &'static str, stream: &str, version: Version, state: &str) -> Result<(), StoreError> {
         self.execute(
             "INSERT INTO states (lifecycle, stream, version, state) VALUES (?1, ?2, ?3, ?4)
              ON CONFLICT (lifecycle, stream) DO UPDATE SET version = excluded.version, state = excluded.state",
-            params![lifecycle, stream.0, version.stored(), state],
+            params![lifecycle, stream, version.stored(), state],
         )
     }
 
-    fn reject(&mut self, lifecycle: &'static str, stream: &StreamId, refusal: &str) -> Result<(), StoreError> {
+    fn reject(&mut self, lifecycle: &'static str, stream: &str, refusal: &str) -> Result<(), StoreError> {
         self.execute(
             "INSERT INTO rejections (lifecycle, stream, refusal) VALUES (?1, ?2, ?3)",
-            params![lifecycle, stream.0, refusal],
+            params![lifecycle, stream, refusal],
         )
     }
 
-    fn request(&mut self, lifecycle: &'static str, stream: &StreamId, request: &str) -> Result<(), StoreError> {
+    fn request(&mut self, lifecycle: &'static str, stream: &str, request: &str) -> Result<(), StoreError> {
         self.execute(
             "INSERT INTO outbox (lifecycle, stream, request) VALUES (?1, ?2, ?3)",
-            params![lifecycle, stream.0, request],
+            params![lifecycle, stream, request],
         )
     }
 
-    fn finish(&mut self, lifecycle: &'static str, id: RequestId) -> Result<Option<StreamId>, StoreError> {
+    fn finish(&mut self, lifecycle: &'static str, id: RequestId) -> Result<Option<String>, StoreError> {
         self.close(lifecycle, id, 0)
     }
 
-    fn park(&mut self, lifecycle: &'static str, id: RequestId, cause: &str) -> Result<Option<StreamId>, StoreError> {
-        let parked: Option<StreamId> = self.close(lifecycle, id, 1)?;
+    fn park(&mut self, lifecycle: &'static str, id: RequestId, cause: &str) -> Result<Option<String>, StoreError> {
+        let parked: Option<String> = self.close(lifecycle, id, 1)?;
         if parked.is_some() {
             self.execute("INSERT INTO parked (id, cause) VALUES (?1, ?2)", params![id.stored(), cause])?;
         }
@@ -265,7 +264,7 @@ impl Writer for Session<'_> {
         while let Some(row) = rows.next().map_err(unavailable)? {
             each(StoredFact {
                 position: loaded("facts", row.get(0).map_err(unavailable)?, Position::loaded)?,
-                stream: StreamId(row.get(1).map_err(unavailable)?),
+                stream: row.get(1).map_err(unavailable)?,
                 version: loaded("facts", row.get(2).map_err(unavailable)?, Version::loaded)?,
                 event: text("facts", row, 3)?,
             })?;
@@ -348,7 +347,7 @@ impl Store for Sqlite {
             let (id, stream, request, attempts) = row.map_err(unavailable)?;
             requests.push(StoredRequest {
                 id: loaded("outbox", id, RequestId::loaded)?,
-                stream: StreamId(stream),
+                stream,
                 request,
                 attempts: loaded("outbox", attempts, |count: i64| u64::try_from(count).ok())?,
             });

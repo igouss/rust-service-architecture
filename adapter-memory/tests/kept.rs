@@ -2,11 +2,11 @@
 
 use adapter_memory::{Held, Kept, Memory, Parked};
 use domain::fulfilment::{Fulfilment, FulfilmentRequest, Progress};
-use domain::task::{AddTask, CompleteTask, Task, TaskEvent, TaskRefusal, Title};
+use domain::task::{AddTask, CompleteTask, Task, TaskRefusal, Title};
 use ports::{Applied, Claimed, Finished, Journal, Outbox, Position, Recorded, RequestId, StoreError, StreamId, View};
 
-fn id(text: &str) -> StreamId {
-    StreamId(text.to_string())
+fn id<S>(text: &str) -> StreamId<S> {
+    StreamId::new(text)
 }
 
 fn store(facts: usize, refusals: usize) -> Memory {
@@ -35,7 +35,7 @@ fn request(store: &Memory, stream: &str) {
 fn positions(store: &Memory, after: u64) -> Result<Vec<Position>, StoreError> {
     store
         .write(|unit| unit.facts::<Task>(Position::ZERO.after(after), 10))
-        .map(|facts: Vec<Recorded<TaskEvent>>| facts.iter().map(Recorded::position).collect())
+        .map(|facts: Vec<Recorded<Task>>| facts.iter().map(Recorded::position).collect())
 }
 
 #[test]
@@ -135,7 +135,7 @@ fn a_parked_request_is_held_as_parked_with_its_cause_and_its_attempts() {
         vec![Parked {
             id: RequestId::from(1),
             lifecycle: "fulfilment",
-            stream: id("p-1"),
+            stream: "p-1".to_string(),
             request: "\"ReserveStock\"".to_string(),
             attempts: 2,
             cause: "no such warehouse".to_string()

@@ -3,7 +3,7 @@
 use std::thread::{self, JoinHandle};
 
 use adapter_postgres::{Durability, Postgres};
-use domain::task::{AddTask, Tally, Task, TaskEvent, TaskRefusal, TaskTally, Title};
+use domain::task::{AddTask, Tally, Task, TaskRefusal, TaskTally, Title};
 use ports::{Answer, Applied, Journal, Position, Recorded, StoreError, StreamId, Unit};
 
 const WRITERS: u64 = 4;
@@ -20,8 +20,8 @@ fn fresh(schema: &str) {
 
 fn add_and_tally(unit: &mut Unit<'_>, task: &str) -> Result<(), StoreError> {
     let title: Title = Title::new(task).expect("a title");
-    let applied: Applied<Task> = unit.apply(&StreamId(task.to_string()), |state: Task| ports::decide(AddTask { title }, state))?;
-    let fact: &Recorded<TaskEvent> = &applied.facts[0];
+    let applied: Applied<Task> = unit.apply(&StreamId::new(task), |state: Task| ports::decide(AddTask { title }, state))?;
+    let fact: &Recorded<Task> = &applied.facts[0];
     let row: Option<Tally> = unit.row::<TaskTally>(TaskTally::KEY)?;
     unit.put(ports::project::<TaskTally>(row, fact))
 }
@@ -80,14 +80,17 @@ fn a_read_keeps_one_snapshot_while_another_writer_commits() {
         })
         .expect("read");
     assert_eq!(seen, (None, 0), "a read saw a commit made after it began");
-    assert_eq!(reader.read(|view| view.states::<Task>()).map(|tasks: Vec<(StreamId, Task)>| tasks.len()), Ok(1));
+    assert_eq!(
+        reader.read(|view| view.states::<Task>()).map(|tasks: Vec<(StreamId<Task>, Task)>| tasks.len()),
+        Ok(1)
+    );
 }
 
 fn claim(schema: &'static str) -> JoinHandle<Result<Answer<TaskRefusal>, StoreError>> {
     thread::spawn(move || {
         let store: Postgres = Postgres::connect(&url(), schema, 2, Durability::Full)?;
         let title: Title = Title::new("the one").expect("a title");
-        let applied: Applied<Task> = store.write(|unit| unit.apply(&StreamId("same".to_string()), |state: Task| ports::decide(AddTask { title }, state)))?;
+        let applied: Applied<Task> = store.write(|unit| unit.apply(&StreamId::new("same"), |state: Task| ports::decide(AddTask { title }, state)))?;
         Ok(applied.answer)
     })
 }

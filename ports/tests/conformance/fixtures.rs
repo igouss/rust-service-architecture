@@ -236,16 +236,16 @@ impl Reaction for Carry {
     }
 }
 
-type Seen = (Position, StreamId, Version, Counted);
+type Seen = (Position, StreamId<Counter>, Version, Counted);
 
-fn id(text: &str) -> StreamId {
-    StreamId(text.to_string())
+fn id<S>(text: &str) -> StreamId<S> {
+    StreamId::new(text)
 }
 
-fn seen(facts: &[Recorded<Counted>]) -> Vec<Seen> {
+fn seen(facts: &[Recorded<Counter>]) -> Vec<Seen> {
     facts
         .iter()
-        .map(|fact: &Recorded<Counted>| (fact.position(), fact.stream().clone(), fact.version(), fact.event().clone()))
+        .map(|fact: &Recorded<Counter>| (fact.position(), fact.stream().clone(), fact.version(), fact.event().clone()))
         .collect()
 }
 
@@ -253,14 +253,14 @@ fn added(position: u64, stream: &str, version: u64, by: u64) -> Seen {
     (Position::ZERO.after(position), id(stream), Version::ZERO.after(version), Counted::Added { by })
 }
 
-fn add(store: &Subject, stream: &str, by: u64) -> Vec<Recorded<Counted>> {
+fn add(store: &Subject, stream: &str, by: u64) -> Vec<Recorded<Counter>> {
     let applied: Applied<Counter> = store
         .write(|unit| unit.apply(&id(stream), |state: Counter| ports::decide(Add { by }, state)))
         .expect("applied");
     applied.facts
 }
 
-fn first_fact(store: &Subject, stream: &str, by: u64) -> Recorded<Counted> {
+fn first_fact(store: &Subject, stream: &str, by: u64) -> Recorded<Counter> {
     add(store, stream, by).into_iter().next().expect("one fact")
 }
 
@@ -314,12 +314,12 @@ fn courier(store: &Subject, stream: &str) -> (Version, Courier) {
     store.read(|view| view.state::<Courier>(&id(stream))).expect("read")
 }
 
-fn parcels(store: &Subject, limit: usize) -> Vec<(StreamId, Parcel)> {
+fn parcels(store: &Subject, limit: usize) -> Vec<(StreamId<Courier>, Parcel)> {
     store
         .claim::<Send>(limit)
         .expect("claimed")
         .into_iter()
-        .map(|claimed: Claimed<Parcel>| (claimed.stream, claimed.request))
+        .map(|claimed: Claimed<Parcel>| (StreamId::new(claimed.stream), claimed.request))
         .collect()
 }
 

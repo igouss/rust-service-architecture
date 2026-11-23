@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::{PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use ports::store::{Key, Listener, Reader, Store, StoredFact, StoredRequest, Writer};
-use ports::{Position, RequestId, StoreError, StreamId, Version};
+use ports::{Position, RequestId, StoreError, Version};
 
 type Stream = (&'static str, String);
 type Row = (&'static str, String);
@@ -10,7 +10,7 @@ type Row = (&'static str, String);
 #[derive(Debug, Clone)]
 struct Fact {
     lifecycle: &'static str,
-    stream: StreamId,
+    stream: String,
     version: Version,
     event: String,
 }
@@ -18,7 +18,7 @@ struct Fact {
 #[derive(Debug, Clone)]
 struct Request {
     lifecycle: &'static str,
-    stream: StreamId,
+    stream: String,
     request: String,
     attempts: u64,
 }
@@ -27,7 +27,7 @@ struct Request {
 pub struct Parked {
     pub id: RequestId,
     pub lifecycle: &'static str,
-    pub stream: StreamId,
+    pub stream: String,
     pub request: String,
     pub attempts: u64,
     pub cause: String,
@@ -36,7 +36,7 @@ pub struct Parked {
 #[derive(Debug, Clone)]
 struct Rejection {
     lifecycle: &'static str,
-    stream: StreamId,
+    stream: String,
     refusal: String,
 }
 
@@ -91,8 +91,8 @@ fn count(length: usize) -> u64 {
     u64::try_from(length).unwrap_or(u64::MAX)
 }
 
-fn state_in(tables: &Tables, lifecycle: &'static str, stream: &StreamId) -> Option<(Version, String)> {
-    tables.states.get(&(lifecycle, stream.0.clone())).cloned()
+fn state_in(tables: &Tables, lifecycle: &'static str, stream: &str) -> Option<(Version, String)> {
+    tables.states.get(&(lifecycle, stream.to_string())).cloned()
 }
 
 fn states_in<'a>(tables: &'a Tables, lifecycle: &'static str) -> impl Iterator<Item = (&'a Stream, &'a (Version, String))> {
@@ -102,9 +102,9 @@ fn states_in<'a>(tables: &'a Tables, lifecycle: &'static str) -> impl Iterator<I
         .take_while(move |(stream, _state): &(&Stream, &(Version, String))| stream.0 == lifecycle)
 }
 
-fn refusals_in<'a>(rejections: impl Iterator<Item = &'a Rejection>, lifecycle: &'static str, stream: &StreamId) -> Vec<String> {
+fn refusals_in<'a>(rejections: impl Iterator<Item = &'a Rejection>, lifecycle: &'static str, stream: &str) -> Vec<String> {
     rejections
-        .filter(|rejection: &&Rejection| rejection.lifecycle == lifecycle && rejection.stream == *stream)
+        .filter(|rejection: &&Rejection| rejection.lifecycle == lifecycle && rejection.stream == stream)
         .map(|rejection: &Rejection| rejection.refusal.clone())
         .collect()
 }
@@ -162,12 +162,12 @@ struct MemoryReader<'a> {
 }
 
 impl Reader for MemoryReader<'_> {
-    fn state(&mut self, lifecycle: &'static str, stream: &StreamId) -> Result<Option<(Version, String)>, StoreError> {
+    fn state(&mut self, lifecycle: &'static str, stream: &str) -> Result<Option<(Version, String)>, StoreError> {
         Ok(state_in(self.tables, lifecycle, stream))
     }
 
-    fn states(&mut self, lifecycle: &'static str, each: &mut dyn FnMut(StreamId, &str) -> Result<(), StoreError>) -> Result<(), StoreError> {
-        states_in(self.tables, lifecycle).try_for_each(|(stream, state): (&Stream, &(Version, String))| each(StreamId(stream.1.clone()), &state.1))
+    fn states(&mut self, lifecycle: &'static str, each: &mut dyn FnMut(String, &str) -> Result<(), StoreError>) -> Result<(), StoreError> {
+        states_in(self.tables, lifecycle).try_for_each(|(stream, state): (&Stream, &(Version, String))| each(stream.1.clone(), &state.1))
     }
 
     fn row(&mut self, read_model: &'static str, key: &str) -> Result<Option<String>, StoreError> {
@@ -178,7 +178,7 @@ impl Reader for MemoryReader<'_> {
         rows_in(self.tables, read_model).try_for_each(|(row, text): (&Row, &String)| each(row.1.clone(), text))
     }
 
-    fn refusals(&mut self, lifecycle: &'static str, stream: &StreamId) -> Result<Vec<String>, StoreError> {
+    fn refusals(&mut self, lifecycle: &'static str, stream: &str) -> Result<Vec<String>, StoreError> {
         Ok(refusals_in(self.tables.rejections.iter(), lifecycle, stream))
     }
 }
@@ -189,7 +189,7 @@ struct MemoryWriter<'a> {
 }
 
 impl MemoryWriter<'_> {
-    fn close(&mut self, lifecycle: &'static str, id: RequestId, parked: Option<&str>) -> Option<StreamId> {
+    fn close(&mut self, lifecycle: &'static str, id: RequestId, parked: Option<&str>) -> Option<String> {
         let open: Option<&Request> = self.tables.outbox.get(&id.get()).filter(|request: &&Request| request.lifecycle == lifecycle);
         match open {
             Some(request) if !self.pending.closed.contains_key(&id.get()) => {
@@ -232,17 +232,17 @@ impl MemoryWriter<'_> {
 }
 
 impl Reader for MemoryWriter<'_> {
-    fn state(&mut self, lifecycle: &'static str, stream: &StreamId) -> Result<Option<(Version, String)>, StoreError> {
-        match self.pending.states.get(&(lifecycle, stream.0.clone())) {
+    fn state(&mut self, lifecycle: &'static str, stream: &str) -> Result<Option<(Version, String)>, StoreError> {
+        match self.pending.states.get(&(lifecycle, stream.to_string())) {
             Some(state) => Ok(Some(state.clone())),
             None => Ok(state_in(self.tables, lifecycle, stream)),
         }
     }
 
-    fn states(&mut self, lifecycle: &'static str, each: &mut dyn FnMut(StreamId, &str) -> Result<(), StoreError>) -> Result<(), StoreError> {
+    fn states(&mut self, lifecycle: &'static str, each: &mut dyn FnMut(String, &str) -> Result<(), StoreError>) -> Result<(), StoreError> {
         self.merged_states(lifecycle)
             .into_iter()
-            .try_for_each(|(stream, state): (String, String)| each(StreamId(stream), &state))
+            .try_for_each(|(stream, state): (String, String)| each(stream, &state))
     }
 
     fn row(&mut self, read_model: &'static str, key: &str) -> Result<Option<String>, StoreError> {
@@ -260,7 +260,7 @@ impl Reader for MemoryWriter<'_> {
             .try_for_each(|(key, text): (String, String)| each(key, &text))
     }
 
-    fn refusals(&mut self, lifecycle: &'static str, stream: &StreamId) -> Result<Vec<String>, StoreError> {
+    fn refusals(&mut self, lifecycle: &'static str, stream: &str) -> Result<Vec<String>, StoreError> {
         Ok(refusals_in(
             self.tables.rejections.iter().chain(self.pending.rejections.iter()),
             lifecycle,
@@ -270,45 +270,45 @@ impl Reader for MemoryWriter<'_> {
 }
 
 impl Writer for MemoryWriter<'_> {
-    fn append(&mut self, lifecycle: &'static str, stream: &StreamId, version: Version, event: &str) -> Result<Position, StoreError> {
+    fn append(&mut self, lifecycle: &'static str, stream: &str, version: Version, event: &str) -> Result<Position, StoreError> {
         self.pending.facts.push(Fact {
             lifecycle,
-            stream: stream.clone(),
+            stream: stream.to_string(),
             version,
             event: event.to_string(),
         });
         Ok(Position::ZERO.after(self.tables.appended + count(self.pending.facts.len())))
     }
 
-    fn save(&mut self, lifecycle: &'static str, stream: &StreamId, version: Version, state: &str) -> Result<(), StoreError> {
-        self.pending.states.insert((lifecycle, stream.0.clone()), (version, state.to_string()));
+    fn save(&mut self, lifecycle: &'static str, stream: &str, version: Version, state: &str) -> Result<(), StoreError> {
+        self.pending.states.insert((lifecycle, stream.to_string()), (version, state.to_string()));
         Ok(())
     }
 
-    fn reject(&mut self, lifecycle: &'static str, stream: &StreamId, refusal: &str) -> Result<(), StoreError> {
+    fn reject(&mut self, lifecycle: &'static str, stream: &str, refusal: &str) -> Result<(), StoreError> {
         self.pending.rejections.push(Rejection {
             lifecycle,
-            stream: stream.clone(),
+            stream: stream.to_string(),
             refusal: refusal.to_string(),
         });
         Ok(())
     }
 
-    fn request(&mut self, lifecycle: &'static str, stream: &StreamId, request: &str) -> Result<(), StoreError> {
+    fn request(&mut self, lifecycle: &'static str, stream: &str, request: &str) -> Result<(), StoreError> {
         self.pending.outbox.push(Request {
             lifecycle,
-            stream: stream.clone(),
+            stream: stream.to_string(),
             request: request.to_string(),
             attempts: 0,
         });
         Ok(())
     }
 
-    fn finish(&mut self, lifecycle: &'static str, id: RequestId) -> Result<Option<StreamId>, StoreError> {
+    fn finish(&mut self, lifecycle: &'static str, id: RequestId) -> Result<Option<String>, StoreError> {
         Ok(self.close(lifecycle, id, None))
     }
 
-    fn park(&mut self, lifecycle: &'static str, id: RequestId, cause: &str) -> Result<Option<StreamId>, StoreError> {
+    fn park(&mut self, lifecycle: &'static str, id: RequestId, cause: &str) -> Result<Option<String>, StoreError> {
         Ok(self.close(lifecycle, id, Some(cause)))
     }
 

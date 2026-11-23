@@ -30,8 +30,8 @@ fn journal_mode(path: &Path) -> Result<String, Fault> {
     Ok(connection.query_row("PRAGMA journal_mode", [], |row: &Row<'_>| row.get::<_, String>(0))?)
 }
 
-fn history_stream(length: u64, call: usize) -> StreamId {
-    StreamId(format!("h-{length:05}-{call:02}"))
+fn history_stream(length: u64, call: usize) -> StreamId<Task> {
+    StreamId::new(format!("h-{length:05}-{call:02}"))
 }
 
 fn seed_histories(path: &Path) -> Result<Seeded, Fault> {
@@ -45,11 +45,11 @@ fn seed_histories(path: &Path) -> Result<Seeded, Fault> {
         let mut state: Statement<'_> = transaction.prepare("INSERT INTO states (lifecycle, stream, version, state) VALUES (?1, ?2, ?3, ?4)")?;
         for length in HISTORIES {
             for call in 0..CALLS {
-                let id: StreamId = history_stream(length, call);
+                let id: StreamId<Task> = history_stream(length, call);
                 for version in 1..=length {
-                    fact.execute((Task::NAME, &id.0, signed(version)?, &added))?;
+                    fact.execute((Task::NAME, id.as_str(), signed(version)?, &added))?;
                 }
-                state.execute((Task::NAME, &id.0, signed(length)?, &open))?;
+                state.execute((Task::NAME, id.as_str(), signed(length)?, &open))?;
                 seeded.streams += 1;
                 seeded.facts += length;
             }
@@ -67,7 +67,7 @@ fn seed_histories(path: &Path) -> Result<Seeded, Fault> {
 }
 
 fn complete(store: &Sqlite, length: u64, call: usize) -> Result<Duration, Fault> {
-    let id: StreamId = history_stream(length, call);
+    let id: StreamId<Task> = history_stream(length, call);
     let (elapsed, answer): (Duration, Result<Answer<<Task as Lifecycle>::Refusal>, StoreError>) = timed(|| handle(store, &id, CompleteTask));
     accepted(answer, length + 1, &id)?;
     Ok(elapsed)
@@ -125,15 +125,15 @@ pub fn histories(directory: &Path, durability: Durability) -> Result<(), Fault> 
 }
 
 pub fn add(store: &Sqlite, prefix: &str, call: usize) -> Result<Duration, Fault> {
-    let id: StreamId = StreamId(format!("{prefix}-{call:02}"));
+    let id: StreamId<Task> = StreamId::new(format!("{prefix}-{call:02}"));
     let command: AddTask = AddTask { title: title()? };
     let (elapsed, answer): (Duration, Result<Answer<<Task as Lifecycle>::Refusal>, StoreError>) = timed(|| handle(store, &id, command));
     accepted(answer, 1, &id)?;
     Ok(elapsed)
 }
 
-fn payment(call: usize) -> StreamId {
-    StreamId(format!("p-{call:02}"))
+fn payment(call: usize) -> StreamId<Payment> {
+    StreamId::new(format!("p-{call:02}"))
 }
 
 fn amount() -> Result<Amount, Fault> {
@@ -142,14 +142,14 @@ fn amount() -> Result<Amount, Fault> {
 
 fn authorize(store: &Sqlite) -> Result<(), Fault> {
     for call in 0..CALLS {
-        let id: StreamId = payment(call);
+        let id: StreamId<Payment> = payment(call);
         accepted(handle(store, &id, Authorize { amount: amount()? }), 1, &id)?;
     }
     Ok(())
 }
 
 fn capture(store: &Sqlite, call: usize) -> Result<Duration, Fault> {
-    let id: StreamId = payment(call);
+    let id: StreamId<Payment> = payment(call);
     let command: Capture = Capture { amount: amount()? };
     let (elapsed, answer): (Duration, Result<Answer<<Payment as Lifecycle>::Refusal>, StoreError>) = timed(|| handle(store, &id, command));
     accepted(answer, 2, &id)?;

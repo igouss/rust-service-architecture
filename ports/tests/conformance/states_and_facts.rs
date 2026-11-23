@@ -99,7 +99,7 @@ fn facts_come_back_in_commit_order_for_their_lifecycle_only() {
     assert_eq!(
         store
             .write(|unit| unit.facts::<Courier>(Position::ZERO, 10))
-            .map(|facts: Vec<Recorded<Dispatched>>| facts.len()),
+            .map(|facts: Vec<Recorded<Courier>>| facts.len()),
         Ok(1)
     );
 }

@@ -12,7 +12,7 @@ FILES = ["Cargo.toml", "Cargo.lock", "rust-toolchain.toml", "clippy.toml", "rust
 
 MUTANTS = SHELL + STORES + HTTP + GATES
 
-EXAMPLE = {"C5", "C8", "C9", "C10", "C15", "C16", "T10", "T11", "T20", "T22", "T23", "T24", "T80", "G6", "G12", "G13", "G19", "G20", "G21", "G22", "G23", "G24", "G25", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9"}
+EXAMPLE = {"C5", "C8", "C9", "C10", "C15", "C16", "C17", "C18", "T10", "T11", "T20", "T22", "T23", "T24", "T80", "G6", "G12", "G13", "G19", "G20", "G21", "G22", "G23", "G24", "G25", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9"}
 
 
 def uncompiled(output):

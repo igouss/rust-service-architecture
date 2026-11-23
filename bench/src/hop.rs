@@ -17,8 +17,8 @@ use crate::measure::{accepted, count, same, summary, table, title, CALLS, TIMED,
 use crate::stats::Summary;
 
 async fn hopped(store: &Arc<Sqlite>, call: usize) -> Result<Duration, Fault> {
-    let id: StreamId = StreamId(format!("s-{call:02}"));
-    let stream: StreamId = id.clone();
+    let id: StreamId<Task> = StreamId::new(format!("s-{call:02}"));
+    let stream: StreamId<Task> = id.clone();
     let shared: Arc<Sqlite> = Arc::clone(store);
     let command: AddTask = AddTask { title: title()? };
     let started: Instant = Instant::now();

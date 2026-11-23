@@ -3,7 +3,7 @@ HTTP = [
      "(StatusCode::CONFLICT, refusal_name(refusal)).into_response()",
      "(StatusCode::NO_CONTENT, refusal_name(refusal)).into_response()", "test"),
     ("H2 a task id is not minted per request", "adapter-http/src/lib.rs",
-     "StreamId(Uuid::now_v7().to_string())", "StreamId(Uuid::nil().to_string())", "test"),
+     "StreamId::new(Uuid::now_v7().to_string())", "StreamId::new(Uuid::nil().to_string())", "test"),
     ("H3 a title reaches the page unescaped", "adapter-http/src/lib.rs", "escape(title.as_str()),", "title.as_str(),", "test"),
     ("H4 a unit of work runs on the executor", "adapter-http/src/lib.rs",
      "= tokio::task::spawn_blocking(move || work(&journal)).await;", "= Ok(work(&journal));", "test"),

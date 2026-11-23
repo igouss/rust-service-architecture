@@ -200,15 +200,13 @@ mod tests {
     fn captured() -> Sqlite {
         let store: Sqlite = Sqlite::in_memory().expect("opens");
         let amount: Amount = Amount::new(500).expect("positive");
-        app::handle(&store, &StreamId("p-1".to_string()), Authorize { amount }).expect("authorized");
-        app::handle(&store, &StreamId("p-1".to_string()), Capture { amount }).expect("captured");
+        app::handle(&store, &StreamId::new("p-1"), Authorize { amount }).expect("authorized");
+        app::handle(&store, &StreamId::new("p-1"), Capture { amount }).expect("captured");
         store
     }
 
     fn fulfilment(store: &Sqlite) -> (Version, Fulfilment) {
-        store
-            .read(|view: &mut View<'_>| view.state::<Fulfilment>(&StreamId("p-1".to_string())))
-            .expect("read")
+        store.read(|view: &mut View<'_>| view.state::<Fulfilment>(&StreamId::new("p-1"))).expect("read")
     }
 
     #[tokio::test]

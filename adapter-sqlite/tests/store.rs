@@ -17,8 +17,8 @@ fn file() -> PathBuf {
     path
 }
 
-fn id(text: &str) -> StreamId {
-    StreamId(text.to_string())
+fn id<S>(text: &str) -> StreamId<S> {
+    StreamId::new(text)
 }
 
 fn title(text: &str) -> Title {

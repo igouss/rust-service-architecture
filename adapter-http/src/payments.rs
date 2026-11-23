@@ -34,8 +34,8 @@ pub async fn authorize<J: Journal + Send + Sync + 'static>(State(service): State
     match amount(&body) {
         Err(bad) => rejected(&span, bad),
         Ok(amount) => {
-            let id: StreamId = StreamId(Uuid::now_v7().to_string());
-            span.record("payment", id.0.as_str());
+            let id: StreamId<Payment> = StreamId::new(Uuid::now_v7().to_string());
+            span.record("payment", id.as_str());
             answered(
                 &span,
                 blocking(service.journal, move |journal: &J| app::handle(journal, &id, Authorize { amount })).await,
@@ -48,10 +48,10 @@ pub async fn authorize<J: Journal + Send + Sync + 'static>(State(service): State
 pub async fn capture<J: Journal + Send + Sync + 'static>(State(service): State<Service<J>>, Path(id): Path<String>, body: Bytes) -> Response {
     let span: Span = request("POST /payments/{id}/capture");
     span.record("command", "Capture");
-    match stream_id(&id).and_then(|id: StreamId| amount(&body).map(|amount: Amount| (id, amount))) {
+    match stream_id::<Payment>(&id).and_then(|id: StreamId<Payment>| amount(&body).map(|amount: Amount| (id, amount))) {
         Err(bad) => rejected(&span, bad),
         Ok((id, amount)) => {
-            span.record("payment", id.0.as_str());
+            span.record("payment", id.as_str());
             answered(
                 &span,
                 blocking(service.journal, move |journal: &J| app::handle(journal, &id, Capture { amount })).await,
@@ -72,7 +72,7 @@ fn progress(fulfilment: &Fulfilment) -> &'static str {
 }
 
 fn item(status: &PaymentStatus) -> String {
-    let id: String = path_segment(&status.id.0);
+    let id: String = path_segment(status.id.as_str());
     let fulfilment: &str = progress(&status.fulfilment);
     match &status.payment {
         Payment::Absent => String::new(),

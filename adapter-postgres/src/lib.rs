@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::thread;
 
 use ports::store::{Key, Listener, Reader, Store, StoredRequest, Writer};
-use ports::{Position, RequestId, StoreError, StreamId};
+use ports::{Position, RequestId, StoreError};
 use postgres::error::DbError;
 use postgres::{Client, NoTls, Row};
 use r2d2::{ManageConnection, Pool, PooledConnection};
@@ -309,7 +309,7 @@ impl Store for Postgres {
             .map(|row: &Row| {
                 Ok(StoredRequest {
                     id: number("outbox", row, 0, RequestId::loaded)?,
-                    stream: StreamId(text("outbox", row, 1)?.to_string()),
+                    stream: text("outbox", row, 1)?.to_string(),
                     request: text("outbox", row, 2)?.to_string(),
                     attempts: number("outbox", row, 3, |count: i64| u64::try_from(count).ok())?,
                 })

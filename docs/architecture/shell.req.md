@@ -18,10 +18,10 @@ driving adapter   map the Answer to a response            (refused → 409 or 42
 
 ```rust
 pub trait Policy: Lifecycle {
-    fn after(unit: &mut Unit<'_>, fact: &Recorded<Self::Event>) -> Result<(), StoreError>;
+    fn after(unit: &mut Unit<'_>, fact: &Recorded<Self>) -> Result<(), StoreError>;
 }
 
-pub fn handle<J: Journal, C: Command>(journal: &J, id: &StreamId, command: C) -> Result<Answer<<C::Reads as Lifecycle>::Refusal>, StoreError>
+pub fn handle<J: Journal, C: Command>(journal: &J, id: &StreamId<C::Reads>, command: C) -> Result<Answer<<C::Reads as Lifecycle>::Refusal>, StoreError>
 where
     C::Reads: Policy,
 {
@@ -31,7 +31,7 @@ where
     })
 }
 
-pub fn react<X: Reaction>(unit: &mut Unit<'_>, id: &StreamId, progress: X) -> Result<(), StoreError>
+pub fn react<X: Reaction>(unit: &mut Unit<'_>, id: &StreamId<X::Reads>, progress: X) -> Result<(), StoreError>
 where
     X::Reads: Policy,
 {
@@ -39,7 +39,7 @@ where
     settle(unit, applied).map(|_answer: Answer<<X::Reads as Lifecycle>::Refusal>| ())
 }
 
-pub fn advance<J: Journal, X: Reaction>(journal: &J, id: &StreamId, progress: X) -> Result<(), StoreError>
+pub fn advance<J: Journal, X: Reaction>(journal: &J, id: &StreamId<X::Reads>, progress: X) -> Result<(), StoreError>
 where
     X::Reads: Policy,
 {

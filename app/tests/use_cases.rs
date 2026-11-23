@@ -31,8 +31,8 @@ fn store() -> Sqlite {
     Sqlite::in_memory().expect("opens")
 }
 
-fn id(text: &str) -> StreamId {
-    StreamId(text.to_string())
+fn id<S>(text: &str) -> StreamId<S> {
+    StreamId::new(text)
 }
 
 fn title_of(task: &str) -> Title {
@@ -65,7 +65,7 @@ struct Recording {
 impl Gateway<FulfilmentRequest> for Recording {
     type Reply = FulfilmentReply;
 
-    async fn perform(&self, id: RequestId, _stream: &StreamId, request: &FulfilmentRequest) -> Result<FulfilmentReply, GatewayError> {
+    async fn perform(&self, id: RequestId, _stream: &str, request: &FulfilmentRequest) -> Result<FulfilmentReply, GatewayError> {
         self.performed.lock().expect("lock").push((id, request.clone()));
         Ok(FulfilmentReply::StockUnavailable)
     }
@@ -76,7 +76,7 @@ struct Down;
 impl Gateway<FulfilmentRequest> for Down {
     type Reply = FulfilmentReply;
 
-    async fn perform(&self, _id: RequestId, _stream: &StreamId, _request: &FulfilmentRequest) -> Result<FulfilmentReply, GatewayError> {
+    async fn perform(&self, _id: RequestId, _stream: &str, _request: &FulfilmentRequest) -> Result<FulfilmentReply, GatewayError> {
         Err(GatewayError::Unavailable { cause: "down".to_string() })
     }
 }
@@ -186,7 +186,7 @@ fn a_capture_starts_the_fulfilment_and_requests_stock_in_the_same_unit() {
         store.claim::<Progress>(10),
         Ok(vec![Claimed {
             id: RequestId::from(1),
-            stream: id("p-1"),
+            stream: "p-1".to_string(),
             request: FulfilmentRequest::ReserveStock,
             attempts: 0
         }])
@@ -284,7 +284,7 @@ struct FailsTheFirst;
 impl Gateway<FulfilmentRequest> for FailsTheFirst {
     type Reply = FulfilmentReply;
 
-    async fn perform(&self, id: RequestId, _stream: &StreamId, _request: &FulfilmentRequest) -> Result<FulfilmentReply, GatewayError> {
+    async fn perform(&self, id: RequestId, _stream: &str, _request: &FulfilmentRequest) -> Result<FulfilmentReply, GatewayError> {
         match id.get() {
             1 => Err(GatewayError::Unavailable { cause: "down".to_string() }),
             _later => Ok(FulfilmentReply::StockUnavailable),
@@ -306,7 +306,7 @@ struct InStock;
 impl Gateway<FulfilmentRequest> for InStock {
     type Reply = FulfilmentReply;
 
-    async fn perform(&self, _id: RequestId, _stream: &StreamId, request: &FulfilmentRequest) -> Result<FulfilmentReply, GatewayError> {
+    async fn perform(&self, _id: RequestId, _stream: &str, request: &FulfilmentRequest) -> Result<FulfilmentReply, GatewayError> {
         match request {
             FulfilmentRequest::ReserveStock => Ok(FulfilmentReply::StockReserved),
             FulfilmentRequest::Ship => Ok(FulfilmentReply::Shipped),
@@ -323,7 +323,7 @@ fn a_performed_reservation_advances_the_fulfilment_to_shipping_and_requests_the_
         store.claim::<Progress>(10),
         Ok(vec![Claimed {
             id: RequestId::from(2),
-            stream: id("p-1"),
+            stream: "p-1".to_string(),
             request: FulfilmentRequest::Ship,
             attempts: 0
         }])
@@ -354,7 +354,7 @@ struct Refuses;
 impl Gateway<FulfilmentRequest> for Refuses {
     type Reply = FulfilmentReply;
 
-    async fn perform(&self, _id: RequestId, _stream: &StreamId, _request: &FulfilmentRequest) -> Result<FulfilmentReply, GatewayError> {
+    async fn perform(&self, _id: RequestId, _stream: &str, _request: &FulfilmentRequest) -> Result<FulfilmentReply, GatewayError> {
         Err(GatewayError::Rejected {
             cause: "no such warehouse".to_string(),
         })
@@ -377,7 +377,7 @@ fn a_request_that_fails_once_under_a_bound_of_two_is_offered_again_with_its_fail
         store.claim::<Progress>(10),
         Ok(vec![Claimed {
             id: RequestId::from(1),
-            stream: id("p-1"),
+            stream: "p-1".to_string(),
             request: FulfilmentRequest::ReserveStock,
             attempts: 1
         }])

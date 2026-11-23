@@ -13,7 +13,7 @@ pub use axum::response::Response;
 pub use axum::Router;
 pub use domain::fulfilment::Fulfilment;
 pub use domain::payment::{Amount, DeclineReason, Payment};
-pub use domain::task::{Tally, Title};
+pub use domain::task::{Tally, Task, Title};
 pub use http_body_util::BodyExt;
 pub use ports::{Journal, Position, StoreError, StreamId, Unit, View};
 pub use tower::ServiceExt;
@@ -88,7 +88,7 @@ pub fn open(service: &Service) -> Vec<String> {
     app::tasks::open_tasks(service.store.as_ref())
         .expect("queried")
         .into_iter()
-        .map(|(_id, title): (StreamId, Title)| title.as_str().to_string())
+        .map(|(_id, title): (StreamId<Task>, Title)| title.as_str().to_string())
         .collect()
 }
 
@@ -96,7 +96,7 @@ pub fn first_id(service: &Service) -> String {
     app::tasks::open_tasks(service.store.as_ref())
         .expect("queried")
         .into_iter()
-        .map(|(id, _title): (StreamId, Title)| id.0)
+        .map(|(id, _title): (StreamId<Task>, Title)| id.as_str().to_string())
         .next()
         .expect("one open task")
 }
@@ -109,14 +109,14 @@ pub async fn authorize(service: &Service, amount: &str) -> Response {
     send(&service.router, post("/payments", format!("amount={amount}"))).await
 }
 
-pub fn payments(service: &Service) -> Vec<(StreamId, Payment)> {
+pub fn payments(service: &Service) -> Vec<(StreamId<Payment>, Payment)> {
     service.store.read(|view: &mut View<'_>| view.states::<Payment>()).expect("read")
 }
 
 pub fn first_payment(service: &Service) -> String {
     payments(service)
         .into_iter()
-        .map(|(id, _payment): (StreamId, Payment)| id.0)
+        .map(|(id, _payment): (StreamId<Payment>, Payment)| id.as_str().to_string())
         .next()
         .expect("one payment")
 }
