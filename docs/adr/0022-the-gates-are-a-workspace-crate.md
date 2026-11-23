@@ -58,6 +58,7 @@ Each line is one commit: the gate, and what was compared.
 
 - 1beed7c: the crate, its reader and seven tests of the reader; no recipe changed.
 - `comments`: the tree, mutants G5, G14 and G15, and six probes (four slashes, a block doc comment, `fc-allow` outside the core, slashes in a string, a block of two lines, a block that does not end) gave the same lines and exit codes from `lint.py` and from `gates`. Comments do not survive `proc-macro2`, so this gate reads them with `ra-ap-rustc_lexer`, pinned to `=0.186.0`: the crate is published from the compiler with no promise of a stable interface.
+- `allows`: the tree, mutants G9, G16, G17 and G18, and seven probes (a call named `allow`, an attribute written across lines, an inner attribute in `src`, an attribute inside a macro, one in a doc comment, a test file with one of the two lints, an outer attribute in a test file): the same lines and exit codes. It reads tokens, so an attribute inside a macro is still seen.
 
 ## What it preserved
 

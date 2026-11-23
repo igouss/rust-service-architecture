@@ -8,26 +8,6 @@ TEST_ALLOWS = {"clippy::expect_used", "clippy::panic"}
 SHELL_FREE = CORE + ("usecase",)
 
 
-def allows():
-    found = []
-    for package in packages():
-        for path in rust_files(package):
-            code = lex(path)[0]
-            in_tests = os.path.relpath(path, folder(package)).split(os.sep)[0] == "tests"
-            inside = 0
-            for opened in re.finditer(r"#(!?)\[", code):
-                text = code[opened.end() : closing(code, opened.end() - 1, "[]")]
-                levels = re.findall(r"\b(allow|expect)\s*\(", text)
-                inside += levels.count("allow")
-                sanctioned = re.fullmatch(r"\s*allow\s*\(([^()]*)\)\s*", text)
-                names = {name.strip() for name in sanctioned.group(1).split(",") if name.strip()} if sanctioned else set()
-                if levels and not (in_tests and opened.group(1) and names and names <= TEST_ALLOWS):
-                    found.append("arch-tsu: %s:%d #%s[%s]" % (relative(path), line_of(code, opened.start()), opened.group(1), " ".join(text.split())))
-            if inside != len(re.findall(r"\ballow\s*\(", code)):
-                raise Unread("%s: an `allow(` stands outside every attribute the scan read" % relative(path))
-    return found, ["The one allow is `#![allow(%s)]` opening a file under tests/." % ", ".join(sorted(TEST_ALLOWS)), "Fix: remove the attribute and fix what the lint names (a type alias, a smaller function)."]
-
-
 def patterns(code):
     found = []
     for keyword in re.finditer(r"\bmatch\b", code):
@@ -162,7 +142,7 @@ def pins():
     return found, ["A tool built from a branch is whatever the branch holds the day CI runs, so a green no longer says which gate passed it.", "Fix: add `--rev <commit>`, the 40-hex id `git ls-remote <url> HEAD` prints, once `just check` passes with that build (docs/adr/0017-gate-tools-are-pinned.md)."]
 
 
-CHECKS = {"allows": allows, "wildcards": wildcards, "traits": traits, "stored": stored, "pins": pins}
+CHECKS = {"wildcards": wildcards, "traits": traits, "stored": stored, "pins": pins}
 
 
 def main():

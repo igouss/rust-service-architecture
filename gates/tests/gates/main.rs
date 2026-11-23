@@ -2,6 +2,7 @@
 
 use gates::tokens::Source;
 
+mod allows;
 mod comments;
 
 pub fn source(text: &str) -> Source {

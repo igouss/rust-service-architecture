@@ -1,7 +1,7 @@
 use std::fs;
 use std::path::Path;
 
-use proc_macro2::{Spacing, Span, TokenStream, TokenTree};
+use proc_macro2::{Delimiter, Spacing, Span, TokenStream, TokenTree};
 
 use crate::Unread;
 
@@ -81,4 +81,19 @@ pub fn idents(stream: &TokenStream, name: &str) -> usize {
     let mut count: usize = 0;
     levels(stream, &mut |trees| count += trees.iter().filter(|tree| is_ident(tree, name)).count());
     count
+}
+
+/// The names among `names` that are written as a call, `name(…)`, at any depth of the stream.
+pub fn calls(stream: &TokenStream, names: &[&str]) -> Vec<String> {
+    let mut found: Vec<String> = Vec::new();
+    levels(stream, &mut |trees| {
+        for pair in trees.windows(2) {
+            if let (TokenTree::Ident(name), TokenTree::Group(group)) = (&pair[0], &pair[1]) {
+                if group.delimiter() == Delimiter::Parenthesis && names.iter().any(|known| name == known) {
+                    found.push(name.to_string());
+                }
+            }
+        }
+    });
+    found
 }

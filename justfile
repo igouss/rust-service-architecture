@@ -63,7 +63,7 @@ comments:
 
 [doc("arch-tsu: no allow or expect attribute, but the one that opens a file under tests/; fix what the lint names.")]
 allows:
-    @python3 lint.py allows
+    @cargo run -q -p gates -- allows
 
 [doc("arch-j0k: no element of a tuple pattern in domain or app catches every remaining case.")]
 wildcards:

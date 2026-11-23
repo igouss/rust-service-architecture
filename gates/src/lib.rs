@@ -1,5 +1,6 @@
 //! The gates of `just check` that read this workspace's own source and manifests.
 
+pub mod allows;
 pub mod comments;
 pub mod tokens;
 pub mod workspace;
