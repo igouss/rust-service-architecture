@@ -71,7 +71,7 @@ wildcards:
 
 [doc("arch-u8nl: a trait is declared only where the primitives live; a feature is an instance, never a new kind.")]
 traits:
-    @python3 lint.py traits
+    @cargo run -q -p gates -- traits
 
 [doc("arch-btw1: every variant of every stored type has a pinned sample in the crate's tests/stored_encoding.rs.")]
 stored:

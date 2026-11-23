@@ -3,6 +3,7 @@
 pub mod allows;
 pub mod comments;
 pub mod tokens;
+pub mod traits;
 pub mod wildcards;
 pub mod workspace;
 

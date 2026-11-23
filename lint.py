@@ -8,24 +8,6 @@ TEST_ALLOWS = {"clippy::expect_used", "clippy::panic"}
 SHELL_FREE = CORE + ("usecase",)
 
 
-def traits():
-    found = []
-    for package in packages():
-        roots = {target["src_path"] for target in package["targets"] if "lib" in target["kind"]}
-        home = set(rust_files(package, "src")) if role(package) == "port-and-adapter" else roots if role(package) in ("domain", "usecase") else set()
-        kept = 0
-        for path in rust_files(package):
-            code = lex(path)[0]
-            declared = list(re.finditer(r"\btrait\s+(\w+)", code))
-            if len(declared) != len(re.findall(r"\btrait\b", code)):
-                raise Unread("%s: a `trait` the scan could not name" % relative(path))
-            kept += len(declared) if path in home else 0
-            found += ["arch-u8nl: %s:%d trait %s" % (relative(path), line_of(code, match.start()), match.group(1)) for match in declared if path not in home]
-        if home and not kept:
-            raise Unread("%s declares no trait where its primitives live; the check has nothing to read" % package["name"])
-    return found, ["A trait is a new kind of thing; the kinds are the traits of domain/src/lib.rs, app/src/lib.rs and ports/src.", "Fix: make the feature an instance of one of them: a lifecycle, a command, a reaction, a projection, a policy, a query, a port."]
-
-
 STORED = {"Lifecycle": ("Event", "Refusal"), "Reaction": ("Request",), "Projection": ("Row",)}
 
 
@@ -103,7 +85,7 @@ def pins():
     return found, ["A tool built from a branch is whatever the branch holds the day CI runs, so a green no longer says which gate passed it.", "Fix: add `--rev <commit>`, the 40-hex id `git ls-remote <url> HEAD` prints, once `just check` passes with that build (docs/adr/0017-gate-tools-are-pinned.md)."]
 
 
-CHECKS = {"traits": traits, "stored": stored, "pins": pins}
+CHECKS = {"stored": stored, "pins": pins}
 
 
 def main():

@@ -4,6 +4,7 @@ use gates::tokens::Source;
 
 mod allows;
 mod comments;
+mod traits;
 mod wildcards;
 
 pub fn source(text: &str) -> Source {
