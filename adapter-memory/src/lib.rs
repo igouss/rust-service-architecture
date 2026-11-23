@@ -2,7 +2,7 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::sync::{PoisonError, RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use ports::store::{Key, Listener, Reader, Store, StoredFact, StoredRequest, Writer};
-use ports::{Position, RequestId, StoreError, Version};
+use ports::{Moment, Position, RequestId, StoreError, Version};
 
 type Stream = (&'static str, String);
 type Row = (&'static str, String);
@@ -21,6 +21,7 @@ struct Request {
     stream: String,
     request: String,
     attempts: u64,
+    not_before: Moment,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -300,6 +301,7 @@ impl Writer for MemoryWriter<'_> {
             stream: stream.to_string(),
             request: request.to_string(),
             attempts: 0,
+            not_before: Moment::ZERO,
         });
         Ok(())
     }
@@ -441,12 +443,12 @@ impl Store for Memory {
         }
     }
 
-    fn requests(&self, _key: Key, lifecycle: &'static str, limit: usize) -> Result<Vec<StoredRequest>, StoreError> {
+    fn requests(&self, _key: Key, lifecycle: &'static str, limit: usize, now: Moment) -> Result<Vec<StoredRequest>, StoreError> {
         let tables: RwLockReadGuard<'_, Tables> = self.reading();
         let mut open: Vec<(u64, u64, &Request)> = tables
             .outbox
             .iter()
-            .filter(|(_id, request): &(&u64, &Request)| request.lifecycle == lifecycle)
+            .filter(|(_id, request): &(&u64, &Request)| request.lifecycle == lifecycle && request.not_before <= now)
             .map(|(id, request): (&u64, &Request)| (request.attempts, *id, request))
             .collect();
         open.sort_by_key(|(attempts, id, _request): &(u64, u64, &Request)| (*attempts, *id));
@@ -462,9 +464,10 @@ impl Store for Memory {
             .collect())
     }
 
-    fn mark_failed(&self, _key: Key, id: RequestId) -> Result<(), StoreError> {
+    fn mark_failed(&self, _key: Key, id: RequestId, again: Moment) -> Result<(), StoreError> {
         if let Some(request) = self.writing().outbox.get_mut(&id.get()) {
             request.attempts += 1;
+            request.not_before = again;
         }
         Ok(())
     }

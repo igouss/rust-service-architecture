@@ -26,7 +26,8 @@ The page adds and completes tasks, and authorizes and captures payments. A captu
 starts a fulfilment; the relay, on a thread of its own, hands its requests to a demonstration
 warehouse that is always in stock and feeds each reply back, so the page shows the fulfilment
 move to shipped. `TASKS_DATABASE`, `TASKS_LISTEN`, `TASKS_DURABILITY` (`full` or `normal`)
-and `TASKS_RELAY_ATTEMPTS` (how often a request is tried before it is parked, 5 unless set)
+and `TASKS_RELAY_ATTEMPTS` (how often a request is tried before it is parked, 10 unless set;
+the waits between tries start at a second and double up to five minutes)
 override the defaults.
 
 Needs the nightly Rust pinned in `rust-toolchain.toml`, [`just`](https://github.com/casey/just),

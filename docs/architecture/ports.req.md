@@ -109,6 +109,7 @@ macro_rules! ordinal {
 ordinal!(Version);
 ordinal!(Position);
 ordinal!(RequestId);
+ordinal!(Moment);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StoreError {
@@ -425,8 +426,8 @@ pub struct Claimed<R> {
 }
 
 pub trait Outbox {
-    fn claim<X: Reaction>(&self, limit: usize) -> Result<Vec<Claimed<X::Request>>, StoreError>;
-    fn failed(&self, id: RequestId) -> Result<(), StoreError>;
+    fn claim<X: Reaction>(&self, limit: usize, now: Moment) -> Result<Vec<Claimed<X::Request>>, StoreError>;
+    fn failed(&self, id: RequestId, again: Moment) -> Result<(), StoreError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -37,6 +37,10 @@ CREATE TABLE IF NOT EXISTS parked (
     cause TEXT NOT NULL,
     parked_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+CREATE TABLE IF NOT EXISTS deferred (
+    id BIGINT PRIMARY KEY REFERENCES outbox (id),
+    not_before BIGINT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS read_models (
     name TEXT NOT NULL,
     key TEXT NOT NULL,
@@ -104,10 +108,17 @@ impl Statements {
             delete: client.prepare("DELETE FROM read_models WHERE name = $1 AND key = $2")?,
             clear_rows: client.prepare("DELETE FROM read_models WHERE name = $1")?,
             clear_position: client.prepare("DELETE FROM read_model_positions WHERE name = $1")?,
-            requests: client.prepare("SELECT id, stream, request, attempts FROM outbox WHERE lifecycle = $1 AND NOT done ORDER BY attempts, id LIMIT $2")?,
+            requests: client.prepare(
+                "SELECT outbox.id, stream, request, attempts FROM outbox LEFT JOIN deferred ON deferred.id = outbox.id
+                 WHERE lifecycle = $1 AND NOT done AND coalesce(not_before, 0) <= $3 ORDER BY attempts, outbox.id LIMIT $2",
+            )?,
             close: client.prepare("UPDATE outbox SET done = true, attempts = attempts + $3 WHERE id = $1 AND lifecycle = $2 AND NOT done RETURNING stream")?,
             park: client.prepare("INSERT INTO parked (id, cause) VALUES ($1, $2)")?,
-            failed: client.prepare("UPDATE outbox SET attempts = attempts + 1 WHERE id = $1")?,
+            failed: client.prepare(
+                "WITH counted AS (UPDATE outbox SET attempts = attempts + 1 WHERE id = $1 RETURNING id)
+                 INSERT INTO deferred (id, not_before) SELECT id, $2 FROM counted
+                 ON CONFLICT (id) DO UPDATE SET not_before = excluded.not_before",
+            )?,
             rejections: client.prepare("SELECT refusal FROM rejections WHERE lifecycle = $1 AND stream = $2 ORDER BY id")?,
         })
     }

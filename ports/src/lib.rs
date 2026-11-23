@@ -91,6 +91,7 @@ macro_rules! ordinal {
 ordinal!(Version);
 ordinal!(Position);
 ordinal!(RequestId);
+ordinal!(Moment);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StoreError {
@@ -454,8 +455,8 @@ pub struct Claimed<R> {
 }
 
 pub trait Outbox {
-    fn claim<X: Reaction>(&self, limit: usize) -> Result<Vec<Claimed<X::Request>>, StoreError>;
-    fn failed(&self, id: RequestId) -> Result<(), StoreError>;
+    fn claim<X: Reaction>(&self, limit: usize, now: Moment) -> Result<Vec<Claimed<X::Request>>, StoreError>;
+    fn failed(&self, id: RequestId, again: Moment) -> Result<(), StoreError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -470,8 +471,8 @@ pub trait Gateway<R> {
 }
 
 impl<K: Store> Outbox for K {
-    fn claim<X: Reaction>(&self, limit: usize) -> Result<Vec<Claimed<X::Request>>, StoreError> {
-        self.requests(Key::new(), <X::Reads as Lifecycle>::NAME, limit)?
+    fn claim<X: Reaction>(&self, limit: usize, now: Moment) -> Result<Vec<Claimed<X::Request>>, StoreError> {
+        self.requests(Key::new(), <X::Reads as Lifecycle>::NAME, limit, now)?
             .into_iter()
             .map(|stored: StoredRequest| {
                 Ok(Claimed {
@@ -484,7 +485,7 @@ impl<K: Store> Outbox for K {
             .collect()
     }
 
-    fn failed(&self, id: RequestId) -> Result<(), StoreError> {
-        self.mark_failed(Key::new(), id)
+    fn failed(&self, id: RequestId, again: Moment) -> Result<(), StoreError> {
+        self.mark_failed(Key::new(), id, again)
     }
 }

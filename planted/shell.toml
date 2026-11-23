@@ -218,22 +218,22 @@ expect = "test"
 [[mutant]]
 name = "T67 the relay never parks a request"
 path = "app/src/lib.rs"
-anchor = "failures.saturating_add(1) < u64::from(attempts.get())"
-replacement = "failures.saturating_add(1) < u64::MAX"
+anchor = 'failed < u64::from(retry.attempts.get())'
+replacement = 'failed < u64::MAX'
 expect = "test"
 
 [[mutant]]
 name = "T68 the relay parks a request at its first failure"
 path = "app/src/lib.rs"
-anchor = "failures.saturating_add(1) < u64::from(attempts.get())"
-replacement = "failures.saturating_add(1) < 1"
+anchor = 'failed < u64::from(retry.attempts.get())'
+replacement = 'failed < 1'
 expect = "test"
 
 [[mutant]]
 name = "T69 the relay allows one attempt more than the bound"
 path = "app/src/lib.rs"
-anchor = "failures.saturating_add(1) < u64::from(attempts.get())"
-replacement = "failures.saturating_add(1) <= u64::from(attempts.get())"
+anchor = 'failed < u64::from(retry.attempts.get())'
+replacement = 'failed <= u64::from(retry.attempts.get())'
 expect = "test"
 
 [[mutant]]
@@ -364,8 +364,8 @@ expect = "test"
 [[mutant]]
 name = "T83 the relay does not count a reply whose unit failed"
 path = "app/src/lib.rs"
-anchor = ") if counted => store.failed(id)?,"
-replacement = ") if counted => (),"
+anchor = ') if counted => store.failed(id, retry.again(now, failed))?,'
+replacement = ') if counted => (),'
 expect = "test"
 
 [[mutant]]
@@ -387,4 +387,18 @@ name = "T86 a stranded request is finished and no cause is recorded"
 path = "ports/src/lib.rs"
 anchor = "Ok(self.store.park(S::NAME, request, cause)?.is_some())"
 replacement = "Ok(self.store.finish(S::NAME, request)?.is_some())"
+expect = "test"
+
+[[mutant]]
+name = "T90 the relay puts a failed request off to now"
+path = "app/src/lib.rs"
+anchor = 'now.after(u64::try_from(self.wait(failures).as_millis()).unwrap_or(u64::MAX))'
+replacement = 'now.after(u64::try_from(self.wait(failures).as_millis()).unwrap_or(u64::MAX).min(0))'
+expect = "test"
+
+[[mutant]]
+name = "T91 the wait does not grow with the failures"
+path = "app/src/lib.rs"
+anchor = 'self.first.saturating_mul(factor).min(self.longest)'
+replacement = 'self.first.saturating_mul(factor.min(1)).min(self.longest)'
 expect = "test"

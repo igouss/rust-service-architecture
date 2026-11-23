@@ -136,7 +136,12 @@ by the route that receives it.
 
 A gateway fails in one of two ways. `Unavailable` is worth another attempt: the request is
 counted and claimed after those that have failed less, so one dead receiver does not hold back
-the rest. `Rejected` is not. A rejected request, and one that has been unavailable as often as
+the rest. It is also put off: `Retry::wait` gives the first wait after the first failure and
+twice the wait before after each further one, up to a longest wait, and the request is not
+claimed before that moment. The bound on attempts is therefore a bound on time; counted in
+passes alone, five attempts half a second apart gave up on a receiver that was away for three
+seconds. The relay reads no clock: the composition root reads it once a pass and hands the
+moment in, as `now` ([`arch-jbno`](shell.req.md)). `Rejected` is not. A rejected request, and one that has been unavailable as often as
 the relay's bound allows, is parked: `app::abandon` closes it, records the cause, and applies
 the reaction built from `Undelivered`, in one unit, so the process manager gives up instead of
 waiting ([`arch-22kr`](invariants.req.md)). The bound is the composition root's setting.
@@ -157,14 +162,14 @@ with a demonstration gateway that answers from nothing. A gateway that calls a r
 driven adapter in a crate of its own.
 
 ```rust
-pub async fn relay<X, K, G>(store: &K, gateway: &G, limit: usize, attempts: NonZeroU32) -> Result<usize, StoreError>
+pub async fn relay<X, K, G>(store: &K, gateway: &G, limit: usize, retry: &Retry, now: Moment) -> Result<usize, StoreError>
 where
     X: Reaction + From<G::Reply> + From<Undelivered<X::Request>>,
     X::Reads: Policy,
     K: Journal + Outbox,
     G: Gateway<X::Request>,
 {
-    let claimed: Vec<Claimed<X::Request>> = store.claim::<X>(limit)?;
+    let claimed: Vec<Claimed<X::Request>> = store.claim::<X>(limit, now)?;
     let mut performed: usize = 0;
     for Claimed {
         id,
@@ -173,11 +178,12 @@ where
         attempts: failures,
     } in claimed
     {
-        let again: bool = failures.saturating_add(1) < u64::from(attempts.get());
+        let failed: u64 = failures.saturating_add(1);
+        let again: bool = failed < u64::from(retry.attempts.get());
         let outcome: Result<G::Reply, GatewayError> = gateway.perform(id, &stream, &request).await;
         let (closed, counted): (Result<usize, StoreError>, bool) = match outcome {
             Ok(reply) => (store.write(|unit: &mut Unit<'_>| resume(unit, id, X::from(reply))).map(|()| 1), again),
-            Err(GatewayError::Unavailable { .. }) if again => (store.failed(id).map(|()| 0), false),
+            Err(GatewayError::Unavailable { .. }) if again => (store.failed(id, retry.again(now, failed)).map(|()| 0), false),
             Err(GatewayError::Unavailable { cause } | GatewayError::Rejected { cause }) => (
                 store
                     .write(|unit: &mut Unit<'_>| abandon(unit, id, &cause, X::from(Undelivered { request })))
@@ -194,7 +200,7 @@ where
                 | StoreError::OutOfOrder { .. }
                 | StoreError::Trimmed { .. }
                 | StoreError::Runaway { .. },
-            ) if counted => store.failed(id)?,
+            ) if counted => store.failed(id, retry.again(now, failed))?,
             Err(
                 unsettled @ (StoreError::Corrupt { .. }
                 | StoreError::Unencodable { .. }

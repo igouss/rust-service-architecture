@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
 use ports::store::{Key, Listener, Reader, Store, StoredFact, StoredRequest, Writer};
-use ports::{Position, RequestId, StoreError, Version};
+use ports::{Moment, Position, RequestId, StoreError, Version};
 use rusqlite::{params, Connection, OptionalExtension, Transaction, TransactionBehavior};
 
 const SCHEMA: &str = "
@@ -41,6 +41,10 @@ CREATE TABLE IF NOT EXISTS parked (
     id INTEGER PRIMARY KEY REFERENCES outbox (id),
     cause TEXT NOT NULL,
     parked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS deferred (
+    id INTEGER PRIMARY KEY REFERENCES outbox (id),
+    not_before INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS read_models (
     name TEXT NOT NULL,
@@ -331,14 +335,17 @@ impl Store for Sqlite {
         }
     }
 
-    fn requests(&self, _key: Key, lifecycle: &'static str, limit: usize) -> Result<Vec<StoredRequest>, StoreError> {
+    fn requests(&self, _key: Key, lifecycle: &'static str, limit: usize, now: Moment) -> Result<Vec<StoredRequest>, StoreError> {
         let connection: MutexGuard<'_, Connection> = self.connection()?;
         let limit: i64 = i64::try_from(limit).unwrap_or(i64::MAX);
         let mut statement = connection
-            .prepare_cached("SELECT id, stream, request, attempts FROM outbox WHERE lifecycle = ?1 AND done = 0 ORDER BY attempts, id LIMIT ?2")
+            .prepare_cached(
+                "SELECT outbox.id, stream, request, attempts FROM outbox LEFT JOIN deferred ON deferred.id = outbox.id
+                 WHERE lifecycle = ?1 AND done = 0 AND coalesce(not_before, 0) <= ?3 ORDER BY attempts, outbox.id LIMIT ?2",
+            )
             .map_err(unavailable)?;
         let rows = statement
-            .query_map(params![lifecycle, limit], |row: &rusqlite::Row<'_>| {
+            .query_map(params![lifecycle, limit, now.stored()], |row: &rusqlite::Row<'_>| {
                 Ok((row.get::<_, i64>(0)?, row.get::<_, String>(1)?, row.get::<_, String>(2)?, row.get::<_, i64>(3)?))
             })
             .map_err(unavailable)?;
@@ -355,11 +362,20 @@ impl Store for Sqlite {
         Ok(requests)
     }
 
-    fn mark_failed(&self, _key: Key, id: RequestId) -> Result<(), StoreError> {
-        let connection: MutexGuard<'_, Connection> = self.connection()?;
-        connection
+    fn mark_failed(&self, _key: Key, id: RequestId, again: Moment) -> Result<(), StoreError> {
+        let mut connection: MutexGuard<'_, Connection> = self.connection()?;
+        let transaction: Transaction<'_> = connection.transaction_with_behavior(TransactionBehavior::Immediate).map_err(unavailable)?;
+        let counted: usize = transaction
             .execute("UPDATE outbox SET attempts = attempts + 1 WHERE id = ?1", params![id.stored()])
             .map_err(unavailable)?;
-        Ok(())
+        if counted == 1 {
+            transaction
+                .execute(
+                    "INSERT INTO deferred (id, not_before) VALUES (?1, ?2) ON CONFLICT (id) DO UPDATE SET not_before = excluded.not_before",
+                    params![id.stored(), again.stored()],
+                )
+                .map_err(unavailable)?;
+        }
+        transaction.commit().map_err(unavailable)
     }
 }

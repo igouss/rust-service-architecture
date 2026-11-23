@@ -1,15 +1,15 @@
 [[mutant]]
 name = "T26 a failed request is claimed first again"
 path = "adapter-sqlite/src/lib.rs"
-anchor = "AND done = 0 ORDER BY attempts, id"
-replacement = "AND done = 0 ORDER BY id"
+anchor = 'ORDER BY attempts, outbox.id LIMIT ?2'
+replacement = 'ORDER BY outbox.id LIMIT ?2'
 expect = "test"
 
 [[mutant]]
 name = "T16 the outbox hands out a request already done"
 path = "adapter-sqlite/src/lib.rs"
-anchor = "AND done = 0 ORDER BY attempts, id"
-replacement = "ORDER BY attempts, id"
+anchor = 'AND done = 0 AND coalesce(not_before, 0) <= ?3'
+replacement = 'AND coalesce(not_before, 0) <= ?3'
 expect = "test"
 
 [[mutant]]
@@ -201,8 +201,8 @@ needs = "STORE_POSTGRES_URL"
 [[mutant]]
 name = "T41 a failed Postgres request is claimed first again"
 path = "adapter-postgres/src/statements.rs"
-anchor = "AND NOT done ORDER BY attempts, id"
-replacement = "AND NOT done ORDER BY id"
+anchor = 'ORDER BY attempts, outbox.id LIMIT $2'
+replacement = 'ORDER BY outbox.id LIMIT $2'
 
 [mutant.expect]
 server = [
@@ -220,8 +220,8 @@ needs = "STORE_POSTGRES_URL"
 [[mutant]]
 name = "T42 the Postgres outbox hands out a request already done"
 path = "adapter-postgres/src/statements.rs"
-anchor = "AND NOT done ORDER BY attempts, id"
-replacement = "ORDER BY attempts, id"
+anchor = 'AND NOT done AND coalesce(not_before, 0) <= $3'
+replacement = 'AND coalesce(not_before, 0) <= $3'
 
 [mutant.expect]
 server = [
@@ -236,3 +236,42 @@ server = [
 ]
 needs = "STORE_POSTGRES_URL"
 
+[[mutant]]
+name = "T87 a SQLite request is claimed before the moment it was put off to"
+path = "adapter-sqlite/src/lib.rs"
+anchor = 'AND coalesce(not_before, 0) <= ?3 ORDER'
+replacement = 'AND ?3 = ?3 ORDER'
+expect = "test"
+
+[[mutant]]
+name = "T88 a memory request is claimed before the moment it was put off to"
+path = "adapter-memory/src/lib.rs"
+anchor = '&& request.not_before <= now)'
+replacement = '&& Moment::ZERO <= now)'
+expect = "test"
+
+[[mutant]]
+name = "T89 a Postgres request is claimed before the moment it was put off to"
+path = "adapter-postgres/src/statements.rs"
+anchor = 'AND coalesce(not_before, 0) <= $3 ORDER'
+replacement = 'AND $3 = $3 ORDER'
+
+[mutant.expect]
+server = [
+    "cargo",
+    "test",
+    "-q",
+    "--no-fail-fast",
+    "-p",
+    "adapter-postgres",
+    "--features",
+    "server",
+]
+needs = "STORE_POSTGRES_URL"
+
+[[mutant]]
+name = "T92 a SQLite request that failed is put off to no moment"
+path = "adapter-sqlite/src/lib.rs"
+anchor = 'params![id.stored(), again.stored()],'
+replacement = 'params![id.stored(), again.stored().min(0)],'
+expect = "test"

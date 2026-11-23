@@ -7,13 +7,14 @@ use std::pin::pin;
 use std::process::ExitCode;
 use std::sync::Arc;
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 use adapter_http::{router, Changes};
 use adapter_sqlite::{Durability, Sqlite};
+use app::Retry;
 use axum::Router;
 use domain::fulfilment::{FulfilmentReply, FulfilmentRequest, Progress};
-use ports::{Gateway, Journal, Outbox, StoreError};
+use ports::{Gateway, Journal, Moment, Outbox, StoreError};
 use tokio::net::TcpListener;
 use tokio::runtime::{Builder, Runtime};
 use tokio::signal::unix::{signal, Signal, SignalKind};
@@ -30,13 +31,15 @@ const ATTEMPTS: &str = "TASKS_RELAY_ATTEMPTS";
 
 const DEFAULT_DATABASE: &str = "tasks.sqlite";
 const DEFAULT_LISTEN: &str = "127.0.0.1:3000";
-const DEFAULT_ATTEMPTS: NonZeroU32 = match NonZeroU32::new(5) {
+const DEFAULT_ATTEMPTS: NonZeroU32 = match NonZeroU32::new(10) {
     Some(attempts) => attempts,
     None => NonZeroU32::MIN,
 };
 
 const RELAY_BATCH: usize = 16;
 const RELAY_EVERY: Duration = Duration::from_millis(500);
+const RELAY_FIRST_WAIT: Duration = Duration::from_secs(1);
+const RELAY_LONGEST_WAIT: Duration = Duration::from_secs(300);
 
 enum Failure {
     UnknownDurability(String),
@@ -103,16 +106,31 @@ async fn stopped(asked: impl Future<Output = ()>, changes: Changes) {
     changes.stop();
 }
 
+/// When a request has failed, `retry` shall have it wait `RELAY_FIRST_WAIT`, then twice as long after each further failure, and never longer than `RELAY_LONGEST_WAIT`.
+fn retry(attempts: NonZeroU32) -> Retry {
+    Retry {
+        attempts,
+        first: RELAY_FIRST_WAIT,
+        longest: RELAY_LONGEST_WAIT,
+    }
+}
+
+/// When asked, `now` shall return the milliseconds since the Unix epoch by the system clock, and the epoch itself if the clock reads earlier.
+fn now() -> Moment {
+    let since: Duration = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or(Duration::ZERO);
+    Moment::ZERO.after(u64::try_from(since.as_millis()).unwrap_or(u64::MAX))
+}
+
 /// When started, `relayed` shall make one pass over the outbox, and another after each pause, until it is asked to stop.
 /// If a pass cannot reach the store, then `relayed` shall log the error and pass again after the pause.
-async fn relayed<K, G>(store: &K, gateway: &G, attempts: NonZeroU32, every: Duration, asked: impl Future<Output = ()>)
+async fn relayed<K, G>(store: &K, gateway: &G, retry: &Retry, every: Duration, clock: impl Fn() -> Moment, asked: impl Future<Output = ()>)
 where
     K: Journal + Outbox,
     G: Gateway<FulfilmentRequest, Reply = FulfilmentReply>,
 {
     let mut asked = pin!(asked);
     loop {
-        match app::relay::<Progress, K, G>(store, gateway, RELAY_BATCH, attempts).await {
+        match app::relay::<Progress, K, G>(store, gateway, RELAY_BATCH, retry, clock()).await {
             Ok(performed) => tracing::debug!(performed, "relayed"),
             Err(error) => tracing::error!(?error, "the relay could not reach the store"),
         }
@@ -127,7 +145,7 @@ fn relaying(store: Arc<Sqlite>, attempts: NonZeroU32, changes: Changes) -> Resul
     let runtime: Runtime = Builder::new_current_thread().enable_time().build().map_err(Failure::Relay)?;
     thread::Builder::new()
         .name("relay".to_string())
-        .spawn(move || runtime.block_on(relayed(store.as_ref(), &AlwaysInStock, attempts, RELAY_EVERY, changes.stopped())))
+        .spawn(move || runtime.block_on(relayed(store.as_ref(), &AlwaysInStock, &retry(attempts), RELAY_EVERY, now, changes.stopped())))
         .map_err(Failure::Relay)
 }
 
@@ -214,7 +232,7 @@ mod tests {
         let store: Sqlite = Sqlite::in_memory().expect("opens");
         let stopped: Result<(), tokio::time::error::Elapsed> = timeout(
             Duration::from_secs(5),
-            relayed(&store, &AlwaysInStock, tries(3), Duration::from_secs(3600), ready(())),
+            relayed(&store, &AlwaysInStock, &retry(tries(3)), Duration::from_secs(3600), || Moment::ZERO, ready(())),
         )
         .await;
         assert_eq!(stopped, Ok(()));
@@ -223,7 +241,7 @@ mod tests {
     #[tokio::test]
     async fn a_relay_asked_to_stop_at_once_still_makes_one_pass() {
         let store: Sqlite = captured();
-        relayed(&store, &AlwaysInStock, tries(3), Duration::from_secs(3600), ready(())).await;
+        relayed(&store, &AlwaysInStock, &retry(tries(3)), Duration::from_secs(3600), || Moment::ZERO, ready(())).await;
         assert_eq!(fulfilment(&store), (Version::from(2), Fulfilment::Shipping));
     }
 
@@ -233,8 +251,9 @@ mod tests {
         relayed(
             &store,
             &AlwaysInStock,
-            tries(3),
+            &retry(tries(3)),
             Duration::from_millis(1),
+            || Moment::ZERO,
             tokio::time::sleep(Duration::from_millis(250)),
         )
         .await;
@@ -246,15 +265,15 @@ mod tests {
         let store: Sqlite = Sqlite::in_memory().expect("opens");
         assert!(timeout(
             Duration::from_millis(50),
-            relayed(&store, &AlwaysInStock, tries(3), Duration::from_millis(1), pending())
+            relayed(&store, &AlwaysInStock, &retry(tries(3)), Duration::from_millis(1), || Moment::ZERO, pending())
         )
         .await
         .is_err());
     }
 
     #[test]
-    fn the_relay_gives_a_request_five_attempts_by_default() {
-        assert_eq!(attempts_of(None).map_err(|failure: Failure| explained(&failure)), Ok(tries(5)));
+    fn the_relay_gives_a_request_ten_attempts_by_default() {
+        assert_eq!(attempts_of(None).map_err(|failure: Failure| explained(&failure)), Ok(tries(10)));
     }
 
     #[test]
@@ -281,6 +300,20 @@ mod tests {
             attempts_of(Some("many")).map_err(|failure: Failure| explained(&failure)),
             Err("TASKS_RELAY_ATTEMPTS is \"many\"; it is a whole number of at least 1".to_string())
         );
+    }
+
+    #[test]
+    fn a_failing_request_waits_a_second_and_then_twice_as_long_up_to_five_minutes() {
+        let waits: Retry = retry(tries(10));
+        assert_eq!(
+            (waits.wait(1), waits.wait(2), waits.wait(10)),
+            (Duration::from_secs(1), Duration::from_secs(2), Duration::from_secs(300))
+        );
+    }
+
+    #[test]
+    fn the_clock_reads_a_moment_after_the_epoch() {
+        assert!(now() > Moment::ZERO);
     }
 
     #[tokio::test]

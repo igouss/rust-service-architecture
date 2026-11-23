@@ -6,7 +6,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use adapter_sqlite::{Durability, Sqlite};
 use domain::fulfilment::{Fulfilment, Progress};
 use domain::task::{AddTask, Task, Title};
-use ports::{Applied, Finished, Journal, Outbox, RequestId, StoreError, StreamId, Version};
+use ports::{Applied, Finished, Journal, Moment, Outbox, RequestId, StoreError, StreamId, Version};
 
 static FILES: AtomicU64 = AtomicU64::new(0);
 
@@ -81,7 +81,7 @@ fn requested(path: &Path) -> Sqlite {
 fn with_no_request_parked_the_parked_table_is_empty() {
     let path: PathBuf = file();
     let store: Sqlite = requested(&path);
-    store.failed(RequestId::from(1)).expect("failed");
+    store.failed(RequestId::from(1), Moment::ZERO).expect("failed");
     drop(store);
     assert_eq!(parked(&path), Vec::new());
 }
@@ -90,7 +90,7 @@ fn with_no_request_parked_the_parked_table_is_empty() {
 fn a_parked_request_is_read_with_sql_with_its_cause_and_its_attempts() {
     let path: PathBuf = file();
     let store: Sqlite = requested(&path);
-    store.failed(RequestId::from(1)).expect("failed");
+    store.failed(RequestId::from(1), Moment::ZERO).expect("failed");
     let _parked: Finished<Fulfilment> = store
         .write(|unit| {
             unit.park(RequestId::from(1), "no such warehouse", |state: Fulfilment| {

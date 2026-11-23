@@ -5,11 +5,12 @@ use std::num::NonZeroU32;
 use std::pin::pin;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::task::{Context, Poll, Waker};
+use std::time::Duration;
 
 use adapter_sqlite::Sqlite;
-use app::{advance, react, relay, Policy};
+use app::{advance, react, relay, Policy, Retry};
 use domain::{Lifecycle, Never, Reaction, Step, Undelivered};
-use ports::{Claimed, Gateway, GatewayError, Journal, Outbox, Recorded, RequestId, StoreError, StreamId, Unit, Version, View};
+use ports::{Claimed, Gateway, GatewayError, Journal, Moment, Outbox, Recorded, RequestId, StoreError, StreamId, Unit, Version, View};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -163,8 +164,12 @@ fn ready<F: Future>(future: F) -> F::Output {
     }
 }
 
-fn tries(bound: u32) -> NonZeroU32 {
-    NonZeroU32::new(bound).expect("at least one attempt")
+fn tries(bound: u32) -> Retry {
+    Retry {
+        attempts: NonZeroU32::new(bound).expect("at least one attempt"),
+        first: Duration::ZERO,
+        longest: Duration::ZERO,
+    }
 }
 
 fn dialled(streams: &[&str]) -> Sqlite {
@@ -177,7 +182,7 @@ fn dialled(streams: &[&str]) -> Sqlite {
 
 fn open(store: &Sqlite) -> Vec<(String, u64)> {
     store
-        .claim::<Line>(10)
+        .claim::<Line>(10, Moment::ZERO)
         .expect("claimed")
         .into_iter()
         .map(|claimed: Claimed<Call>| (claimed.stream, claimed.attempts))
@@ -192,7 +197,7 @@ fn caller(store: &Sqlite, stream: &str) -> (Version, Caller) {
 fn a_reply_whose_unit_fails_is_counted_and_offered_again() {
     let store: Sqlite = dialled(&["loop-1"]);
     let gateway: Answers = Answers(AtomicUsize::new(0));
-    assert_eq!(ready(relay::<Line, Sqlite, Answers>(&store, &gateway, 10, tries(2))), Ok(0));
+    assert_eq!(ready(relay::<Line, Sqlite, Answers>(&store, &gateway, 10, &tries(2), Moment::ZERO)), Ok(0));
     assert_eq!(open(&store), vec![("loop-1".to_string(), 1)]);
 }
 
@@ -201,9 +206,9 @@ fn a_reply_whose_unit_fails_as_often_as_the_bound_parks_the_request_and_tells_no
     let store: Sqlite = dialled(&["loop-1"]);
     let gateway: Answers = Answers(AtomicUsize::new(0));
     let passes: [Result<usize, StoreError>; 3] = [
-        ready(relay::<Line, Sqlite, Answers>(&store, &gateway, 10, tries(2))),
-        ready(relay::<Line, Sqlite, Answers>(&store, &gateway, 10, tries(2))),
-        ready(relay::<Line, Sqlite, Answers>(&store, &gateway, 10, tries(2))),
+        ready(relay::<Line, Sqlite, Answers>(&store, &gateway, 10, &tries(2), Moment::ZERO)),
+        ready(relay::<Line, Sqlite, Answers>(&store, &gateway, 10, &tries(2), Moment::ZERO)),
+        ready(relay::<Line, Sqlite, Answers>(&store, &gateway, 10, &tries(2), Moment::ZERO)),
     ];
     assert_eq!(passes, [Ok(0), Ok(0), Ok(0)]);
     assert_eq!(gateway.0.load(Ordering::SeqCst), 2);
@@ -215,7 +220,7 @@ fn a_reply_whose_unit_fails_as_often_as_the_bound_parks_the_request_and_tells_no
 fn a_request_behind_one_whose_unit_fails_is_performed_in_the_same_pass() {
     let store: Sqlite = dialled(&["loop-1", "calm-2"]);
     let gateway: Answers = Answers(AtomicUsize::new(0));
-    assert_eq!(ready(relay::<Line, Sqlite, Answers>(&store, &gateway, 10, tries(2))), Ok(1));
+    assert_eq!(ready(relay::<Line, Sqlite, Answers>(&store, &gateway, 10, &tries(2), Moment::ZERO)), Ok(1));
     assert_eq!(caller(&store, "calm-2"), (Version::from(1), Caller::Answered));
     assert_eq!(open(&store), vec![("loop-1".to_string(), 1)]);
 }
@@ -224,7 +229,7 @@ fn a_request_behind_one_whose_unit_fails_is_performed_in_the_same_pass() {
 fn a_rejected_request_whose_lifecycle_cannot_be_told_is_parked_all_the_same() {
     let store: Sqlite = dialled(&["loop-1"]);
     let gateway: Refuses = Refuses(AtomicUsize::new(0));
-    assert_eq!(ready(relay::<Line, Sqlite, Refuses>(&store, &gateway, 10, tries(5))), Ok(0));
+    assert_eq!(ready(relay::<Line, Sqlite, Refuses>(&store, &gateway, 10, &tries(5), Moment::ZERO)), Ok(0));
     assert_eq!(open(&store), Vec::new());
     assert_eq!(caller(&store, "loop-1"), (Version::ZERO, Caller::Waiting));
 }
@@ -233,6 +238,6 @@ fn a_rejected_request_whose_lifecycle_cannot_be_told_is_parked_all_the_same() {
 fn a_reply_whose_unit_succeeds_is_performed_as_before() {
     let store: Sqlite = dialled(&["calm-1"]);
     let gateway: Answers = Answers(AtomicUsize::new(0));
-    assert_eq!(ready(relay::<Line, Sqlite, Answers>(&store, &gateway, 10, tries(2))), Ok(1));
+    assert_eq!(ready(relay::<Line, Sqlite, Answers>(&store, &gateway, 10, &tries(2), Moment::ZERO)), Ok(1));
     assert_eq!(open(&store), Vec::new());
 }

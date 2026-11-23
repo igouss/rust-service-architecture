@@ -3,7 +3,7 @@
 use adapter_memory::{Held, Kept, Memory, Parked};
 use domain::fulfilment::{Fulfilment, FulfilmentRequest, Progress};
 use domain::task::{AddTask, CompleteTask, Task, TaskRefusal, Title};
-use ports::{Applied, Claimed, Finished, Journal, Outbox, Position, Recorded, RequestId, StoreError, StreamId, View};
+use ports::{Applied, Claimed, Finished, Journal, Moment, Outbox, Position, Recorded, RequestId, StoreError, StreamId, View};
 
 fn id<S>(text: &str) -> StreamId<S> {
     StreamId::new(text)
@@ -101,7 +101,7 @@ fn refusals_beyond_the_kept_number_drop_the_oldest() {
 fn a_done_request_is_no_longer_held() {
     let store: Memory = store(2, 2);
     request(&store, "p-1");
-    let claimed: Vec<Claimed<FulfilmentRequest>> = store.claim::<Progress>(10).expect("claimed");
+    let claimed: Vec<Claimed<FulfilmentRequest>> = store.claim::<Progress>(10, Moment::ZERO).expect("claimed");
     let _finished: Finished<Fulfilment> = store
         .write(|unit| unit.finish(claimed[0].id, |state: Fulfilment| ports::react(Progress::StockUnavailable, state)))
         .expect("finished");
@@ -112,8 +112,8 @@ fn a_done_request_is_no_longer_held() {
 fn a_failed_request_is_still_held() {
     let store: Memory = store(2, 2);
     request(&store, "p-1");
-    let claimed: Vec<Claimed<FulfilmentRequest>> = store.claim::<Progress>(10).expect("claimed");
-    store.failed(claimed[0].id).expect("failed");
+    let claimed: Vec<Claimed<FulfilmentRequest>> = store.claim::<Progress>(10, Moment::ZERO).expect("claimed");
+    store.failed(claimed[0].id, Moment::ZERO).expect("failed");
     assert_eq!(store.held().requests, 1);
 }
 
@@ -121,7 +121,7 @@ fn a_failed_request_is_still_held() {
 fn a_parked_request_is_held_as_parked_with_its_cause_and_its_attempts() {
     let store: Memory = store(2, 2);
     request(&store, "p-1");
-    store.failed(RequestId::from(1)).expect("failed");
+    store.failed(RequestId::from(1), Moment::ZERO).expect("failed");
     let _parked: Finished<Fulfilment> = store
         .write(|unit| {
             unit.park(RequestId::from(1), "no such warehouse", |state: Fulfilment| {

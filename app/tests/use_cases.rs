@@ -6,14 +6,15 @@ use std::pin::pin;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll, Waker};
+use std::time::Duration;
 
 use adapter_sqlite::Sqlite;
 use app::tasks::{open_tasks, task_board, task_tally, TaskBoard};
-use app::{handle, rebuild, relay};
+use app::{handle, rebuild, relay, Retry};
 use domain::fulfilment::{Fulfilment, FulfilmentReply, FulfilmentRequest, Progress};
 use domain::payment::{Amount, Authorize, Capture, Payment, PaymentRefusal};
 use domain::task::{AddTask, CompleteTask, Tally, Task, TaskRefusal, TaskTally, Title};
-use ports::{Answer, Claimed, Gateway, GatewayError, Journal, Outbox, Position, RequestId, StoreError, StreamId, Version, View};
+use ports::{Answer, Claimed, Gateway, GatewayError, Journal, Moment, Outbox, Position, RequestId, StoreError, StreamId, Version, View};
 
 fn ready<F: Future>(future: F) -> F::Output {
     let mut future = pin!(future);
@@ -23,8 +24,12 @@ fn ready<F: Future>(future: F) -> F::Output {
     }
 }
 
-fn tries(bound: u32) -> NonZeroU32 {
-    NonZeroU32::new(bound).expect("at least one attempt")
+fn tries(bound: u32) -> Retry {
+    Retry {
+        attempts: NonZeroU32::new(bound).expect("at least one attempt"),
+        first: Duration::ZERO,
+        longest: Duration::ZERO,
+    }
 }
 
 fn store() -> Sqlite {
@@ -174,7 +179,7 @@ fn an_authorization_starts_no_fulfilment() {
     let store: Sqlite = store();
     handle(&store, &id("p-1"), Authorize { amount: cents(500) }).expect("authorized");
     assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version::ZERO, Fulfilment::Idle));
-    assert_eq!(store.claim::<Progress>(10), Ok(Vec::new()));
+    assert_eq!(store.claim::<Progress>(10, Moment::ZERO), Ok(Vec::new()));
 }
 
 #[test]
@@ -183,7 +188,7 @@ fn a_capture_starts_the_fulfilment_and_requests_stock_in_the_same_unit() {
     assert_eq!(state::<Payment>(&store, "p-1"), (Version::from(2), Payment::Captured { amount: cents(500) }));
     assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version::from(1), Fulfilment::Reserving));
     assert_eq!(
-        store.claim::<Progress>(10),
+        store.claim::<Progress>(10, Moment::ZERO),
         Ok(vec![Claimed {
             id: RequestId::from(1),
             stream: "p-1".to_string(),
@@ -209,8 +214,14 @@ fn the_relay_performs_a_claimed_request_once_and_marks_it_done() {
     let gateway: Recording = Recording {
         performed: Mutex::new(Vec::new()),
     };
-    assert_eq!(ready(relay::<Progress, Sqlite, Recording>(&store, &gateway, 10, tries(3))), Ok(1));
-    assert_eq!(ready(relay::<Progress, Sqlite, Recording>(&store, &gateway, 10, tries(3))), Ok(0));
+    assert_eq!(
+        ready(relay::<Progress, Sqlite, Recording>(&store, &gateway, 10, &tries(3), Moment::ZERO)),
+        Ok(1)
+    );
+    assert_eq!(
+        ready(relay::<Progress, Sqlite, Recording>(&store, &gateway, 10, &tries(3), Moment::ZERO)),
+        Ok(0)
+    );
     assert_eq!(
         *gateway.performed.lock().expect("lock"),
         vec![(RequestId::from(1), FulfilmentRequest::ReserveStock)]
@@ -220,14 +231,14 @@ fn the_relay_performs_a_claimed_request_once_and_marks_it_done() {
 #[test]
 fn a_request_the_gateway_fails_stays_claimable() {
     let store: Sqlite = captured_payment();
-    assert_eq!(ready(relay::<Progress, Sqlite, Down>(&store, &Down, 10, tries(3))), Ok(0));
-    assert_eq!(store.claim::<Progress>(10).map(|claimed| claimed.len()), Ok(1));
+    assert_eq!(ready(relay::<Progress, Sqlite, Down>(&store, &Down, 10, &tries(3), Moment::ZERO)), Ok(0));
+    assert_eq!(store.claim::<Progress>(10, Moment::ZERO).map(|claimed| claimed.len()), Ok(1));
 }
 
 #[test]
 fn the_relay_with_an_empty_outbox_performs_nothing() {
     let store: Sqlite = store();
-    assert_eq!(ready(relay::<Progress, Sqlite, Down>(&store, &Down, 10, tries(3))), Ok(0));
+    assert_eq!(ready(relay::<Progress, Sqlite, Down>(&store, &Down, 10, &tries(3), Moment::ZERO)), Ok(0));
 }
 
 #[test]
@@ -276,7 +287,7 @@ fn a_unit_that_fails_after_applying_stores_nothing() {
     });
     assert_eq!(failed, Err(StoreError::Unavailable { cause: "injected".to_string() }));
     assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version::ZERO, Fulfilment::Idle));
-    assert_eq!(store.claim::<Progress>(10), Ok(Vec::new()));
+    assert_eq!(store.claim::<Progress>(10, Moment::ZERO), Ok(Vec::new()));
 }
 
 struct FailsTheFirst;
@@ -297,8 +308,14 @@ fn a_request_that_keeps_failing_does_not_hold_back_the_next_one() {
     let store: Sqlite = captured_payment();
     handle(&store, &id("p-2"), Authorize { amount: cents(500) }).expect("authorized");
     handle(&store, &id("p-2"), Capture { amount: cents(500) }).expect("captured");
-    assert_eq!(ready(relay::<Progress, Sqlite, FailsTheFirst>(&store, &FailsTheFirst, 1, tries(3))), Ok(0));
-    assert_eq!(ready(relay::<Progress, Sqlite, FailsTheFirst>(&store, &FailsTheFirst, 1, tries(3))), Ok(1));
+    assert_eq!(
+        ready(relay::<Progress, Sqlite, FailsTheFirst>(&store, &FailsTheFirst, 1, &tries(3), Moment::ZERO)),
+        Ok(0)
+    );
+    assert_eq!(
+        ready(relay::<Progress, Sqlite, FailsTheFirst>(&store, &FailsTheFirst, 1, &tries(3), Moment::ZERO)),
+        Ok(1)
+    );
 }
 
 struct InStock;
@@ -317,10 +334,10 @@ impl Gateway<FulfilmentRequest> for InStock {
 #[test]
 fn a_performed_reservation_advances_the_fulfilment_to_shipping_and_requests_the_shipment() {
     let store: Sqlite = captured_payment();
-    assert_eq!(ready(relay::<Progress, Sqlite, InStock>(&store, &InStock, 10, tries(3))), Ok(1));
+    assert_eq!(ready(relay::<Progress, Sqlite, InStock>(&store, &InStock, 10, &tries(3), Moment::ZERO)), Ok(1));
     assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version::from(2), Fulfilment::Shipping));
     assert_eq!(
-        store.claim::<Progress>(10),
+        store.claim::<Progress>(10, Moment::ZERO),
         Ok(vec![Claimed {
             id: RequestId::from(2),
             stream: "p-1".to_string(),
@@ -333,9 +350,9 @@ fn a_performed_reservation_advances_the_fulfilment_to_shipping_and_requests_the_
 #[test]
 fn relayed_until_no_request_is_left_the_fulfilment_is_done() {
     let store: Sqlite = captured_payment();
-    assert_eq!(ready(relay::<Progress, Sqlite, InStock>(&store, &InStock, 10, tries(3))), Ok(1));
-    assert_eq!(ready(relay::<Progress, Sqlite, InStock>(&store, &InStock, 10, tries(3))), Ok(1));
-    assert_eq!(ready(relay::<Progress, Sqlite, InStock>(&store, &InStock, 10, tries(3))), Ok(0));
+    assert_eq!(ready(relay::<Progress, Sqlite, InStock>(&store, &InStock, 10, &tries(3), Moment::ZERO)), Ok(1));
+    assert_eq!(ready(relay::<Progress, Sqlite, InStock>(&store, &InStock, 10, &tries(3), Moment::ZERO)), Ok(1));
+    assert_eq!(ready(relay::<Progress, Sqlite, InStock>(&store, &InStock, 10, &tries(3), Moment::ZERO)), Ok(0));
     assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version::from(3), Fulfilment::Done));
 }
 
@@ -345,7 +362,10 @@ fn a_reply_that_stock_is_unavailable_abandons_the_fulfilment() {
     let gateway: Recording = Recording {
         performed: Mutex::new(Vec::new()),
     };
-    assert_eq!(ready(relay::<Progress, Sqlite, Recording>(&store, &gateway, 10, tries(3))), Ok(1));
+    assert_eq!(
+        ready(relay::<Progress, Sqlite, Recording>(&store, &gateway, 10, &tries(3), Moment::ZERO)),
+        Ok(1)
+    );
     assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version::from(2), Fulfilment::Abandoned));
 }
 
@@ -364,17 +384,17 @@ impl Gateway<FulfilmentRequest> for Refuses {
 #[test]
 fn a_request_the_gateway_rejects_is_not_offered_again_and_its_fulfilment_is_abandoned() {
     let store: Sqlite = captured_payment();
-    assert_eq!(ready(relay::<Progress, Sqlite, Refuses>(&store, &Refuses, 10, tries(3))), Ok(0));
-    assert_eq!(store.claim::<Progress>(10), Ok(Vec::new()));
+    assert_eq!(ready(relay::<Progress, Sqlite, Refuses>(&store, &Refuses, 10, &tries(3), Moment::ZERO)), Ok(0));
+    assert_eq!(store.claim::<Progress>(10, Moment::ZERO), Ok(Vec::new()));
     assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version::from(2), Fulfilment::Abandoned));
 }
 
 #[test]
 fn a_request_that_fails_once_under_a_bound_of_two_is_offered_again_with_its_failure_counted() {
     let store: Sqlite = captured_payment();
-    assert_eq!(ready(relay::<Progress, Sqlite, Down>(&store, &Down, 10, tries(2))), Ok(0));
+    assert_eq!(ready(relay::<Progress, Sqlite, Down>(&store, &Down, 10, &tries(2), Moment::ZERO)), Ok(0));
     assert_eq!(
-        store.claim::<Progress>(10),
+        store.claim::<Progress>(10, Moment::ZERO),
         Ok(vec![Claimed {
             id: RequestId::from(1),
             stream: "p-1".to_string(),
@@ -388,25 +408,25 @@ fn a_request_that_fails_once_under_a_bound_of_two_is_offered_again_with_its_fail
 #[test]
 fn a_request_that_fails_as_often_as_the_bound_is_parked_and_its_fulfilment_abandoned() {
     let store: Sqlite = captured_payment();
-    assert_eq!(ready(relay::<Progress, Sqlite, Down>(&store, &Down, 10, tries(2))), Ok(0));
-    assert_eq!(ready(relay::<Progress, Sqlite, Down>(&store, &Down, 10, tries(2))), Ok(0));
-    assert_eq!(store.claim::<Progress>(10), Ok(Vec::new()));
+    assert_eq!(ready(relay::<Progress, Sqlite, Down>(&store, &Down, 10, &tries(2), Moment::ZERO)), Ok(0));
+    assert_eq!(ready(relay::<Progress, Sqlite, Down>(&store, &Down, 10, &tries(2), Moment::ZERO)), Ok(0));
+    assert_eq!(store.claim::<Progress>(10, Moment::ZERO), Ok(Vec::new()));
     assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version::from(2), Fulfilment::Abandoned));
 }
 
 #[test]
 fn under_a_bound_of_one_the_first_failure_parks_the_request() {
     let store: Sqlite = captured_payment();
-    assert_eq!(ready(relay::<Progress, Sqlite, Down>(&store, &Down, 10, tries(1))), Ok(0));
-    assert_eq!(store.claim::<Progress>(10), Ok(Vec::new()));
+    assert_eq!(ready(relay::<Progress, Sqlite, Down>(&store, &Down, 10, &tries(1), Moment::ZERO)), Ok(0));
+    assert_eq!(store.claim::<Progress>(10, Moment::ZERO), Ok(Vec::new()));
     assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version::from(2), Fulfilment::Abandoned));
 }
 
 #[test]
 fn a_shipment_the_gateway_rejects_abandons_the_fulfilment_it_was_shipping() {
     let store: Sqlite = captured_payment();
-    assert_eq!(ready(relay::<Progress, Sqlite, InStock>(&store, &InStock, 10, tries(3))), Ok(1));
-    assert_eq!(ready(relay::<Progress, Sqlite, Refuses>(&store, &Refuses, 10, tries(3))), Ok(0));
+    assert_eq!(ready(relay::<Progress, Sqlite, InStock>(&store, &InStock, 10, &tries(3), Moment::ZERO)), Ok(1));
+    assert_eq!(ready(relay::<Progress, Sqlite, Refuses>(&store, &Refuses, 10, &tries(3), Moment::ZERO)), Ok(0));
     assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version::from(3), Fulfilment::Abandoned));
 }
 
@@ -415,7 +435,7 @@ fn progress_from_outside_advances_the_process_manager_and_issues_its_request() {
     let store: Sqlite = captured_payment();
     assert_eq!(app::advance(&store, &id("p-1"), Progress::StockReserved), Ok(()));
     assert_eq!(state::<Fulfilment>(&store, "p-1"), (Version::from(2), Fulfilment::Shipping));
-    assert_eq!(store.claim::<Progress>(10).map(|claimed| claimed.len()), Ok(2));
+    assert_eq!(store.claim::<Progress>(10, Moment::ZERO).map(|claimed| claimed.len()), Ok(2));
 }
 
 #[test]

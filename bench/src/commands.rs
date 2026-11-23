@@ -9,7 +9,7 @@ use domain::fulfilment::{Fulfilment, Progress};
 use domain::payment::{Amount, Authorize, Capture, Payment};
 use domain::task::{AddTask, CompleteTask, Tally, Task, TaskEvent, TaskTally};
 use domain::{Lifecycle, Projection};
-use ports::{Answer, Journal, Outbox, StoreError, StreamId, Version, View};
+use ports::{Answer, Journal, Moment, Outbox, StoreError, StreamId, Version, View};
 use rusqlite::{Connection, Row, Statement, Transaction};
 
 use crate::fault::Fault;
@@ -177,5 +177,9 @@ pub fn commands(directory: &Path, durability: Durability) -> Result<(), Fault> {
     table("command and what its unit of work writes", &labels, &summaries);
     let calls: u64 = count(CALLS)?;
     same("tally after the added tasks", task_tally(&adding)?, Some(Tally { open: calls, done: 0 }))?;
-    same("outbox requests after the captures", capturing.claim::<Progress>(CALLS + 1)?.len(), CALLS)
+    same(
+        "outbox requests after the captures",
+        capturing.claim::<Progress>(CALLS + 1, Moment::ZERO)?.len(),
+        CALLS,
+    )
 }

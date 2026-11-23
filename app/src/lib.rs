@@ -1,7 +1,8 @@
 use std::num::NonZeroU32;
+use std::time::Duration;
 
 use domain::{Command, Lifecycle, Projection, Reaction, Undelivered};
-use ports::{Answer, Applied, Claimed, Finished, Gateway, GatewayError, Journal, Outbox, Position, Recorded, RequestId, StoreError, StreamId, Unit};
+use ports::{Answer, Applied, Claimed, Finished, Gateway, GatewayError, Journal, Moment, Outbox, Position, Recorded, RequestId, StoreError, StreamId, Unit};
 
 pub mod board;
 pub mod payments;
@@ -91,18 +92,44 @@ pub fn rebuild<J: Journal, P: Projection>(journal: &J, batch: usize) -> Result<u
     })
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Retry {
+    pub attempts: NonZeroU32,
+    pub first: Duration,
+    pub longest: Duration,
+}
+
+impl Retry {
+    /// While no attempt has failed, `wait` shall return no time at all.
+    /// When one attempt has failed, `wait` shall return `first`, and for each failure after it twice the wait before.
+    /// If that is longer than `longest`, then `wait` shall return `longest`.
+    pub fn wait(&self, failures: u64) -> Duration {
+        match failures.checked_sub(1) {
+            None => Duration::ZERO,
+            Some(doublings) => {
+                let factor: u32 = 1u32.checked_shl(u32::try_from(doublings).unwrap_or(u32::MAX)).unwrap_or(u32::MAX);
+                self.first.saturating_mul(factor).min(self.longest)
+            }
+        }
+    }
+
+    fn again(&self, now: Moment, failures: u64) -> Moment {
+        now.after(u64::try_from(self.wait(failures).as_millis()).unwrap_or(u64::MAX))
+    }
+}
+
 fn stranded<S: Lifecycle, K: Journal>(store: &K, request: RequestId, unsettled: &StoreError) -> Result<(), StoreError> {
     store.write(|unit: &mut Unit<'_>| unit.strand::<S>(request, &format!("{unsettled:?}")).map(|_parked: bool| ()))
 }
 
-pub async fn relay<X, K, G>(store: &K, gateway: &G, limit: usize, attempts: NonZeroU32) -> Result<usize, StoreError>
+pub async fn relay<X, K, G>(store: &K, gateway: &G, limit: usize, retry: &Retry, now: Moment) -> Result<usize, StoreError>
 where
     X: Reaction + From<G::Reply> + From<Undelivered<X::Request>>,
     X::Reads: Policy,
     K: Journal + Outbox,
     G: Gateway<X::Request>,
 {
-    let claimed: Vec<Claimed<X::Request>> = store.claim::<X>(limit)?;
+    let claimed: Vec<Claimed<X::Request>> = store.claim::<X>(limit, now)?;
     let mut performed: usize = 0;
     for Claimed {
         id,
@@ -111,11 +138,12 @@ where
         attempts: failures,
     } in claimed
     {
-        let again: bool = failures.saturating_add(1) < u64::from(attempts.get());
+        let failed: u64 = failures.saturating_add(1);
+        let again: bool = failed < u64::from(retry.attempts.get());
         let outcome: Result<G::Reply, GatewayError> = gateway.perform(id, &stream, &request).await;
         let (closed, counted): (Result<usize, StoreError>, bool) = match outcome {
             Ok(reply) => (store.write(|unit: &mut Unit<'_>| resume(unit, id, X::from(reply))).map(|()| 1), again),
-            Err(GatewayError::Unavailable { .. }) if again => (store.failed(id).map(|()| 0), false),
+            Err(GatewayError::Unavailable { .. }) if again => (store.failed(id, retry.again(now, failed)).map(|()| 0), false),
             Err(GatewayError::Unavailable { cause } | GatewayError::Rejected { cause }) => (
                 store
                     .write(|unit: &mut Unit<'_>| abandon(unit, id, &cause, X::from(Undelivered { request })))
@@ -132,7 +160,7 @@ where
                 | StoreError::OutOfOrder { .. }
                 | StoreError::Trimmed { .. }
                 | StoreError::Runaway { .. },
-            ) if counted => store.failed(id)?,
+            ) if counted => store.failed(id, retry.again(now, failed))?,
             Err(
                 unsettled @ (StoreError::Corrupt { .. }
                 | StoreError::Unencodable { .. }

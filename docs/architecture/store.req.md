@@ -20,7 +20,7 @@ their writer and reader in a private field, so nothing outside `ports` reaches a
 shell cannot call `save` or `append`, although the adapter implements them.
 
 ```rust
-use crate::{Position, RequestId, StoreError, Version};
+use crate::{Moment, Position, RequestId, StoreError, Version};
 
 pub struct Key(());
 
@@ -81,8 +81,8 @@ pub trait Store {
     fn transact<T>(&self, key: Key, work: impl FnOnce(&mut dyn Writer) -> Result<T, StoreError>) -> Result<T, StoreError>;
     fn snapshot<T>(&self, key: Key, work: impl FnOnce(&mut dyn Reader) -> Result<T, StoreError>) -> Result<T, StoreError>;
     fn committed(&self, key: Key, last: Position);
-    fn requests(&self, key: Key, lifecycle: &'static str, limit: usize) -> Result<Vec<StoredRequest>, StoreError>;
-    fn mark_failed(&self, key: Key, id: RequestId) -> Result<(), StoreError>;
+    fn requests(&self, key: Key, lifecycle: &'static str, limit: usize, now: Moment) -> Result<Vec<StoredRequest>, StoreError>;
+    fn mark_failed(&self, key: Key, id: RequestId, again: Moment) -> Result<(), StoreError>;
 }
 ```
 

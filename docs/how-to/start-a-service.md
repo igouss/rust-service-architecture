@@ -39,7 +39,8 @@ form you are copying.
 6. If a process manager of yours issues requests, write a `Gateway` for each receiver, with
    the `Reply` it answers, `impl From<ThatReply>` and `impl From<Undelivered<ThatRequest>>`
    for the process manager's `Reaction`, and run `app::relay` on a thread of its own with the
-   number of attempts a request gets ([`arch-w0v`](../architecture/shell.req.md)). A result
+   number of attempts a request gets, the waits between them (`app::Retry`) and the moment
+   your composition root reads from its clock ([`arch-w0v`](../architecture/shell.req.md)). A result
    that arrives later than the call comes back through `app::advance`.
 
 ## The mutants after the examples are gone

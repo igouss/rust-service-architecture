@@ -5,7 +5,7 @@ use std::sync::Arc;
 use std::thread;
 
 use ports::store::{Key, Listener, Reader, Store, StoredRequest, Writer};
-use ports::{Position, RequestId, StoreError};
+use ports::{Moment, Position, RequestId, StoreError};
 use postgres::error::DbError;
 use postgres::{Client, NoTls, Row};
 use r2d2::{ManageConnection, Pool, PooledConnection};
@@ -301,10 +301,11 @@ impl Store for Postgres {
         }
     }
 
-    fn requests(&self, _key: Key, lifecycle: &'static str, limit: usize) -> Result<Vec<StoredRequest>, StoreError> {
+    fn requests(&self, _key: Key, lifecycle: &'static str, limit: usize, now: Moment) -> Result<Vec<StoredRequest>, StoreError> {
         let limit: i64 = i64::try_from(limit).unwrap_or(i64::MAX);
+        let now: i64 = now.stored();
         self.checked()?
-            .call(move |client: &mut Client, statements: &Statements| client.query(&statements.requests, &[&lifecycle, &limit]))?
+            .call(move |client: &mut Client, statements: &Statements| client.query(&statements.requests, &[&lifecycle, &limit, &now]))?
             .iter()
             .map(|row: &Row| {
                 Ok(StoredRequest {
@@ -317,10 +318,11 @@ impl Store for Postgres {
             .collect()
     }
 
-    fn mark_failed(&self, _key: Key, id: RequestId) -> Result<(), StoreError> {
+    fn mark_failed(&self, _key: Key, id: RequestId, again: Moment) -> Result<(), StoreError> {
         let id: i64 = id.stored();
+        let again: i64 = again.stored();
         self.checked()?
-            .call(move |client: &mut Client, statements: &Statements| client.execute(&statements.failed, &[&id]))
+            .call(move |client: &mut Client, statements: &Statements| client.execute(&statements.failed, &[&id, &again]))
             .map(|_changed: u64| ())
     }
 }

@@ -125,7 +125,8 @@ Participants: `Gateway::Reply`, `app::relay`, `app::resume`, `Unit::finish`, `Wr
 If a gateway rejects a request, or has been unavailable for it as often as the relay's bound
 allows, then the system shall park the request, record the cause, and apply to the lifecycle
 that issued it the reaction built from `Undelivered`, in one unit of work. While a request has
-failed less often than the bound and was not rejected, the system shall offer it again.
+failed less often than the bound and was not rejected, the system shall offer it again, and
+not before the wait that its count of failures gives has passed since the failure.
 
 If the unit that applies a reply fails and the store is neither unavailable nor misconfigured,
 then the system shall count a failed attempt, and shall go on to the next request. If that
@@ -142,6 +143,7 @@ Participants: `GatewayError`, `domain::Undelivered`, `app::relay`, `app::abandon
 - `arch-22kr.4` A parked request is closed once, like a finished one: `a_request_parked_twice_applies_its_reaction_once`, `a_request_finished_and_parked_in_one_unit_applies_only_the_first_reaction`, `a_unit_that_fails_after_parking_a_request_leaves_it_claimable`.
 - `arch-22kr.5` A parked request can be read where the store keeps it, with its cause and its attempts: `a_parked_request_is_read_with_sql_with_its_cause_and_its_attempts` for SQLite and Postgres, `a_parked_request_is_held_as_parked_with_its_cause_and_its_attempts` for memory (mutants T70 to T75).
 - `arch-22kr.6` A reply whose unit fails is counted, does not hold back the next request, and at the bound is parked with nothing applied: `a_reply_whose_unit_fails_is_counted_and_offered_again`, `a_request_behind_one_whose_unit_fails_is_performed_in_the_same_pass`, `a_reply_whose_unit_fails_as_often_as_the_bound_parks_the_request_and_tells_nothing` (mutants T83 to T85).
+- `arch-22kr.8` A failed request is put off for a wait that doubles with each failure up to a longest wait, and no store hands it out before that moment: `each_further_failure_doubles_the_wait`, `the_wait_is_never_longer_than_the_longest`, `a_failed_request_is_not_performed_again_before_its_wait_is_over`, `five_passes_half_a_second_apart_leave_a_fulfilment_reserving`, `a_request_put_off_is_not_claimed_before_its_moment`, `a_request_put_off_is_claimed_at_its_moment` (mutants T87 to T92).
 - `arch-22kr.7` A request whose lifecycle cannot be told is parked all the same, with a cause: `a_rejected_request_whose_lifecycle_cannot_be_told_is_parked_all_the_same`, `a_stranded_request_is_not_claimed_again_and_applies_nothing`, `a_stranded_request_is_held_as_parked_with_its_cause` (mutant T86).
 
 ## `arch-oif` A read model shall hold exactly the fold of its lifecycle's facts up to its position
