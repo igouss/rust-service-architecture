@@ -1,0 +1,91 @@
+[[mutant]]
+name = "H1 a refusal is answered as accepted"
+path = "adapter-http/src/lib.rs"
+anchor = "(StatusCode::CONFLICT, refusal_name(refusal)).into_response()"
+replacement = "(StatusCode::NO_CONTENT, refusal_name(refusal)).into_response()"
+example = true
+expect = "test"
+
+[[mutant]]
+name = "H2 a task id is not minted per request"
+path = "adapter-http/src/lib.rs"
+anchor = "StreamId::new(Uuid::now_v7().to_string())"
+replacement = "StreamId::new(Uuid::nil().to_string())"
+example = true
+expect = "test"
+
+[[mutant]]
+name = "H10 a creation ignores its idempotency key"
+path = "adapter-http/src/lib.rs"
+anchor = """
+.map(|key: Uuid| StreamId::new(key.to_string()))
+            .ok_or(BadInput::MalformedKey),"""
+replacement = """
+.map(|_key: Uuid| StreamId::new(Uuid::now_v7().to_string()))
+            .ok_or(BadInput::MalformedKey),"""
+example = true
+expect = "test"
+
+[[mutant]]
+name = "H11 a key that is not a UUID is replaced by a minted id"
+path = "adapter-http/src/lib.rs"
+anchor = ".ok_or(BadInput::MalformedKey),"
+replacement = ".map_or_else(|| Ok(StreamId::new(Uuid::now_v7().to_string())), Ok),"
+example = true
+expect = "test"
+
+[[mutant]]
+name = "H3 a title reaches the page unescaped"
+path = "adapter-http/src/lib.rs"
+anchor = "escape(title.as_str()),"
+replacement = "title.as_str(),"
+example = true
+expect = "test"
+
+[[mutant]]
+name = "H4 a unit of work runs on the executor"
+path = "adapter-http/src/lib.rs"
+anchor = "= tokio::task::spawn_blocking(move || work(&journal)).await;"
+replacement = "= Ok(work(&journal));"
+example = true
+expect = "test"
+
+[[mutant]]
+name = "H5 a line break in a title starts a new event line"
+path = "adapter-http/src/lib.rs"
+anchor = ''''\n' => escaped.push_str("&#10;"),'''
+replacement = ''''\n' => escaped.push('\n'),'''
+example = true
+expect = "test"
+
+[[mutant]]
+name = "H6 an open stream outlives a stop"
+path = "adapter-http/src/lib.rs"
+anchor = "wait_for(|stopped: &bool| *stopped)"
+replacement = "wait_for(|stopped: &bool| *stopped && !*stopped)"
+example = true
+expect = "test"
+
+[[mutant]]
+name = "H7 a store error is answered and not logged"
+path = "adapter-http/src/lib.rs"
+anchor = 'tracing::error!(parent: span, error = ?error, "{message}");'
+replacement = "let _unlogged: (&StoreError, &'static str) = (error, message);"
+example = true
+expect = "test"
+
+[[mutant]]
+name = "H8 a refusal is logged as accepted"
+path = "adapter-http/src/lib.rs"
+anchor = 'span.record("outcome", "refused");'
+replacement = 'span.record("outcome", "accepted");'
+example = true
+expect = "test"
+
+[[mutant]]
+name = "H9 a request body is logged"
+path = "adapter-http/src/lib.rs"
+anchor = 'span.record("command", "AddTask");'
+replacement = 'span.record("command", String::from_utf8_lossy(&body).as_ref());'
+example = true
+expect = "test"

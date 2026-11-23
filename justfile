@@ -103,7 +103,7 @@ views-current:
 
 [doc("Continuous integration only: plant every architecture mutant and require each to die as stated.")]
 mutants:
-    python3 mutants.py
+    cargo run -q -p gates -- mutants
 
 [doc("Continuous integration only: native mutation of the core.")]
 mutants-core:

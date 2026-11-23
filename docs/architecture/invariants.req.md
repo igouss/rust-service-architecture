@@ -6,7 +6,7 @@ prefix: arch
 
 Every service built on this architecture holds these. Each acceptance criterion names the
 check that decides it. A mutant named `C…` must fail to compile and one named `T…` must fail a
-test; `python3 mutants.py` plants every one listed in `planted/` and exits non-zero unless each
+test; `just mutants` plants every one listed in `planted/` and exits non-zero unless each
 dies as stated.
 
 ## `arch-30c` The system shall apply exactly one outcome per handled command

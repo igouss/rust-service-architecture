@@ -23,7 +23,7 @@
       docs (sort (fs/glob guide "*.req.md"))
       sources (->> (fs/glob workspace "*/src/**.rs") (map (comp normalize slurp str)))
       rust (->> (fs/glob workspace "*/{src,tests}/**.rs") (map (comp slurp str)) (str/join "\n"))
-      planted (set (map second (re-seq #"\(\"([CTGH]\d+) " (str/join "\n" (map (comp slurp str) (fs/glob workspace "planted/*.py"))))))
+      planted (set (map second (re-seq #"(?m)^name = \"([CTGH]\d+) " (str/join "\n" (map (comp slurp str) (fs/glob workspace "planted/*.toml"))))))
       missing (for [doc docs
                     [index block] (map-indexed vector (rust-blocks (slurp (str doc))))
                     :when (not-any? #(str/includes? % (open-ended (normalize block))) sources)]
@@ -34,7 +34,7 @@
                              (for [test (cited-tests text) :when (not (str/includes? rust (str "fn " test "(")))]
                                (str "names a test that does not exist: " test))
                              (for [mutant (cited-mutants text) :when (not (planted mutant))]
-                               (str "names a mutant that mutants.py does not plant: " mutant)))]
+                               (str "names a mutant that planted/ does not hold: " mutant)))]
                 (str (fs/file-name doc) " " problem))
       total (count (mapcat (comp rust-blocks slurp str) docs))]
   (run! println missing)

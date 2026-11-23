@@ -1,0 +1,488 @@
+[[mutant]]
+name = "G1 a driven adapter depends on the shell"
+path = "adapter-sqlite/Cargo.toml"
+anchor = 'ports = { path = "../ports" }'
+replacement = """
+ports = { path = "../ports" }
+app = { path = "../app" }"""
+
+[mutant.expect]
+gate = ["hex-lint"]
+names = "adapter-sqlite"
+
+[[mutant]]
+name = "G10 a store adapter depends on a serializer"
+path = "adapter-sqlite/Cargo.toml"
+anchor = 'ports = { path = "../ports" }'
+replacement = """
+ports = { path = "../ports" }
+serde_json = { workspace = true }"""
+
+[mutant.expect]
+gate = [
+    "just",
+    "raw-store",
+]
+names = "adapter-sqlite depends on serde_json"
+
+[[mutant]]
+name = "G11 a store adapter does not run the conformance suite"
+path = "adapter-memory/tests/conformance.rs"
+anchor = 'include!("../../ports/tests/conformance/suite.rs");'
+replacement = ""
+
+[mutant.expect]
+gate = [
+    "just",
+    "raw-store",
+]
+names = "adapter-memory implements Store and does not include the conformance suite"
+
+[[mutant]]
+name = "G12 an event says only that something changed"
+path = "domain/src/task.rs"
+anchor = """
+pub enum TaskEvent {
+    Added { title: Title },
+    Completed,"""
+replacement = """
+pub enum TaskEvent {
+    Added { title: Title },
+    Updated,"""
+example = true
+
+[mutant.expect]
+gate = [
+    "just",
+    "events",
+]
+names = "TaskEvent::Updated"
+
+[[mutant]]
+name = "G13 an event is the lifecycle's name and a generic verb"
+path = "domain/src/task.rs"
+anchor = """
+pub enum TaskEvent {
+    Added { title: Title },
+    Completed,"""
+replacement = """
+pub enum TaskEvent {
+    Added { title: Title },
+    TaskChanged,"""
+example = true
+
+[mutant.expect]
+gate = [
+    "just",
+    "events",
+]
+names = "TaskEvent::TaskChanged"
+
+[[mutant]]
+name = "G8 a driving adapter depends on a driven adapter"
+path = "adapter-http/Cargo.toml"
+anchor = 'ports = { path = "../ports" }'
+replacement = """
+ports = { path = "../ports" }
+adapter-sqlite = { path = "../adapter-sqlite" }"""
+
+[mutant.expect]
+gate = ["hex-lint"]
+names = "adapter-http"
+
+[[mutant]]
+name = "G2 the core reads the clock"
+path = "domain/src/lib.rs"
+anchor = "pub type Facts<S> = Vec<<S as Lifecycle>::Event>;"
+replacement = """
+pub fn now() -> std::time::SystemTime {
+    std::time::SystemTime::now()
+}
+
+pub type Facts<S> = Vec<<S as Lifecycle>::Event>;"""
+
+[mutant.expect]
+gate = [
+    "effect-audit",
+    "--require-domain",
+    "--strict",
+    ".",
+]
+names = "clock"
+
+[[mutant]]
+name = "G3 the core takes a dependency it does not vouch for"
+path = "domain/Cargo.toml"
+anchor = """
+[dependencies]
+serde = { workspace = true }"""
+replacement = """
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }"""
+
+[mutant.expect]
+gate = [
+    "effect-audit",
+    "--require-domain",
+    "--strict",
+    ".",
+]
+names = "serde_json"
+
+[[mutant]]
+name = "G4 the core runs async code"
+path = "domain/src/lib.rs"
+anchor = "pub type Facts<S> = Vec<<S as Lifecycle>::Event>;"
+replacement = """
+pub async fn later() {}
+
+pub type Facts<S> = Vec<<S as Lifecycle>::Event>;"""
+
+[mutant.expect]
+gate = [
+    "effect-audit",
+    "--require-domain",
+    "--strict",
+    ".",
+]
+names = "async"
+
+[[mutant]]
+name = "G5 a comment explains code"
+path = "app/src/lib.rs"
+anchor = "pub trait Policy: Lifecycle {"
+replacement = """
+// names the readers
+pub trait Policy: Lifecycle {"""
+
+[mutant.expect]
+gate = [
+    "just",
+    "comments",
+]
+names = "arch-0d2"
+
+[[mutant]]
+name = "G6 a match on an enum has a wildcard arm"
+path = "domain/src/task.rs"
+anchor = "Task::Open { .. } | Task::Done { .. } => Err(TaskRefusal::AlreadyExists),"
+replacement = "_ => Err(TaskRefusal::AlreadyExists),"
+example = true
+
+[mutant.expect]
+gate = [
+    "cargo",
+    "clippy",
+    "-q",
+    "--all-targets",
+    "--",
+    "-D",
+    "warnings",
+]
+names = "wildcard_enum_match_arm"
+
+[[mutant]]
+name = "G9 a lint is silenced where it fires"
+path = "app/src/lib.rs"
+anchor = "pub trait Policy: Lifecycle {"
+replacement = """
+#[allow(dead_code)]
+pub trait Policy: Lifecycle {"""
+
+[mutant.expect]
+gate = [
+    "just",
+    "allows",
+]
+names = "arch-tsu"
+
+[[mutant]]
+name = "G7 a rule document shows code the workspace does not hold"
+path = "ports/src/lib.rs"
+anchor = "pub struct $name(u64);"
+replacement = "pub struct $name(u32);"
+
+[mutant.expect]
+gate = [
+    "bb",
+    "guide-sync.bb",
+]
+names = "arch-ajd"
+
+[[mutant]]
+name = "G14 a comment trails code"
+path = "app/src/lib.rs"
+anchor = "pub trait Policy: Lifecycle {"
+replacement = "pub trait Policy: Lifecycle { // the policies"
+
+[mutant.expect]
+gate = [
+    "just",
+    "comments",
+]
+names = "// the policies"
+
+[[mutant]]
+name = "G15 a block comment explains code"
+path = "app/src/lib.rs"
+anchor = "pub trait Policy: Lifecycle {"
+replacement = """
+/* the policies */
+pub trait Policy: Lifecycle {"""
+
+[mutant.expect]
+gate = [
+    "just",
+    "comments",
+]
+names = "/* the policies */"
+
+[[mutant]]
+name = "G16 a lint is silenced by expect"
+path = "app/src/lib.rs"
+anchor = "pub trait Policy: Lifecycle {"
+replacement = """
+#[expect(unused_imports)]
+pub trait Policy: Lifecycle {"""
+
+[mutant.expect]
+gate = [
+    "just",
+    "allows",
+]
+names = "#[expect(unused_imports)]"
+
+[[mutant]]
+name = "G17 a lint is silenced under cfg_attr"
+path = "app/src/lib.rs"
+anchor = "pub trait Policy: Lifecycle {"
+replacement = """
+#[cfg_attr(all(), allow(unused_imports))]
+pub trait Policy: Lifecycle {"""
+
+[mutant.expect]
+gate = [
+    "just",
+    "allows",
+]
+names = "#[cfg_attr(all(), allow(unused_imports))]"
+
+[[mutant]]
+name = "G18 a test file silences a lint the tests do not need silenced"
+path = "domain/tests/stored_encoding.rs"
+anchor = "#![allow(clippy::expect_used, clippy::panic)]"
+replacement = "#![allow(clippy::expect_used, clippy::panic, clippy::wildcard_enum_match_arm)]"
+
+[mutant.expect]
+gate = [
+    "just",
+    "allows",
+]
+names = "arch-tsu: domain/tests/stored_encoding.rs:1 #![allow(clippy::expect_used, clippy::panic, clippy::wildcard_enum_match_arm)]"
+
+[[mutant]]
+name = "G19 a tuple match has a wildcard element"
+path = "domain/src/task.rs"
+anchor = "| (s @ Task::Done { .. }, TaskEvent::Added { .. } | TaskEvent::Completed) => s,"
+replacement = "| (s @ Task::Done { .. }, _) => s,"
+example = true
+
+[mutant.expect]
+gate = [
+    "just",
+    "wildcards",
+]
+names = "arch-j0k: domain/src/task.rs `(s @ Task::Done { .. }, _)`"
+
+[[mutant]]
+name = "G20 a feature declares a new kind of thing"
+path = "app/src/tasks.rs"
+anchor = """
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskBoard {"""
+replacement = """
+pub trait Board {
+    fn open(&self) -> usize;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TaskBoard {"""
+example = true
+
+[mutant.expect]
+gate = [
+    "just",
+    "traits",
+]
+names = "trait Board"
+
+[[mutant]]
+name = "G21 an evolve arm is not one the view can draw"
+path = "domain/src/task.rs"
+anchor = "| (s @ Task::Done { .. }, TaskEvent::Added { .. } | TaskEvent::Completed) => s,"
+replacement = "| (s @ Task::Done { .. }, TaskEvent::Added { .. } | TaskEvent::Completed) => reopened(s),"
+example = true
+
+[mutant.expect]
+gate = [
+    "just",
+    "views-current",
+]
+names = "`reopened(s)` is neither a state nor the state it was given"
+
+[[mutant]]
+name = "G22 a lifecycle is written in a form the scans do not read"
+path = "domain/src/task.rs"
+anchor = "type Event = TaskEvent;"
+replacement = "type Event = crate::task::TaskEvent;"
+example = true
+
+[mutant.expect]
+gate = [
+    "just",
+    "events",
+]
+names = "read as `impl Lifecycle for State"
+
+[[mutant]]
+name = "G23 a lifecycle's event enum is not where the scan looks"
+path = "domain/src/task.rs"
+anchor = "pub enum TaskEvent {"
+replacement = "pub enum TaskFact {"
+example = true
+
+[mutant.expect]
+gate = [
+    "just",
+    "events",
+]
+names = "TaskEvent is declared 0 times"
+
+[[mutant]]
+name = "G24 a stored type gains a variant that no test pins"
+path = "domain/src/fulfilment.rs"
+anchor = """
+pub enum FulfilmentRequest {
+    ReserveStock,
+    Ship,"""
+replacement = """
+pub enum FulfilmentRequest {
+    ReserveStock,
+    Ship,
+    Cancel,"""
+example = true
+expect = "E0004"
+
+[[mutant]]
+name = "G25 a stored variant has no pinned sample"
+path = "domain/src/fulfilment.rs"
+anchor = """
+pub enum FulfilmentRequest {
+    ReserveStock,
+    Ship,"""
+replacement = """
+pub enum FulfilmentRequest {
+    ReserveStock,
+    Ship,
+    Cancel,"""
+example = true
+
+[mutant.expect]
+gate = [
+    "just",
+    "stored",
+]
+names = "does not pin FulfilmentRequest::Cancel"
+
+[[mutant]]
+name = "G28 two lifecycles share a name"
+path = "domain/src/fulfilment.rs"
+anchor = """const NAME: &'static str = "fulfilment";"""
+replacement = """const NAME: &'static str = "payment";"""
+example = true
+
+[mutant.expect]
+gate = [
+    "just",
+    "names",
+]
+names = 'two lifecycles are named "payment"'
+
+[[mutant]]
+name = "G29 a lifecycle's name is not a literal the scan reads"
+path = "domain/src/task.rs"
+anchor = """const NAME: &'static str = "task";"""
+replacement = """const NAME: &'static str = concat!("ta", "sk");"""
+example = true
+
+[mutant.expect]
+gate = [
+    "just",
+    "names",
+]
+names = "the scan needs exactly one"
+
+[[mutant]]
+name = "G30 two projections share a name"
+path = "domain/src/task.rs"
+anchor = """
+pub struct TaskTally;
+"""
+replacement = """
+pub struct TaskTally;
+
+pub struct Other;
+
+impl Projection for Other {
+    const NAME: &'static str = "task_tally_v1";
+}
+"""
+example = true
+
+[mutant.expect]
+gate = [
+    "just",
+    "names",
+]
+names = 'two projections are named "task_tally_v1"'
+
+[[mutant]]
+name = "G26 a store adapter's conformance suite is built under a feature nobody sets"
+path = "adapter-postgres/Cargo.toml"
+anchor = """
+[[test]]
+name = "conformance"
+required-features = ["server"]"""
+replacement = """
+[[test]]
+name = "conformance"
+required-features = ["server", "unbuilt"]"""
+
+[mutant.expect]
+gate = [
+    "cargo",
+    "run",
+    "-q",
+    "-p",
+    "gates",
+    "--",
+    "raw-store",
+    "--ran",
+    "adapter-postgres",
+    "server",
+]
+names = "adapter-postgres ran 0 of the"
+
+[[mutant]]
+name = "G27 a gate tool is installed from a branch"
+path = ".github/workflows/ci.yml"
+anchor = "cargo install --locked --git https://github.com/igouss/req --rev 7ccd79b74ee037ca6aac6ac566fa0805fab262bb"
+replacement = "cargo install --locked --git https://github.com/igouss/req"
+
+[mutant.expect]
+gate = [
+    "just",
+    "pins",
+]
+names = "igouss/req names no --rev"

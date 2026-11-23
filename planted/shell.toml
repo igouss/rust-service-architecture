@@ -1,0 +1,362 @@
+[[mutant]]
+name = "C1 a state is applied in place of an outcome"
+path = "app/src/lib.rs"
+anchor = "let applied: Applied<C::Reads> = unit.apply(id, |state: C::Reads| ports::decide(command, state))?;"
+replacement = "let applied: Applied<C::Reads> = unit.apply(id, |state: C::Reads| state)?;"
+expect = "E0308"
+
+[[mutant]]
+name = "C2 a transition is built outside ports"
+path = "app/src/lib.rs"
+anchor = "let applied: Applied<X::Reads> = unit.apply(id, |state: X::Reads| ports::react(progress, state))?;"
+replacement = "let applied: Applied<X::Reads> = unit.apply(id, |state: X::Reads| ports::Outcome::<X::Reads, X::Request>::Accepted(ports::Transition { state, events: Vec::new(), requests: Vec::new() }))?;"
+expect = "E0451"
+
+[[mutant]]
+name = "C3 the private fold is called outside ports"
+path = "app/src/lib.rs"
+anchor = "let applied: Applied<X::Reads> = unit.apply(id, |state: X::Reads| ports::react(progress, state))?;"
+replacement = "let applied: Applied<X::Reads> = unit.apply(id, |state: X::Reads| ports::Outcome::<X::Reads, X::Request>::Accepted(ports::Transition::fold(state, Vec::new(), Vec::new())))?;"
+expect = "E0624"
+
+[[mutant]]
+name = "C4 a change is built outside ports"
+path = "app/src/lib.rs"
+anchor = "unit.put(ports::project::<P>(row, fact))"
+replacement = "unit.put(ports::Change::<P> { position: fact.position(), write: ports::Write::Nothing })"
+expect = "E0451"
+
+[[mutant]]
+name = "C5 an outcome is computed and dropped"
+path = "app/src/lib.rs"
+anchor = "let applied: Applied<C::Reads> = unit.apply(id, |state: C::Reads| ports::decide(command, state))?;"
+replacement = "ports::decide(domain::task::CompleteTask, domain::task::Task::Absent); let applied: Applied<C::Reads> = unit.apply(id, |state: C::Reads| ports::decide(command, state))?;"
+example = true
+expect = "unused"
+
+[[mutant]]
+name = "C6 applied facts never reach a policy"
+path = "app/src/lib.rs"
+anchor = """
+let applied: Applied<X::Reads> = unit.apply(id, |state: X::Reads| ports::react(progress, state))?;
+    settle(unit, applied).map(|_answer: Answer<<X::Reads as Lifecycle>::Refusal>| ())"""
+replacement = """
+unit.apply(id, |state: X::Reads| ports::react(progress, state))?;
+    Ok(())"""
+expect = "unused"
+
+[[mutant]]
+name = "C7 a change is computed and never put"
+path = "app/src/lib.rs"
+anchor = "unit.put(ports::project::<P>(row, fact))"
+replacement = "{ ports::project::<P>(row, fact); Ok(()) }"
+expect = "unused"
+
+[[mutant]]
+name = "C8 a lifecycle has no policy"
+path = "app/src/tasks.rs"
+anchor = """
+impl Policy for Task {
+    fn after(unit: &mut Unit<'_>, fact: &Recorded<Task>) -> Result<(), StoreError> {
+        project::<TaskTally>(unit, fact)
+    }
+}"""
+replacement = "pub fn unused_task_event(_fact: &Recorded<Task>) {}"
+example = true
+expect = "E0277"
+
+[[mutant]]
+name = "C9 a command issues a request"
+path = "domain/src/task.rs"
+anchor = "Task::Open { .. } => Ok(vec![TaskEvent::Completed]),"
+replacement = "Task::Open { .. } => Ok(crate::Step { events: vec![TaskEvent::Completed], requests: vec![()] }),"
+example = true
+expect = "E0308"
+
+[[mutant]]
+name = "C10 a fact is built outside ports"
+path = "app/src/tasks.rs"
+anchor = """
+        project::<TaskTally>(unit, fact)
+"""
+replacement = """
+        project::<TaskTally>(unit, &Recorded { position: ports::Position::from(1), stream: fact.stream().clone(), version: fact.version(), event: domain::task::TaskEvent::Completed })
+"""
+example = true
+expect = "E0451"
+
+[[mutant]]
+name = "C11 the key to the raw store is built outside ports"
+path = "app/src/lib.rs"
+anchor = "pub trait Policy: Lifecycle {"
+replacement = """
+pub fn key() -> ports::store::Key {
+    ports::store::Key(())
+}
+
+pub trait Policy: Lifecycle {"""
+expect = "E0603"
+
+[[mutant]]
+name = "C12 the key to the raw store is minted outside ports"
+path = "app/src/lib.rs"
+anchor = "pub trait Policy: Lifecycle {"
+replacement = """
+pub fn key() -> ports::store::Key {
+    ports::store::Key::new()
+}
+
+pub trait Policy: Lifecycle {"""
+expect = "E0624"
+
+[[mutant]]
+name = "C13 a unit of work is built around a raw writer outside ports"
+path = "app/src/lib.rs"
+anchor = "pub trait Policy: Lifecycle {"
+replacement = """
+pub fn unit(store: &mut dyn ports::store::Writer) -> Unit<'_> {
+    Unit { store, last: None, applied: 0 }
+}
+
+pub trait Policy: Lifecycle {"""
+expect = "E0451"
+
+[[mutant]]
+name = "T1 the stored state is not the fold of the facts"
+path = "ports/src/lib.rs"
+anchor = "let state: S = events.iter().fold(state, S::evolve);"
+replacement = "let state: S = events.iter().fold(state, |state: S, _event: &S::Event| state);"
+expect = "test"
+
+[[mutant]]
+name = "T2 a refusal is not recorded"
+path = "ports/src/lib.rs"
+anchor = 'self.store.reject(S::NAME, id.as_str(), &encode("rejections", &refusal)?)?;'
+replacement = 'let _unrecorded: String = encode("rejections", &refusal)?;'
+expect = "test"
+
+[[mutant]]
+name = "T3 the state row is not written"
+path = "ports/src/lib.rs"
+anchor = "if next != version {"
+replacement = "if false {"
+expect = "test"
+
+[[mutant]]
+name = "T7 a read model accepts a change out of order"
+path = "ports/src/lib.rs"
+anchor = "if position <= at {"
+replacement = "if false {"
+expect = "test"
+
+[[mutant]]
+name = "T10 a policy skips its projection"
+path = "app/src/tasks.rs"
+anchor = """
+        project::<TaskTally>(unit, fact)
+"""
+replacement = """
+        Ok(()).map(|ok: ()| { let _unused: (&mut Unit<'_>, &Recorded<Task>) = (unit, fact); ok })
+"""
+example = true
+expect = "test"
+
+[[mutant]]
+name = "T11 a policy skips its process manager"
+path = "app/src/payments.rs"
+anchor = "PaymentEvent::Captured { .. } => react(unit, &fulfilment_of(fact.stream()), Progress::PaymentCaptured),"
+replacement = "PaymentEvent::Captured { .. } => Ok(()).map(|ok: ()| { let _unused: (&mut Unit<'_>, Progress) = (unit, Progress::PaymentCaptured); ok }),"
+example = true
+expect = "test"
+
+[[mutant]]
+name = "T12 applied facts skip the policy"
+path = "app/src/lib.rs"
+anchor = "S::after(unit, fact)?;"
+replacement = "let _skipped: &Recorded<S> = fact;"
+expect = "test"
+
+[[mutant]]
+name = "T13 a projection folds without its previous row"
+path = "app/src/lib.rs"
+anchor = "Some(key) => unit.row::<P>(&key)?,"
+replacement = "Some(_key) => None,"
+expect = "test"
+
+[[mutant]]
+name = "T14 a failed request is marked done"
+path = "adapter-sqlite/src/lib.rs"
+anchor = '"UPDATE outbox SET attempts = attempts + 1 WHERE id = ?1"'
+replacement = '"UPDATE outbox SET done = 1 WHERE id = ?1"'
+expect = "test"
+
+[[mutant]]
+name = "T15 the relay never finishes a request"
+path = "app/src/lib.rs"
+anchor = "store.write(|unit: &mut Unit<'_>| resume(unit, id, X::from(reply)))?;"
+replacement = "let _dropped: G::Reply = reply;"
+expect = "test"
+
+[[mutant]]
+name = "C14 the facts of a finished request never reach a policy"
+path = "app/src/lib.rs"
+anchor = """
+let finished: Finished<X::Reads> = unit.finish(request, |state: X::Reads| ports::react(progress, state))?;
+    closed(unit, finished)"""
+replacement = """
+unit.finish(request, |state: X::Reads| ports::react(progress, state))?;
+    Ok(())"""
+expect = "unused"
+
+[[mutant]]
+name = "T66 the relay offers a rejected request again"
+path = "app/src/lib.rs"
+anchor = "Err(GatewayError::Unavailable { .. }) if failures"
+replacement = "Err(GatewayError::Unavailable { .. } | GatewayError::Rejected { .. }) if failures"
+expect = "test"
+
+[[mutant]]
+name = "T67 the relay never parks a request"
+path = "app/src/lib.rs"
+anchor = "failures.saturating_add(1) < u64::from(attempts.get())"
+replacement = "failures.saturating_add(1) < u64::MAX"
+expect = "test"
+
+[[mutant]]
+name = "T68 the relay parks a request at its first failure"
+path = "app/src/lib.rs"
+anchor = "failures.saturating_add(1) < u64::from(attempts.get())"
+replacement = "failures.saturating_add(1) < 1"
+expect = "test"
+
+[[mutant]]
+name = "T69 the relay allows one attempt more than the bound"
+path = "app/src/lib.rs"
+anchor = "failures.saturating_add(1) < u64::from(attempts.get())"
+replacement = "failures.saturating_add(1) <= u64::from(attempts.get())"
+expect = "test"
+
+[[mutant]]
+name = "C17 a payment's id is handed to the fulfilment's reaction"
+path = "app/src/payments.rs"
+anchor = "react(unit, &fulfilment_of(fact.stream()), Progress::PaymentCaptured)"
+replacement = "react(unit, fact.stream(), Progress::PaymentCaptured)"
+example = true
+expect = "E0271"
+
+[[mutant]]
+name = "C18 a payment's id is handed to a task's command"
+path = "adapter-http/src/lib.rs"
+anchor = "    match stream_id::<Task>(&id) {"
+replacement = "    match stream_id::<domain::payment::Payment>(&id) {"
+example = true
+expect = "E0271"
+
+[[mutant]]
+name = "T81 a unit of work allows one outcome more than its bound"
+path = "ports/src/lib.rs"
+anchor = "pub const OUTCOMES: u32 = 32;"
+replacement = "pub const OUTCOMES: u32 = 33;"
+expect = "test"
+
+[[mutant]]
+name = "T82 the bound on a unit's outcomes is checked one outcome late"
+path = "ports/src/lib.rs"
+anchor = "if self.applied == Unit::OUTCOMES {"
+replacement = "if self.applied > Unit::OUTCOMES {"
+expect = "test"
+
+[[mutant]]
+name = "T65 a finished request applies no reaction"
+path = "ports/src/lib.rs"
+anchor = "Some(stream) => self.apply(&StreamId::new(stream), decide).map(Finished::Applied),"
+replacement = "Some(_stream) => Ok(Finished::Already),"
+expect = "test"
+
+[[mutant]]
+name = "T18 a rebuild keeps the old rows"
+path = "app/src/lib.rs"
+anchor = "unit.clear::<P>()?;"
+replacement = ""
+expect = "test"
+
+[[mutant]]
+name = "T19 requests are not written to the outbox"
+path = "ports/src/lib.rs"
+anchor = "for request in &requests {"
+replacement = "for request in requests.iter().take(0) {"
+expect = "test"
+
+[[mutant]]
+name = "T20 a stored fact changes its encoding"
+path = "domain/src/task.rs"
+anchor = """
+pub enum TaskEvent {
+    Added { title: Title },
+    Completed,"""
+replacement = """
+pub enum TaskEvent {
+    Added { title: Title },
+    #[serde(rename = "Finished")]
+    Completed,"""
+example = true
+expect = "test"
+
+[[mutant]]
+name = "T21 a fact takes a position that is not its own"
+path = "ports/src/lib.rs"
+anchor = """
+                        position,
+                        stream: id.clone(),"""
+replacement = """
+                        position: position.after(1),
+                        stream: id.clone(),"""
+expect = "test"
+
+[[mutant]]
+name = "T22 a blank title is accepted"
+path = "domain/src/task.rs"
+anchor = "if text.trim().is_empty() {"
+replacement = "if text.is_empty() && !text.is_empty() {"
+example = true
+expect = "test"
+
+[[mutant]]
+name = "T23 a title over the limit is accepted"
+path = "domain/src/task.rs"
+anchor = "if text.chars().count() > Title::LIMIT {"
+replacement = "if text.chars().count() > Title::LIMIT + 1 {"
+example = true
+expect = "test"
+
+[[mutant]]
+name = "T24 a stored title skips the constructor on load"
+path = "domain/src/task.rs"
+anchor = '#[serde(try_from = "String")]'
+replacement = "#[serde(transparent)]"
+example = true
+expect = "test"
+
+[[mutant]]
+name = "C15 the rule for new titles is looser than the rule stored titles load under"
+path = "domain/src/task.rs"
+anchor = "pub const LIMIT: usize = 200;"
+replacement = "pub const LIMIT: usize = 201;"
+example = true
+expect = "E0080"
+
+[[mutant]]
+name = "C16 the rule stored titles load under is tightened"
+path = "domain/src/task.rs"
+anchor = "const STORED_LIMIT: usize = 200;"
+replacement = "const STORED_LIMIT: usize = 199;"
+example = true
+expect = "E0080"
+
+[[mutant]]
+name = "T80 a stored blank title loads"
+path = "domain/src/task.rs"
+anchor = "(true, true | false) => Err(TitleError::Blank),"
+replacement = "(true, true | false) => Ok(Title(text)),"
+example = true
+expect = "test"

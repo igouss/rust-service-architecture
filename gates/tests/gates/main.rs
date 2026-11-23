@@ -6,6 +6,7 @@ mod allows;
 mod comments;
 mod events;
 mod guarded;
+mod mutants;
 mod names;
 mod pins;
 mod raw_store;

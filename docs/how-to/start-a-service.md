@@ -11,12 +11,12 @@ form you are copying.
 | `ports/src/`, `ports/tests/conformance/` | keep, byte for byte |
 | `adapter-sqlite/`, `adapter-memory/`, `adapter-postgres/` | keep the one store adapter your service uses, byte for byte, with its tests; delete the others together with their workspace member lines and their mutants ([adapters](../architecture/adapters.req.md)). Without `adapter-postgres`, delete the `postgres` recipes and the `postgres` job too |
 | `app/src/lib.rs`, `domain/src/lib.rs` | keep; only their `pub mod` lines change |
-| `clippy.toml`, `rustfmt.toml`, the root `Cargo.toml`, `workspace.py`, `lint.py`, `names.py`, `guarded.py`, `views.py`, `guide-sync.bb`, `CLAUDE.md`, `.req/`, `requirements.toon`, `LICENSE-*`, `.gitignore` | keep |
+| `clippy.toml`, `rustfmt.toml`, the root `Cargo.toml`, `gates/`, `guide-sync.bb`, `CLAUDE.md`, `.req/`, `requirements.toon`, `LICENSE-*`, `.gitignore` | keep |
 | `domain/src/task.rs`, `payment.rs`, `fulfilment.rs`; `app/src/tasks.rs`, `payments.rs`, `board.rs` | replace with your lifecycles, policies and queries |
 | `app/tests/use_cases.rs`, `adapter-sqlite/tests/store.rs`, `domain/tests/stored_encoding.rs` | port: keep every assertion's intent, swap the example types for yours |
 | `adapter-http/src/`, `adapter-http/tests/routes/` | keep `blocking`, `Changes`, the frame encoding and the request span (rename its `task` and `payment` fields); replace the routes, the page and the renderers |
 | `server/`, `justfile` | keep; rename the `TASKS_*` settings and the default database file. Replace `server/src/warehouse.rs` with your gateways, each in an adapter crate of its own once it calls a real system, and name your process manager's reaction where `relayed` names `Progress`; without a process manager, delete the relay |
-| `mutants.py`, `planted/` | keep the runner and the machinery mutants; re-plant the example ones (below) and update `EXAMPLE` |
+| `planted/` | keep the machinery mutants; re-plant the example ones (below) and mark each `example = true` |
 | `docs/architecture/`, `docs/how-to/add-a-use-case.md`, `AGENTS.md` | keep the rules; re-point every pointer at an example file and every cited example test to yours (`just check` names a citation that no longer exists) |
 | `docs/adr/` | keep: they say why the architecture is this way; number your own after them |
 | `bench/` | port it to your commands and queries, or delete it together with its workspace member line and its `justfile` recipe |
@@ -30,7 +30,7 @@ form you are copying.
    [`add-a-use-case.md`](add-a-use-case.md), until `just check` is green with both present.
 3. Delete the example files in the right-hand column, their `pub mod` lines and their routes.
    The compiler names what still refers to them.
-4. Leave `mutants.py` for the mutation job in continuous integration. Its first run after the
+4. Leave `just mutants` for the mutation job in continuous integration. Its first run after the
    examples are gone reports every mutant whose anchor left with them; the section below says
    what to do with each. This does not block building the service.
 5. Choose the durability in `server`: `full` syncs to disk on every commit; `normal` survives a
@@ -46,7 +46,7 @@ form you are copying.
 
 A follow-up task, started from the mutation job's report, not part of starting the service.
 
-`python3 mutants.py --list` marks every mutant `machinery` or `example`.
+`cargo run -q -p gates -- mutants --list` marks every mutant `machinery` or `example`.
 
 - A **machinery** mutant is planted in code you kept. It was killed by the example's tests, so
   it must now be killed by yours. Do not delete one that survives: it is telling you that your
@@ -65,7 +65,7 @@ A follow-up task, started from the mutation job's report, not part of starting t
   and replacement to plant the same fault in new code is a legitimate edit
   ([`arch-tsu`](../architecture/enforcement.req.md)); dropping the fault is not. If your
   service has nothing the fault applies to (no process manager, so no T11), remove that mutant
-  and say so in the commit. Keep the `EXAMPLE` set in `mutants.py` in step with what you
+  and say so in the commit. Keep `example = true` in `planted/` in step with what you
   re-planted and added.
 
 ## Not provided
