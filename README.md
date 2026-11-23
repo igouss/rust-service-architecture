@@ -29,7 +29,7 @@ move to shipped. `TASKS_DATABASE`, `TASKS_LISTEN`, `TASKS_DURABILITY` (`full` or
 and `TASKS_RELAY_ATTEMPTS` (how often a request is tried before it is parked, 5 unless set)
 override the defaults.
 
-Needs Rust 1.95 (pinned in `rust-toolchain.toml`), [`just`](https://github.com/casey/just),
+Needs the nightly Rust pinned in `rust-toolchain.toml`, [`just`](https://github.com/casey/just),
 [`hex-lint`](https://github.com/igouss/hex-lint), [`effect-audit`](https://github.com/igouss/effect-audit),
 and [`req`](https://github.com/igouss/req). The other gates are the `gates` crate of this workspace.
 

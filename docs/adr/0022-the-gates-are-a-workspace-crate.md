@@ -107,7 +107,8 @@ lifetime named for a keyword, and `if let` and closure patterns.
   The gates were first written against `syn` 2; the operator asked for 3 ("let's use latest
   rust (nightly, syn 3)", 2026-11-23). The reader changed in two places: where an impl names its trait, and at an
   arm's guard, which `syn` 3 holds inside the pattern; a test that the guard is no part of the
-  pattern went red and caught the second. `syn` 2 left the lock file. The build on 2 and the
+  pattern went red and caught the second. The gates build `syn` 3 only; `syn` 2 stays in the lock file under `tracing-attributes`,
+  which `adapter-http` pulls in. The build on 2 and the
   build on 3 were then run side by side, every gate on the tree and on 49 planted forms: the
   same lines and exit codes but for the negative impl below, exit 2 from both. `syn` 3 moves `impl !Trait` out of that field, so
   the reader now says outright that a negative impl is not read, with a test.

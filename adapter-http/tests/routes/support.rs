@@ -222,7 +222,7 @@ impl Journal for Exhausted {
 
     fn read<T>(&self, work: impl FnOnce(&mut View<'_>) -> Result<T, StoreError>) -> Result<T, StoreError> {
         self.reads_left
-            .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |left: usize| left.checked_sub(1))
+            .try_update(Ordering::SeqCst, Ordering::SeqCst, |left: usize| left.checked_sub(1))
             .map_err(|_none_left: usize| StoreError::Unavailable { cause: "injected".to_string() })?;
         self.store.read(work)
     }
