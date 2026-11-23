@@ -10,6 +10,7 @@ mod pins;
 mod raw_store;
 mod stored;
 mod traits;
+mod views;
 mod wildcards;
 
 pub fn lifecycles(text: &str) -> Result<gates::lifecycles::Lifecycles, gates::Unread> {

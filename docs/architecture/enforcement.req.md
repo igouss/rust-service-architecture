@@ -33,7 +33,7 @@ names the rule it enforces.
 | `pins` | a scan of every workflow under `.github/workflows` | every `cargo install --git` names `--rev` and a 40-hex commit; red when a `cargo install` is not one to a line |
 | `docs` | `guide-sync.bb` | every Rust block in these documents is code in the workspace |
 | `ids` | `req check` | the requirement ids and their projection are current |
-| `views-current` | `views.py --check` | the committed crate graph and state machines are the code's; red when a lifecycle or an `evolve` arm cannot be drawn |
+| `views-current` | `gates views --check` | the committed crate graph and state machines are the code's; red when a lifecycle or an `evolve` arm cannot be drawn |
 
 `just postgres` runs the Postgres adapter's lints and tests against the server that
 `STORE_POSTGRES_URL` names, and `just postgres-local` starts a throwaway one for it. Neither is

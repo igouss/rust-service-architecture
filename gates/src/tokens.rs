@@ -97,3 +97,30 @@ pub fn calls(stream: &TokenStream, names: &[&str]) -> Vec<String> {
     });
     found
 }
+
+fn segment(trees: &[TokenTree]) -> Option<String> {
+    let [TokenTree::Ident(_), first, second, TokenTree::Ident(name)] = trees else {
+        return None;
+    };
+    (is_joint(first, ':') && is_punct(second, ':')).then(|| name.to_string())
+}
+
+/// Every `Head::Name` in the stream, in the order written.
+pub fn paths(stream: &TokenStream, head: &str) -> Vec<String> {
+    let mut found: Vec<(usize, String)> = Vec::new();
+    levels(stream, &mut |trees| {
+        for window in trees.windows(4) {
+            if let (true, Some(name)) = (is_ident(&window[0], head), segment(window)) {
+                found.push((window[0].span().byte_range().start, name));
+            }
+        }
+    });
+    found.sort();
+    found.into_iter().map(|held| held.1).collect()
+}
+
+/// `Name` when the stream opens with `Head::Name`.
+pub fn opening(stream: &TokenStream, head: &str) -> Option<String> {
+    let trees: Vec<TokenTree> = stream.clone().into_iter().take(4).collect();
+    trees.first().filter(|first| is_ident(first, head)).and_then(|_| segment(&trees))
+}

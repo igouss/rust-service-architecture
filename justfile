@@ -95,11 +95,11 @@ ids:
 
 [doc("Regenerate docs/views (crate graph, state machines) from the code.")]
 views:
-    python3 views.py
+    cargo run -q -p gates -- views
 
 [doc("The committed views match the code; a stale view is a hand-drawn diagram with a delay.")]
 views-current:
-    python3 views.py --check
+    cargo run -q -p gates -- views --check
 
 [doc("Continuous integration only: plant every architecture mutant and require each to die as stated.")]
 mutants:

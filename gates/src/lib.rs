@@ -11,6 +11,7 @@ pub mod raw_store;
 pub mod stored;
 pub mod tokens;
 pub mod traits;
+pub mod views;
 pub mod wildcards;
 pub mod workspace;
 

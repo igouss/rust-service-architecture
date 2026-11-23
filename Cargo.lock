@@ -369,6 +369,7 @@ name = "gates"
 version = "0.0.0"
 dependencies = [
  "proc-macro2",
+ "quote",
  "ra-ap-rustc_lexer",
  "regex",
  "serde",
